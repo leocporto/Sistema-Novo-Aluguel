@@ -177,7 +177,7 @@ export interface Repasse {
 }
 
 export const ROTULO_STATUS_IMOVEL: Record<string, string> = {
-  disponivel: "Disponível",
+  disponivel: "Desalugado",
   alugado: "Alugado",
   vendido: "Vendido",
   reservado: "Reservado",

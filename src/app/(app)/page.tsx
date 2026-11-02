@@ -117,7 +117,7 @@ export default async function PainelPage() {
           tom="sucesso"
         />
         <Indicador rotulo="Contratos ativos" valor={ativos.length} detalhe={`Carteira: ${formatarReais(carteira)}/mês`} href="/contratos" />
-        <Indicador rotulo="Imóveis alugados" valor={alugados} detalhe={`${disponiveis} disponível(is)`} href="/imoveis" />
+        <Indicador rotulo="Imóveis alugados" valor={alugados} detalhe={`${disponiveis} desalugado(s)`} href="/imoveis" />
         <Indicador
           rotulo="Ocupação"
           valor={alugados + disponiveis ? `${Math.round((alugados / (alugados + disponiveis)) * 100)}%` : "—"}
@@ -146,7 +146,7 @@ export default async function PainelPage() {
               ))}
             {im.length > 0 && (
               <span className="text-xs text-slate-500">
-                Aluguel potencial dos disponíveis: {formatarReais(potencialDisponiveis)}/mês
+                Aluguel potencial dos desalugados: {formatarReais(potencialDisponiveis)}/mês
               </span>
             )}
           </div>

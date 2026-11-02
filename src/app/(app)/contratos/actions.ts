@@ -304,5 +304,5 @@ export async function encerrarContrato(_: EstadoAcao, fd: FormData): Promise<Est
   revalidatePath(`/contratos/${contrato_id}`);
   revalidatePath("/");
   revalidatePath("/contratos");
-  return { ok: "Contrato encerrado e imóvel marcado como disponível." };
+  return { ok: "Contrato encerrado e imóvel marcado como desalugado." };
 }
