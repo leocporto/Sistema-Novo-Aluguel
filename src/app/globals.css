@@ -143,6 +143,22 @@ select option {
   background: var(--bg-card);
   color: var(--text-primary);
 }
+/* Lista aberta (select com size): sem seta, opções no fundo do campo, selecionada em azul */
+select[size]:not([size="1"]) {
+  background-image: none;
+  padding: 6px !important;
+  cursor: default;
+}
+select[size]:not([size="1"]) option {
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+select[size]:not([size="1"]) option:checked {
+  background: var(--accent-bg);
+  color: var(--accent-hot);
+  font-weight: 600;
+}
 
 /* Barra de filtros/ferramentas: tudo lado a lado com a altura do botão (40px) */
 .barra-filtros input,

@@ -161,3 +161,15 @@ export async function criarPessoaRapida(dados: {
   revalidatePath("/pessoas");
   return { ok: true, id: data.id as string, nome: data.nome as string };
 }
+
+/** Atualiza só o celular/WhatsApp da pessoa (usado no envio rápido da régua). */
+export async function atualizarTelefone(pessoaId: string, telefone: string): Promise<{ ok: boolean; erro?: string }> {
+  const { supabase } = await obterContexto();
+  const digitos = somenteDigitos(telefone);
+  if (digitos.length < 10 || digitos.length > 13) return { ok: false, erro: "Celular inválido. Use DDD + número." };
+  const { error } = await supabase.from("pessoas").update({ telefone }).eq("id", pessoaId);
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  revalidatePath("/pessoas");
+  revalidatePath(`/pessoas/${pessoaId}`);
+  return { ok: true };
+}

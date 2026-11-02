@@ -7,6 +7,7 @@ import { enviosDevidos, renderizarMensagem } from "@/lib/dominio/regua";
 import type { AvisoRegua } from "./actions";
 import { AvisosHoje, type AvisoDoDia } from "./avisos-hoje";
 import { EditorRegua } from "./editor-regua";
+import { EnvioWhatsapp, type ClienteEnvio } from "./envio-whatsapp";
 
 export const metadata: Metadata = { title: "Régua de cobrança" };
 
@@ -32,7 +33,7 @@ function quandoTexto(dias: number) {
 export default async function ReguaPage() {
   const { supabase } = await obterContexto();
   const hoje = hojeISO();
-  const [{ data: regrasRaw }, { data: faturasRaw }, { data: enviosRaw }] = await Promise.all([
+  const [{ data: regrasRaw }, { data: faturasRaw }, { data: enviosRaw }, { data: pessoasRaw }, { data: abertasRaw }] = await Promise.all([
     supabase.from("regua_regras").select("*").order("dias_relativos"),
     supabase
       .from("faturas")
@@ -43,6 +44,12 @@ export default async function ReguaPage() {
       .gte("vencimento", somarDias(hoje, -95))
       .lte("vencimento", somarDias(hoje, 95)),
     supabase.from("regua_envios").select("regra_id, fatura_id").gte("enviado_em", somarDias(hoje, -120)),
+    supabase.from("pessoas").select("id, nome, telefone").order("nome"),
+    supabase
+      .from("faturas")
+      .select("id, competencia, vencimento, valor_total, contrato:contratos(imovel:imoveis(codigo, logradouro, numero), contrato_partes(papel, pessoa_id))")
+      .eq("status", "aberta")
+      .order("vencimento"),
   ]);
   const regras = (regrasRaw ?? []) as Regra[];
   const faturas = (faturasRaw ?? []) as unknown as FaturaR[];
@@ -100,9 +107,42 @@ export default async function ReguaPage() {
     };
   });
 
+  // Envio avulso: cada cliente com as cobranças em aberto em que é locatário.
+  type Aberta = {
+    id: string;
+    competencia: string;
+    vencimento: string;
+    valor_total: number;
+    contrato: { imovel: { codigo: string; logradouro: string | null; numero: string | null }; contrato_partes: { papel: string; pessoa_id: string }[] };
+  };
+  const faturasPorPessoa = new Map<string, ClienteEnvio["faturas"]>();
+  for (const f of (abertasRaw ?? []) as unknown as Aberta[]) {
+    const im = f.contrato.imovel;
+    for (const parte of f.contrato.contrato_partes.filter((x) => x.papel === "locatario")) {
+      const lista = faturasPorPessoa.get(parte.pessoa_id) ?? [];
+      lista.push({
+        id: f.id,
+        competencia: f.competencia,
+        vencimento: f.vencimento,
+        valor: Number(f.valor_total),
+        imovel: [im.logradouro, im.numero].filter(Boolean).join(", ") || im.codigo,
+      });
+      faturasPorPessoa.set(parte.pessoa_id, lista);
+    }
+  }
+  const clientes: ClienteEnvio[] = ((pessoasRaw ?? []) as { id: string; nome: string; telefone: string | null }[]).map((p) => ({
+    ...p,
+    faturas: faturasPorPessoa.get(p.id) ?? [],
+  }));
+  const modelos = regras.map((r) => ({ id: r.id, nome: quandoTexto(r.dias_relativos), mensagem: r.mensagem }));
+
   return (
     <>
       <Cabecalho titulo="Régua de cobrança" descricao="Defina quando avisar o inquilino sobre o aluguel. Todo dia, os avisos do dia aparecem aqui prontos para enviar." />
+
+      <Cartao titulo="Enviar mensagem no WhatsApp" className="mb-6">
+        <EnvioWhatsapp clientes={clientes} modelos={modelos} />
+      </Cartao>
 
       <Cartao titulo={`Para enviar hoje (${avisos.length})`} className="mb-6">
         <AvisosHoje avisos={avisos} />
