@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
-import { Cabecalho, Campo, Cartao, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela, classeBotao } from "@/components/ui";
+import { Cabecalho, Campo, Cartao, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { fimDoMes, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { type EstadoAcao, ErroValidacao, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Financeiro" };
 
@@ -80,10 +81,9 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
       </div>
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div>
-          <form className="mb-4 flex gap-2">
+          <FiltroAutomatico className="mb-4 flex gap-2">
             <Entrada type="month" name="mes" defaultValue={mes} className="w-44" />
-            <button className={classeBotao("secundario")}>Ver mês</button>
-          </form>
+          </FiltroAutomatico>
           <Tabela colunas={["Vencimento", "Descrição", "Categoria", "Tipo", "Valor", "Situação"]}>
             {lanc.length === 0 && <LinhaVazia colunas={6}>Nenhum lançamento no mês.</LinhaVazia>}
             {lanc.map((l) => (

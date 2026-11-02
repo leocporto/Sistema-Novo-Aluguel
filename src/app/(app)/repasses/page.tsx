@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
-import { Cabecalho, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela, classeBotao } from "@/components/ui";
+import { Cabecalho, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarCompetencia, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import type { Repasse } from "@/lib/tipos";
 import { marcarRepassesPagos } from "./actions";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Repasses" };
 
@@ -52,15 +53,14 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
           tom="sucesso"
         />
       </div>
-      <form className="mb-4 flex gap-2">
+      <FiltroAutomatico className="mb-4 flex gap-2">
         <Selecao name="status" defaultValue={status} className="max-w-48">
           <option value="pendente">Pendentes</option>
           <option value="pago">Pagos</option>
           <option value="cancelado">Cancelados</option>
           <option value="">Todos</option>
         </Selecao>
-        <button className={classeBotao("secundario")}>Filtrar</button>
-      </form>
+      </FiltroAutomatico>
       <Formulario acao={marcarRepassesPagos} className="space-y-4">
         <Tabela colunas={["", "Previsto", "Proprietário", "Contrato", "Competência", "Bruto", "Taxas", "IRRF", "Líquido", "Dados bancários", "Situação"]}>
           {repasses.length === 0 && <LinhaVazia colunas={11}>Nenhum repasse.</LinhaVazia>}

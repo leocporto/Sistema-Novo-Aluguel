@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BotaoLink, Cabecalho, Celula, LinhaVazia, Selecao, Selo, Tabela, classeBotao } from "@/components/ui";
+import { BotaoLink, Cabecalho, Celula, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarDataBR } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_GARANTIA } from "@/lib/tipos";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Contratos" };
 
@@ -42,15 +43,14 @@ export default async function ContratosPage({ searchParams }: PageProps<"/contra
         titulo="Contratos de locação"
         acoes={<BotaoLink href="/contratos/novo">Novo contrato</BotaoLink>}
       />
-      <form className="mb-4 flex gap-2">
+      <FiltroAutomatico className="mb-4 flex gap-2">
         <Selecao name="status" defaultValue={status} className="max-w-48">
           <option value="">Todos</option>
           <option value="ativo">Ativos</option>
           <option value="rescindido">Rescindidos</option>
           <option value="encerrado">Encerrados</option>
         </Selecao>
-        <button className={classeBotao("secundario")}>Filtrar</button>
-      </form>
+      </FiltroAutomatico>
       <Tabela colunas={["Nº", "Imóvel", "Locatário", "Proprietário(s)", "Vigência", "Aluguel", "Garantia", "Situação"]}>
         {contratos.length === 0 && <LinhaVazia colunas={8}>Nenhum contrato.</LinhaVazia>}
         {contratos.map((c) => (

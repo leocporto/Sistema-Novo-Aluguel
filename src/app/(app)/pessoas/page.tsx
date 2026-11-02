@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BotaoLink, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Selo, Tabela, classeBotao } from "@/components/ui";
+import { BotaoLink, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarDocumento } from "@/lib/dominio/documentos";
 import { ROTULO_PAPEL, type Pessoa } from "@/lib/tipos";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Pessoas" };
 
@@ -26,7 +27,7 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
         descricao="Proprietários, locatários, fiadores e clientes."
         acoes={<BotaoLink href="/pessoas/novo">Nova pessoa</BotaoLink>}
       />
-      <form className="mb-4 flex flex-wrap gap-2">
+      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
         <Entrada name="q" placeholder="Buscar por nome ou documento" defaultValue={busca} className="max-w-xs" />
         <Selecao name="papel" defaultValue={papel} className="max-w-48">
           <option value="">Todos os papéis</option>
@@ -36,8 +37,7 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
             </option>
           ))}
         </Selecao>
-        <button className={classeBotao("secundario")}>Filtrar</button>
-      </form>
+      </FiltroAutomatico>
       <Tabela colunas={["Nome", "Documento", "Contato", "Papéis"]}>
         {pessoas.length === 0 && <LinhaVazia colunas={4}>Nenhuma pessoa encontrada.</LinhaVazia>}
         {pessoas.map((p) => (

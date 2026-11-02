@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BotaoLink, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Selo, Tabela, classeBotao } from "@/components/ui";
+import { BotaoLink, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_STATUS_IMOVEL, type Imovel } from "@/lib/tipos";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Imóveis" };
 
@@ -28,7 +29,7 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
         descricao={`${imoveis.length} imóvel(is)`}
         acoes={<BotaoLink href="/imoveis/novo">Novo imóvel</BotaoLink>}
       />
-      <form className="mb-4 flex flex-wrap gap-2">
+      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
         <Entrada name="q" placeholder="Código, rua, bairro ou cidade" defaultValue={busca} className="max-w-xs" />
         <Selecao name="status" defaultValue={status} className="max-w-48">
           <option value="">Todas as situações</option>
@@ -38,8 +39,7 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
             </option>
           ))}
         </Selecao>
-        <button className={classeBotao("secundario")}>Filtrar</button>
-      </form>
+      </FiltroAutomatico>
       <Tabela colunas={["Código", "Endereço", "Tipo", "Proprietário(s)", "Aluguel", "Situação"]}>
         {imoveis.length === 0 && <LinhaVazia colunas={6}>Nenhum imóvel cadastrado.</LinhaVazia>}
         {imoveis.map((i) => (

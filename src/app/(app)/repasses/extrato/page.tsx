@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { BotaoImprimir } from "@/components/formulario";
-import { Aviso, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Tabela, classeBotao } from "@/components/ui";
+import { Aviso, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarCompetencia, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { formatarDocumento } from "@/lib/dominio/documentos";
 import type { Pessoa, Repasse } from "@/lib/tipos";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Extrato do proprietário" };
 
@@ -39,7 +40,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
     <>
       <div className="nao-imprimir">
         <Cabecalho titulo="Extrato do proprietário" descricao="Repasses do ano e informe de rendimentos de aluguéis." acoes={pessoa ? <BotaoImprimir /> : undefined} />
-        <form className="mb-6 flex flex-wrap gap-2">
+        <FiltroAutomatico className="mb-6 flex flex-wrap gap-2">
           <Selecao name="pessoa" defaultValue={pessoaId} className="max-w-xs">
             <option value="">Selecione o proprietário…</option>
             {(props ?? []).map((p) => (
@@ -49,8 +50,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
             ))}
           </Selecao>
           <Entrada type="number" name="ano" defaultValue={ano} className="w-28" />
-          <button className={classeBotao("secundario")}>Ver extrato</button>
-        </form>
+        </FiltroAutomatico>
       </div>
       {pessoa && (
         <div className="space-y-4">

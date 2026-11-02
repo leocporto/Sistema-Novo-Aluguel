@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
-import { Cabecalho, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela, classeBotao } from "@/components/ui";
+import { Cabecalho, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { fimDoMes, formatarCompetencia, formatarDataBR, hojeISO, inicioDoMes } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import type { Fatura } from "@/lib/tipos";
 import { gerarFaturasDoMes } from "./actions";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Cobranças" };
 
@@ -60,7 +61,7 @@ export default async function FaturasPage({ searchParams }: PageProps<"/faturas"
         <Indicador rotulo="Em atraso" valor={formatarReais(atraso)} tom={atraso > 0 ? "perigo" : "neutro"} />
         <Indicador rotulo="Recebido" valor={formatarReais(recebido)} tom="sucesso" />
       </div>
-      <form className="mb-4 flex flex-wrap gap-2">
+      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
         <Entrada type="month" name="mes" defaultValue={mes} className="w-44" />
         <Selecao name="situacao" defaultValue={situacao} className="max-w-48">
           <option value="">Todas</option>
@@ -69,8 +70,7 @@ export default async function FaturasPage({ searchParams }: PageProps<"/faturas"
           <option value="cancelada">Canceladas</option>
           <option value="atraso">Todas em atraso</option>
         </Selecao>
-        <button className={classeBotao("secundario")}>Filtrar</button>
-      </form>
+      </FiltroAutomatico>
       <Tabela colunas={["Nº", "Contrato", "Locatário", "Competência", "Vencimento", "Valor", "Situação"]}>
         {faturas.length === 0 && <LinhaVazia colunas={7}>Nenhuma fatura no período.</LinhaVazia>}
         {faturas.map((f) => {

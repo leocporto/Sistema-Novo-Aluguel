@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
-import { Cabecalho, Campo, Cartao, Celula, Entrada, LinhaVazia, Selecao, Tabela, classeBotao } from "@/components/ui";
+import { Cabecalho, Campo, Cartao, Celula, Entrada, LinhaVazia, Selecao, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarCompetencia } from "@/lib/dominio/datas";
 import { INDICES, NOME_INDICE, acumular } from "@/lib/dominio/reajuste";
 import { type EstadoAcao, ErroValidacao, mensagemErro, numero, textoObrigatorio } from "@/lib/form";
+import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Índices econômicos" };
 
@@ -69,7 +70,7 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
       />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div>
-          <form className="mb-4 flex gap-2">
+          <FiltroAutomatico className="mb-4 flex gap-2">
             <Selecao name="indice" defaultValue={indice} className="max-w-xs">
               {INDICES.map((i) => (
                 <option key={i} value={i}>
@@ -77,8 +78,7 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
                 </option>
               ))}
             </Selecao>
-            <button className={classeBotao("secundario")}>Ver</button>
-          </form>
+          </FiltroAutomatico>
           <Tabela colunas={["Mês", "Variação do mês", "Acumulado 12 meses"]}>
             {linhas.length === 0 && <LinhaVazia colunas={3}>Nenhum mês cadastrado para {indice}.</LinhaVazia>}
             {linhas.map((l, i) => {
