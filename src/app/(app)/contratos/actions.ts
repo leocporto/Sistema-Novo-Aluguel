@@ -49,7 +49,7 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
         data_fim: somarDias(somarMeses(inicio, prazo), -1),
         valor_aluguel: valor,
         dia_vencimento: dia,
-        modalidade: texto(fd, "modalidade") ?? "vencido",
+        modalidade: texto(fd, "modalidade") ?? "antecipado",
         indice_reajuste: texto(fd, "indice_reajuste") ?? "IGPM",
         periodicidade_reajuste_meses: inteiro(fd, "periodicidade_reajuste_meses") ?? 12,
         data_base_reajuste: inicio,

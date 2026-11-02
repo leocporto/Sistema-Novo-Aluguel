@@ -96,10 +96,10 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
               <Campo rotulo="Dia do vencimento">
                 <Entrada type="number" min={1} max={31} name="dia_vencimento" defaultValue={10} />
               </Campo>
-              <Campo rotulo="Modalidade" dica="Vencido: paga no mês seguinte ao uso.">
-                <Selecao name="modalidade" defaultValue="vencido">
-                  <option value="vencido">Mês vencido</option>
+              <Campo rotulo="Modalidade" dica="Antecipado: paga no início do mês de uso. Vencido: paga no mês seguinte.">
+                <Selecao name="modalidade" defaultValue="antecipado">
                   <option value="antecipado">Mês antecipado</option>
+                  <option value="vencido">Mês vencido</option>
                 </Selecao>
               </Campo>
               <Campo rotulo="Índice de reajuste">
