@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { Formulario } from "@/components/formulario";
 import { BotaoLink, Cabecalho, Campo, Cartao, Entrada, Selecao, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarReais } from "@/lib/dominio/dinheiro";
@@ -27,6 +27,7 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
   ]);
   const proprietarios = (props ?? []) as unknown as { percentual: number; pessoa: { id: string; nome: string } }[];
   const soma = proprietarios.reduce((s, p) => s + Number(p.percentual), 0);
+  const falta = Math.round((100 - soma) * 100) / 100;
 
   return (
     <>
@@ -47,7 +48,20 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
                     {p.pessoa.nome}
                   </Link>
                   <span className="flex items-center gap-2">
-                    {Number(p.percentual)}%
+                    <Formulario acao={adicionarProprietario} automatico salvarQuando="percentual" className="flex items-center gap-1">
+                      <input type="hidden" name="imovel_id" value={id} />
+                      <input type="hidden" name="pessoa_id" value={p.pessoa.id} />
+                      <input type="hidden" name="editar" value="1" />
+                      <input
+                        name="percentual"
+                        inputMode="decimal"
+                        required
+                        aria-label={`Participação de ${p.pessoa.nome} (%)`}
+                        defaultValue={String(Number(p.percentual))}
+                        className="h-9 w-16 rounded-[9px] border border-borda-forte bg-input px-2 text-right text-sm outline-none focus:border-acento"
+                      />
+                      %
+                    </Formulario>
                     <form action={removerProprietario}>
                       <input type="hidden" name="imovel_id" value={id} />
                       <input type="hidden" name="pessoa_id" value={p.pessoa.id} />
@@ -61,24 +75,32 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
             {proprietarios.length > 0 && Math.abs(soma - 100) > 0.01 && (
               <p className="mb-3 text-xs text-alerta">As participações somam {soma}% — devem somar 100%.</p>
             )}
-            <Formulario acao={adicionarProprietario} className="space-y-3">
+            <Formulario
+              key={proprietarios.map((p) => p.pessoa.id).join(",")}
+              acao={adicionarProprietario}
+              automatico
+              salvarQuando="pessoa_id"
+              className="space-y-3 border-t border-borda-suave pt-4"
+            >
               <input type="hidden" name="imovel_id" value={id} />
+              <p className="text-xs text-mudo">Adicionar proprietário: escolha a pessoa — entra na hora.</p>
+              <Campo rotulo="Participação (%)">
+                <Entrada name="percentual" inputMode="decimal" defaultValue={falta > 0 ? String(falta) : ""} placeholder="100" />
+              </Campo>
               <Campo rotulo="Pessoa">
                 <Selecao name="pessoa_id" required defaultValue="">
                   <option value="" disabled>
                     Selecione…
                   </option>
-                  {((pessoas ?? []) as Pick<Pessoa, "id" | "nome">[]).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome}
-                    </option>
-                  ))}
+                  {((pessoas ?? []) as Pick<Pessoa, "id" | "nome">[])
+                    .filter((p) => !proprietarios.some((v) => v.pessoa.id === p.id))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome}
+                      </option>
+                    ))}
                 </Selecao>
               </Campo>
-              <Campo rotulo="Participação (%)">
-                <Entrada name="percentual" inputMode="decimal" defaultValue={proprietarios.length ? "" : "100"} />
-              </Campo>
-              <BotaoEnviar variante="secundario">Vincular proprietário</BotaoEnviar>
             </Formulario>
           </Cartao>
           )}

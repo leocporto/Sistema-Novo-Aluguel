@@ -30,7 +30,7 @@ export function FormPessoa({
   const p = pessoa;
   const papeis = p?.papeis ?? (papelInicial ? [papelInicial] : []);
   return (
-    <Formulario acao={salvarPessoa}>
+    <Formulario acao={salvarPessoa} automatico={Boolean(p)}>
       {p && <input type="hidden" name="id" value={p.id} />}
       <Cartao titulo="Dados principais">
         <div className="space-y-4">
@@ -88,7 +88,7 @@ export function FormPessoa({
         ) : (
           <>
             <p className="mb-3 text-xs text-mudo">
-              Marque os imóveis dos quais esta pessoa é proprietária. Ao salvar, ela é vinculada com a participação que falta para
+              Marque os imóveis dos quais esta pessoa é proprietária. Ao marcar, ela é vinculada com a participação que falta para
               100% (ajuste as porcentagens na página do imóvel, se houver mais de um dono).
             </p>
             <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto md:grid-cols-2">
@@ -192,9 +192,11 @@ export function FormPessoa({
         <AreaTexto name="observacoes" defaultValue={p?.observacoes ?? ""} />
       </Cartao>
 
-      <div className="flex justify-end">
-        <BotaoEnviar>Salvar</BotaoEnviar>
-      </div>
+      {!p && (
+        <div className="flex justify-end">
+          <BotaoEnviar>Cadastrar pessoa</BotaoEnviar>
+        </div>
+      )}
     </Formulario>
   );
 }

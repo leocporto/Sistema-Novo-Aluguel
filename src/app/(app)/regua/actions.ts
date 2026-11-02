@@ -42,8 +42,19 @@ export async function salvarRegua(_: EstadoAcao, fd: FormData): Promise<EstadoAc
     const repetidos = linhas.map((l) => l.dias_relativos).filter((d, i, arr) => arr.indexOf(d) !== i);
     if (repetidos.length) throw new ErroValidacao(`Há dois avisos para "${nomeDoAviso(repetidos[0])}". Deixe só um.`);
 
-    const { data: atuais, error: e1 } = await supabase.from("regua_regras").select("id");
+    const { data: atuais, error: e1 } = await supabase.from("regua_regras").select("id, dias_relativos");
     if (e1) throw e1;
+    // Aviso novo (sem id) que já foi gravado num salvamento automático anterior:
+    // reaproveita a linha de mesmo dia em vez de apagar e criar de novo.
+    const usados = new Set(linhas.filter((l) => l.id).map((l) => l.id));
+    for (const l of linhas) {
+      if (l.id) continue;
+      const igual = (atuais ?? []).find((r) => r.dias_relativos === l.dias_relativos && !usados.has(r.id as string));
+      if (igual) {
+        l.id = igual.id as string;
+        usados.add(l.id);
+      }
+    }
     const manter = new Set(linhas.filter((l) => l.id).map((l) => l.id));
     const remover = (atuais ?? []).map((r) => r.id as string).filter((id) => !manter.has(id));
     if (remover.length) {

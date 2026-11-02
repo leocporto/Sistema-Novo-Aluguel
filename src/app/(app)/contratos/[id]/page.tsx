@@ -197,7 +197,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
           )}
 
           <Cartao titulo="Editar condições">
-            <Formulario acao={atualizarContrato}>
+            <Formulario acao={atualizarContrato} automatico>
               <input type="hidden" name="id" value={id} />
               <Grade colunas={4}>
                 <Campo rotulo="Código interno">
@@ -288,9 +288,6 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
               <Campo rotulo="Observações">
                 <AreaTexto name="observacoes" defaultValue={c.observacoes ?? ""} />
               </Campo>
-              <div className="flex justify-end">
-                <BotaoEnviar>Salvar alterações</BotaoEnviar>
-              </div>
             </Formulario>
           </Cartao>
         </div>
@@ -318,8 +315,27 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                 </li>
               ))}
             </ul>
-            <Formulario acao={adicionarParte} className="space-y-3">
+            <Formulario
+              key={partes.map((p) => `${p.pessoa_id}-${p.papel}`).join(",")}
+              acao={adicionarParte}
+              automatico
+              salvarQuando="pessoa_id"
+              className="space-y-3 border-t border-borda-suave pt-4"
+            >
               <input type="hidden" name="contrato_id" value={id} />
+              <p className="text-xs text-mudo">Adicionar: escolha o papel e depois a pessoa — entra na hora.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Campo rotulo="Papel">
+                  <Selecao name="papel" defaultValue="fiador">
+                    <option value="locatario">Locatário</option>
+                    <option value="fiador">Fiador</option>
+                    <option value="proprietario">Proprietário</option>
+                  </Selecao>
+                </Campo>
+                <Campo rotulo="% (proprietário)">
+                  <Entrada name="percentual" inputMode="decimal" placeholder="100" />
+                </Campo>
+              </div>
               <Campo rotulo="Pessoa">
                 <Selecao name="pessoa_id" required defaultValue="">
                   <option value="" disabled>
@@ -332,19 +348,6 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                   ))}
                 </Selecao>
               </Campo>
-              <div className="grid grid-cols-2 gap-2">
-                <Campo rotulo="Papel">
-                  <Selecao name="papel" defaultValue="fiador">
-                    <option value="locatario">Locatário</option>
-                    <option value="fiador">Fiador</option>
-                    <option value="proprietario">Proprietário</option>
-                  </Selecao>
-                </Campo>
-                <Campo rotulo="% (proprietário)">
-                  <Entrada name="percentual" inputMode="decimal" />
-                </Campo>
-              </div>
-              <BotaoEnviar variante="secundario">Adicionar</BotaoEnviar>
             </Formulario>
           </Cartao>
 

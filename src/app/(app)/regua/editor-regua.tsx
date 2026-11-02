@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mail, MessageCircle, Plus, Trash2 } from "lucide-react";
-import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { EVENTO_SALVAR, Formulario } from "@/components/formulario";
 import { classeBotao } from "@/components/ui";
 import { salvarRegua, type AvisoRegua } from "./actions";
 
@@ -24,11 +24,22 @@ function ordem(a: AvisoRegua) {
   return a.quando === "antes" ? -a.dias : a.quando === "depois" ? a.dias : 0;
 }
 
-/** Editor da régua: uma linha do tempo de avisos, salva tudo de uma vez. */
+/** Editor da régua: uma linha do tempo de avisos, salva sozinha a cada mudança. */
 export function EditorRegua({ inicial }: { inicial: AvisoRegua[] }) {
   const [avisos, setAvisos] = useState<AvisoRegua[]>(inicial);
   const [aberto, setAberto] = useState<number | null>(null);
   const textos = useRef<(HTMLTextAreaElement | null)[]>([]);
+  const campo = useRef<HTMLInputElement>(null);
+  const primeira = useRef(true);
+
+  // Toda mudança na régua é salva sozinha (sem botão).
+  useEffect(() => {
+    if (primeira.current) {
+      primeira.current = false;
+      return;
+    }
+    campo.current?.dispatchEvent(new CustomEvent(EVENTO_SALVAR, { bubbles: true, detail: 900 }));
+  }, [avisos]);
 
   const mudar = (i: number, parte: Partial<AvisoRegua>) =>
     setAvisos((lista) => lista.map((a, k) => (k === i ? { ...a, ...parte } : a)));
@@ -55,8 +66,8 @@ export function EditorRegua({ inicial }: { inicial: AvisoRegua[] }) {
   const ordenados = avisos.map((a, i) => ({ a, i })).sort((x, y) => ordem(x.a) - ordem(y.a));
 
   return (
-    <Formulario acao={salvarRegua} className="space-y-4">
-      <input type="hidden" name="avisos" value={JSON.stringify(avisos)} />
+    <Formulario acao={salvarRegua} automatico className="space-y-4">
+      <input ref={campo} type="hidden" name="avisos" value={JSON.stringify(avisos)} />
 
       <ol className="relative space-y-3 before:absolute before:bottom-6 before:left-[19px] before:top-6 before:w-px before:bg-borda">
         {ordenados.map(({ a, i }) => {
@@ -177,7 +188,6 @@ export function EditorRegua({ inicial }: { inicial: AvisoRegua[] }) {
         <button type="button" onClick={adicionar} className={classeBotao("secundario")}>
           <Plus className="size-4" /> Adicionar aviso
         </button>
-        <BotaoEnviar>Salvar régua</BotaoEnviar>
       </div>
     </Formulario>
   );

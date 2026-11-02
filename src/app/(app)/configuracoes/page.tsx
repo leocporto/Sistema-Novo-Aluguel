@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
-import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { Formulario } from "@/components/formulario";
 import { Building, Check, House } from "lucide-react";
 import { Cabecalho, Campo, Cartao, Entrada, Grade } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -59,7 +59,7 @@ export default async function ConfiguracoesPage() {
   return (
     <>
       <Cabecalho titulo="Configurações" descricao="Modo de uso, dados e padrões para novos contratos." />
-      <Formulario acao={salvar}>
+      <Formulario acao={salvar} automatico>
         <Cartao titulo="Modo de uso">
           <div className="grid gap-3 md:grid-cols-2">
             {opcoes.map(({ valor, titulo, Icone, texto: t }) => (
@@ -82,7 +82,7 @@ export default async function ConfiguracoesPage() {
             ))}
           </div>
           <p className="mt-3 text-xs text-mudo">
-            A troca vale para os próximos pagamentos registrados; o que já foi lançado não muda. Clique em Salvar no fim da página.
+            A troca vale para os próximos pagamentos registrados; o que já foi lançado não muda.
           </p>
         </Cartao>
 
@@ -158,9 +158,6 @@ export default async function ConfiguracoesPage() {
           </Grade>
         </Cartao>
         )}
-        <div className="flex justify-end">
-          <BotaoEnviar>Salvar</BotaoEnviar>
-        </div>
       </Formulario>
     </>
   );

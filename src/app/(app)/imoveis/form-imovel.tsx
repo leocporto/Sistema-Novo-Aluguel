@@ -9,7 +9,7 @@ export function FormImovel({ imovel, proprietarios }: { imovel?: Imovel; proprie
   const i = imovel;
   const fins = i?.finalidades ?? ["locacao"];
   return (
-    <Formulario acao={salvarImovel}>
+    <Formulario acao={salvarImovel} automatico={Boolean(i)}>
       {i && <input type="hidden" name="id" value={i.id} />}
       <Cartao titulo="Identificação">
         <div className="space-y-4">
@@ -158,9 +158,11 @@ export function FormImovel({ imovel, proprietarios }: { imovel?: Imovel; proprie
         </div>
       </Cartao>
 
-      <div className="flex justify-end">
-        <BotaoEnviar>Salvar</BotaoEnviar>
-      </div>
+      {!i && (
+        <div className="flex justify-end">
+          <BotaoEnviar>Cadastrar imóvel</BotaoEnviar>
+        </div>
+      )}
     </Formulario>
   );
 }

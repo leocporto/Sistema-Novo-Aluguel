@@ -98,7 +98,7 @@ export async function adicionarProprietario(_: EstadoAcao, fd: FormData): Promis
     });
     revalidatePath(`/imoveis/${imovel_id}`);
     revalidatePath("/");
-    return { ok: "Proprietário vinculado." };
+    return { ok: fd.has("editar") ? "Participação salva." : "Proprietário vinculado." };
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
