@@ -618,7 +618,7 @@ select option {
 @keyframes tela-subir {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -626,14 +626,12 @@ select option {
   }
 }
 .tela > * {
-  animation: tela-subir 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: tela-subir 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-.tela > *:nth-child(2) { animation-delay: 0.04s; }
-.tela > *:nth-child(3) { animation-delay: 0.08s; }
-.tela > *:nth-child(4) { animation-delay: 0.12s; }
-.tela > *:nth-child(5) { animation-delay: 0.16s; }
-.tela > *:nth-child(6) { animation-delay: 0.2s; }
-.tela > *:nth-child(n + 7) { animation-delay: 0.24s; }
+.tela > *:nth-child(2) { animation-delay: 0.02s; }
+.tela > *:nth-child(3) { animation-delay: 0.04s; }
+.tela > *:nth-child(4) { animation-delay: 0.06s; }
+.tela > *:nth-child(n + 5) { animation-delay: 0.08s; }
 
 /* ── Movimento (nada que responde a clique/hover passa de 340ms) ── */
 @keyframes subir {
@@ -647,18 +645,18 @@ select option {
   }
 }
 .entrar {
-  animation: subir 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: subir 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .entrar-cascata > * {
-  animation: subir 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: subir 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-.entrar-cascata > *:nth-child(2) { animation-delay: 40ms; }
-.entrar-cascata > *:nth-child(3) { animation-delay: 80ms; }
-.entrar-cascata > *:nth-child(4) { animation-delay: 120ms; }
-.entrar-cascata > *:nth-child(5) { animation-delay: 160ms; }
-.entrar-cascata > *:nth-child(6) { animation-delay: 200ms; }
-.entrar-cascata > *:nth-child(7) { animation-delay: 240ms; }
-.entrar-cascata > *:nth-child(8) { animation-delay: 280ms; }
+.entrar-cascata > *:nth-child(2) { animation-delay: 20ms; }
+.entrar-cascata > *:nth-child(3) { animation-delay: 40ms; }
+.entrar-cascata > *:nth-child(4) { animation-delay: 60ms; }
+.entrar-cascata > *:nth-child(5) { animation-delay: 80ms; }
+.entrar-cascata > *:nth-child(6) { animation-delay: 100ms; }
+.entrar-cascata > *:nth-child(7) { animation-delay: 100ms; }
+.entrar-cascata > *:nth-child(8) { animation-delay: 100ms; }
 
 /* ── Janelas (modais): fundo escuro desfocado; a janela sobe/cresce ao abrir e some ao fechar ── */
 @keyframes janela-fundo-in {

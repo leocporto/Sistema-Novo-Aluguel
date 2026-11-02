@@ -19,14 +19,20 @@ export interface ContratoCompleto {
 }
 
 export async function carregarContrato(sb: SupabaseClient, id: string): Promise<ContratoCompleto | null> {
-  const { data: contrato } = await sb
-    .from("contratos")
-    .select("*, imovel:imoveis(*), organizacao:organizacoes(imposto_pf_pct, imposto_pj_pct)")
-    .eq("id", id)
-    .maybeSingle();
+  // As três consultas vão juntas (antes eram em fila: 3 idas ao banco seguidas).
+  const [rContrato, rPartes, rEncargos] = await Promise.all([
+    sb
+      .from("contratos")
+      .select("*, imovel:imoveis(*), organizacao:organizacoes(imposto_pf_pct, imposto_pj_pct)")
+      .eq("id", id)
+      .maybeSingle(),
+    sb.from("contrato_partes").select("*, pessoa:pessoas(*)").eq("contrato_id", id),
+    sb.from("contrato_encargos").select("*").eq("contrato_id", id).order("descricao"),
+  ]);
+  const contrato = rContrato.data;
   if (!contrato) return null;
-  const partes = verificar(await sb.from("contrato_partes").select("*, pessoa:pessoas(*)").eq("contrato_id", id));
-  const encargos = verificar(await sb.from("contrato_encargos").select("*").eq("contrato_id", id).order("descricao"));
+  const partes = verificar(rPartes);
+  const encargos = verificar(rEncargos);
   const { imovel, organizacao, ...resto } = contrato as Contrato & {
     imovel: Imovel;
     organizacao: { imposto_pf_pct: number | string; imposto_pj_pct: number | string } | null;
