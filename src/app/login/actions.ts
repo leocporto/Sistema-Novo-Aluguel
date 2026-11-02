@@ -18,7 +18,11 @@ export async function entrar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   }
 
   const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if (error) return { erro: "E-mail ou senha inválidos." };
+  if (error) {
+    if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message))
+      return { erro: "Seu e-mail ainda não foi confirmado. Abra o link enviado pelo Supabase para o seu e-mail e tente novamente." };
+    return { erro: "E-mail ou senha inválidos." };
+  }
   redirect("/");
 }
 
