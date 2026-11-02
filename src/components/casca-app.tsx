@@ -58,7 +58,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     titulo: "Locação",
     itens: [
       { href: "/reajustes", rotulo: "Reajustes", icone: TrendingUp },
-      { href: "/regua", rotulo: "Régua de cobrança", icone: Bell },
+      { href: "/regua", rotulo: "Inadimplência", icone: Bell },
     ],
   },
   {
@@ -121,11 +121,14 @@ export function CascaApp({
   nomeOrganizacao,
   email,
   acaoSair,
+  emAtraso = 0,
   children,
 }: {
   nomeOrganizacao: string;
   email: string;
   acaoSair: () => Promise<void>;
+  /** Cobranças vencidas sem pagamento (sininho da barra do topo). */
+  emAtraso?: number;
   children: ReactNode;
 }) {
   const caminho = usePathname();
@@ -206,6 +209,17 @@ export function CascaApp({
         </nav>
 
         <div className="topo-dir">
+          <button
+            type="button"
+            className="topo-btn topo-sino"
+            onClick={() => ir("/regua")}
+            onMouseEnter={() => router.prefetch("/regua")}
+            title={emAtraso ? `${emAtraso} cobrança(s) em atraso — cobrar agora` : "Nenhum aluguel em atraso"}
+            aria-label={emAtraso ? `${emAtraso} cobranças em atraso` : "Inadimplência"}
+          >
+            <Bell className="size-[18px]" />
+            {emAtraso > 0 && <span className="topo-sino-num">{emAtraso > 99 ? "99+" : emAtraso}</span>}
+          </button>
           <BotaoTema className="topo-btn" />
           <div className="topo-usuario">
             <span className="topo-av">{inicial}</span>

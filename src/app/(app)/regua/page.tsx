@@ -1,59 +1,130 @@
 import type { Metadata } from "next";
-import { Cabecalho, Cartao } from "@/components/ui";
+import { Cabecalho, Cartao, Indicador } from "@/components/ui";
+import { Contador } from "@/components/abas-segmentadas";
 import { obterContexto } from "@/lib/contexto";
-import { formatarDataBR, hojeISO, somarDias } from "@/lib/dominio/datas";
-import { formatarReais } from "@/lib/dominio/dinheiro";
-import { enviosDevidos, renderizarMensagem } from "@/lib/dominio/regua";
+import { diasEntre, formatarCompetencia, formatarDataBR, hojeISO, somarDias } from "@/lib/dominio/datas";
+import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
+import { calcularAtraso } from "@/lib/dominio/encargos";
+import { renderizarMensagem } from "@/lib/dominio/regua";
+import { AlertTriangle, CalendarClock, Users } from "lucide-react";
 import type { AvisoRegua } from "./actions";
-import { AvisosHoje, type AvisoDoDia } from "./avisos-hoje";
 import { EditorRegua } from "./editor-regua";
-import { EnvioWhatsapp, type ClienteEnvio } from "./envio-whatsapp";
+import { ListaCobranca, type ItemCobranca } from "./lista-cobranca";
 
-export const metadata: Metadata = { title: "Régua de cobrança" };
+export const metadata: Metadata = { title: "Inadimplência" };
 
-type Regra = { id: string; nome: string; dias_relativos: number; canal: string; mensagem: string; assunto: string | null; ativo: boolean };
-type FaturaR = {
+/** Quantos dias à frente entram em "Vence nos próximos dias". */
+const DIAS_A_VENCER = 5;
+
+type Regra = { id: string; dias_relativos: number; canal: string; mensagem: string; ativo: boolean };
+type FaturaAberta = {
   id: string;
-  vencimento: string;
+  contrato_id: string;
   competencia: string;
+  vencimento: string;
   valor_total: number;
-  status: string;
   contrato: {
+    multa_atraso_pct: number;
+    juros_mes_pct: number;
+    carencia_dias: number;
     imovel: { codigo: string; logradouro: string | null; numero: string | null };
-    contrato_partes: { papel: string; pessoa: { nome: string; email: string | null; telefone: string | null } }[];
+    contrato_partes: { papel: string; pessoa_id: string; pessoa: { nome: string; telefone: string | null } }[];
   };
 };
 
-function quandoTexto(dias: number) {
-  if (dias === 0) return "Aviso do dia do vencimento";
-  const n = Math.abs(dias);
-  return dias < 0 ? `Lembrete de ${n} ${n === 1 ? "dia" : "dias"} antes` : `Cobrança de ${n} ${n === 1 ? "dia" : "dias"} de atraso`;
+const PADRAO_ATRASO =
+  "Olá {{nome}}, não identificamos o pagamento do aluguel de {{competencia}} ({{valor}}), vencido em {{vencimento}}. Se já pagou, desconsidere.";
+const PADRAO_LEMBRETE = "Olá {{nome}}! Lembrete: o aluguel de {{competencia}} ({{valor}}) vence em {{vencimento}}.";
+
+/**
+ * Escolhe a mensagem da régua para a situação: em atraso, o aviso "depois"
+ * de maior prazo já alcançado (ou o primeiro); a vencer, o aviso "antes"/"no dia".
+ */
+function regraPara(regras: Regra[], dias: number): Regra | null {
+  const ativas = regras.filter((r) => r.ativo);
+  if (dias > 0) {
+    const depois = ativas.filter((r) => r.dias_relativos > 0).sort((a, b) => a.dias_relativos - b.dias_relativos);
+    return [...depois].reverse().find((r) => r.dias_relativos <= dias) ?? depois[0] ?? null;
+  }
+  if (dias === 0) return ativas.find((r) => r.dias_relativos === 0) ?? null;
+  const antes = ativas.filter((r) => r.dias_relativos < 0).sort((a, b) => b.dias_relativos - a.dias_relativos);
+  return antes.find((r) => -r.dias_relativos >= -dias) ?? antes[antes.length - 1] ?? null;
 }
 
-export default async function ReguaPage() {
+export default async function InadimplenciaPage() {
   const { supabase } = await obterContexto();
   const hoje = hojeISO();
-  const [{ data: regrasRaw }, { data: faturasRaw }, { data: enviosRaw }, { data: pessoasRaw }, { data: abertasRaw }] = await Promise.all([
-    supabase.from("regua_regras").select("*").order("dias_relativos"),
+  const [{ data: regrasRaw }, { data: faturasRaw }] = await Promise.all([
+    supabase.from("regua_regras").select("id, dias_relativos, canal, mensagem, ativo").order("dias_relativos"),
     supabase
       .from("faturas")
       .select(
-        "id, vencimento, competencia, valor_total, status, contrato:contratos(imovel:imoveis(codigo, logradouro, numero), contrato_partes(papel, pessoa:pessoas(nome, email, telefone)))",
+        "id, contrato_id, competencia, vencimento, valor_total, contrato:contratos(multa_atraso_pct, juros_mes_pct, carencia_dias, imovel:imoveis(codigo, logradouro, numero), contrato_partes(papel, pessoa_id, pessoa:pessoas(nome, telefone)))",
       )
       .eq("status", "aberta")
-      .gte("vencimento", somarDias(hoje, -95))
-      .lte("vencimento", somarDias(hoje, 95)),
-    supabase.from("regua_envios").select("regra_id, fatura_id").gte("enviado_em", somarDias(hoje, -120)),
-    supabase.from("pessoas").select("id, nome, telefone").order("nome"),
-    supabase
-      .from("faturas")
-      .select("id, competencia, vencimento, valor_total, contrato:contratos(imovel:imoveis(codigo, logradouro, numero), contrato_partes(papel, pessoa_id))")
-      .eq("status", "aberta")
+      .lte("vencimento", somarDias(hoje, DIAS_A_VENCER))
       .order("vencimento"),
   ]);
   const regras = (regrasRaw ?? []) as Regra[];
-  const faturas = (faturasRaw ?? []) as unknown as FaturaR[];
-  const enviados = new Set((enviosRaw ?? []).map((e) => `${e.regra_id}:${e.fatura_id}`));
+  const faturas = (faturasRaw ?? []) as unknown as FaturaAberta[];
+
+  const ids = faturas.map((f) => f.id);
+  const { data: enviosRaw } = ids.length
+    ? await supabase.from("regua_envios").select("fatura_id, enviado_em").in("fatura_id", ids).order("enviado_em", { ascending: false })
+    : { data: [] as { fatura_id: string; enviado_em: string }[] };
+  const ultimoAviso = new Map<string, string>();
+  for (const e of enviosRaw ?? []) if (!ultimoAviso.has(e.fatura_id)) ultimoAviso.set(e.fatura_id, e.enviado_em);
+
+  const itens: ItemCobranca[] = faturas.map((f) => {
+    const dias = diasEntre(f.vencimento, hoje);
+    const loc = f.contrato.contrato_partes.find((p) => p.papel === "locatario");
+    const im = f.contrato.imovel;
+    const imovel = [im.logradouro, im.numero].filter(Boolean).join(", ") || im.codigo;
+    const atraso =
+      dias > 0
+        ? calcularAtraso({
+            valor: paraCentavos(f.valor_total),
+            vencimento: f.vencimento,
+            pagamento: hoje,
+            multaPct: Number(f.contrato.multa_atraso_pct),
+            jurosMesPct: Number(f.contrato.juros_mes_pct),
+            carenciaDias: f.contrato.carencia_dias,
+          })
+        : null;
+    const totalHoje = atraso ? paraReais(atraso.total) : Number(f.valor_total);
+    const regra = regraPara(regras, dias);
+    const mensagem = renderizarMensagem(regra?.mensagem ?? (dias > 0 ? PADRAO_ATRASO : PADRAO_LEMBRETE), {
+      nome: loc?.pessoa.nome.split(" ")[0] ?? "",
+      valor: totalHoje,
+      vencimento: f.vencimento,
+      competencia: f.competencia,
+      imovel,
+    });
+    const aviso = ultimoAviso.get(f.id);
+    return {
+      faturaId: f.id,
+      contratoId: f.contrato_id,
+      inquilinoId: loc?.pessoa_id ?? null,
+      inquilino: loc?.pessoa.nome ?? "Locatário sem cadastro",
+      telefone: loc?.pessoa.telefone ?? null,
+      imovel,
+      competencia: formatarCompetencia(f.competencia),
+      vencimento: formatarDataBR(f.vencimento),
+      dias,
+      valor: formatarReais(f.valor_total),
+      valorAtualizado: atraso && atraso.total !== paraCentavos(f.valor_total) ? formatarReais(totalHoje) : null,
+      ultimoAviso: aviso ? new Date(aviso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : null,
+      regraId: regra?.id ?? null,
+      mensagem,
+    };
+  });
+
+  const emAtraso = itens.filter((i) => i.dias > 0).sort((a, b) => b.dias - a.dias);
+  const vencendo = itens.filter((i) => i.dias <= 0);
+  const totalAtraso = faturas
+    .filter((f) => diasEntre(f.vencimento, hoje) > 0)
+    .reduce((s, f) => s + Number(f.valor_total), 0);
+  const devedores = new Set(emAtraso.map((i) => i.inquilinoId ?? i.faturaId)).size;
 
   const inicial: AvisoRegua[] = regras.map((r) => ({
     id: r.id,
@@ -64,91 +135,42 @@ export default async function ReguaPage() {
     ativo: r.ativo,
   }));
 
-  const avisos: AvisoDoDia[] = enviosDevidos(
-    regras.map((r) => ({ id: r.id, diasRelativos: r.dias_relativos, ativo: r.ativo })),
-    faturas,
-    hoje,
-    enviados,
-  ).map((d) => {
-    const regra = regras.find((r) => r.id === d.regraId)!;
-    const f = faturas.find((x) => x.id === d.faturaId)!;
-    const loc = f.contrato.contrato_partes.find((p) => p.papel === "locatario")?.pessoa;
-    const vars = {
-      nome: loc?.nome?.split(" ")[0] ?? "",
-      valor: Number(f.valor_total),
-      vencimento: f.vencimento,
-      competencia: f.competencia,
-      imovel: [f.contrato.imovel.logradouro, f.contrato.imovel.numero].filter(Boolean).join(", ") || f.contrato.imovel.codigo,
-    };
-    const mensagem = renderizarMensagem(regra.mensagem, vars);
-    const assunto = renderizarMensagem(regra.assunto ?? "Aluguel", vars);
-    const canal = regra.canal === "whatsapp" ? "whatsapp" : "email";
-    const fone = (loc?.telefone ?? "").replace(/\D/g, "");
-    const link =
-      canal === "whatsapp"
-        ? fone
-          ? `https://wa.me/${fone.length <= 11 ? `55${fone}` : fone}?text=${encodeURIComponent(mensagem)}`
-          : null
-        : loc?.email
-          ? `mailto:${loc.email}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(mensagem)}`
-          : null;
-    return {
-      chave: `${d.regraId}:${d.faturaId}`,
-      regraId: d.regraId,
-      faturaId: d.faturaId,
-      quando: quandoTexto(regra.dias_relativos),
-      inquilino: loc?.nome ?? "Locatário sem cadastro",
-      valor: formatarReais(f.valor_total),
-      vencimento: formatarDataBR(f.vencimento),
-      canal,
-      destinatario: canal === "whatsapp" ? fone || null : (loc?.email ?? null),
-      link,
-      mensagem,
-    };
-  });
-
-  // Envio avulso: cada cliente com as cobranças em aberto em que é locatário.
-  type Aberta = {
-    id: string;
-    competencia: string;
-    vencimento: string;
-    valor_total: number;
-    contrato: { imovel: { codigo: string; logradouro: string | null; numero: string | null }; contrato_partes: { papel: string; pessoa_id: string }[] };
-  };
-  const faturasPorPessoa = new Map<string, ClienteEnvio["faturas"]>();
-  for (const f of (abertasRaw ?? []) as unknown as Aberta[]) {
-    const im = f.contrato.imovel;
-    for (const parte of f.contrato.contrato_partes.filter((x) => x.papel === "locatario")) {
-      const lista = faturasPorPessoa.get(parte.pessoa_id) ?? [];
-      lista.push({
-        id: f.id,
-        competencia: f.competencia,
-        vencimento: f.vencimento,
-        valor: Number(f.valor_total),
-        imovel: [im.logradouro, im.numero].filter(Boolean).join(", ") || im.codigo,
-      });
-      faturasPorPessoa.set(parte.pessoa_id, lista);
-    }
-  }
-  const clientes: ClienteEnvio[] = ((pessoasRaw ?? []) as { id: string; nome: string; telefone: string | null }[]).map((p) => ({
-    ...p,
-    faturas: faturasPorPessoa.get(p.id) ?? [],
-  }));
-  const modelos = regras.map((r) => ({ id: r.id, nome: quandoTexto(r.dias_relativos), mensagem: r.mensagem }));
-
   return (
     <>
-      <Cabecalho titulo="Régua de cobrança" descricao="Defina quando avisar o inquilino sobre o aluguel. Todo dia, os avisos do dia aparecem aqui prontos para enviar." />
+      <Cabecalho
+        titulo="Inadimplência"
+        descricao="Quem está devendo e quem vai vencer, já com a mensagem pronta para cobrar no WhatsApp."
+      />
 
-      <Cartao titulo="Enviar mensagem no WhatsApp" className="mb-6">
-        <EnvioWhatsapp clientes={clientes} modelos={modelos} />
+      <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Indicador
+          rotulo="Em atraso"
+          icone={<AlertTriangle />}
+          tom={emAtraso.length ? "perigo" : "sucesso"}
+          valor={<Contador valor={totalAtraso} formato="moeda" />}
+          detalhe={`${emAtraso.length} cobrança(s) vencida(s)`}
+        />
+        <Indicador rotulo="Inquilinos devendo" icone={<Users />} tom={devedores ? "perigo" : "sucesso"} valor={<Contador valor={devedores} />} />
+        <Indicador
+          rotulo={`Vencem em até ${DIAS_A_VENCER} dias`}
+          icone={<CalendarClock />}
+          valor={<Contador valor={vencendo.length} />}
+          detalhe="lembrete antes do vencimento"
+        />
+      </div>
+
+      <Cartao titulo={`Quem está devendo (${emAtraso.length})`} className="mb-6">
+        <ListaCobranca itens={emAtraso} tipo="atraso" />
       </Cartao>
 
-      <Cartao titulo={`Para enviar hoje (${avisos.length})`} className="mb-6">
-        <AvisosHoje avisos={avisos} />
+      <Cartao titulo={`Vence nos próximos ${DIAS_A_VENCER} dias (${vencendo.length})`} className="mb-6">
+        <ListaCobranca itens={vencendo} tipo="vencendo" />
       </Cartao>
 
-      <Cartao titulo="Quando avisar">
+      <Cartao titulo="Mensagens de cobrança (quando avisar)">
+        <p className="mb-4 text-[13px] text-texto-2">
+          O botão de cobrar usa a mensagem do aviso que combina com os dias de atraso (ou de antecedência).
+        </p>
         <EditorRegua inicial={inicial} />
       </Cartao>
     </>
