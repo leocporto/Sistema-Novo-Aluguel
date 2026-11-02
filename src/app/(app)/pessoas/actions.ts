@@ -130,3 +130,34 @@ export async function excluirPessoa(fd: FormData) {
   revalidatePath("/pessoas");
   redirect("/pessoas");
 }
+
+/**
+ * Cadastro rápido (nome + CPF/CNPJ) usado na janela "Novo locatário/fiador"
+ * do contrato. Retorna a pessoa criada para já ficar selecionada.
+ */
+export async function criarPessoaRapida(dados: {
+  nome: string;
+  documento: string;
+  papel: "locatario" | "fiador" | "proprietario";
+}): Promise<{ ok: true; id: string; nome: string } | { ok: false; erro: string }> {
+  const { supabase } = await obterContexto();
+  const nome = dados.nome.trim();
+  if (!nome) return { ok: false, erro: "Informe o nome." };
+  const documento = somenteDigitos(dados.documento) || null;
+  let tipo: "PF" | "PJ" = "PF";
+  if (documento) {
+    if (documento.length === 14) tipo = "PJ";
+    const valido = tipo === "PF" ? validarCPF(documento) : validarCNPJ(documento);
+    if (!valido) return { ok: false, erro: tipo === "PF" ? "CPF inválido." : "CNPJ inválido." };
+    const { data: existente } = await supabase.from("pessoas").select("id, nome").eq("documento", documento).maybeSingle();
+    if (existente) return { ok: false, erro: `Já existe um cadastro com esse documento: ${existente.nome}.` };
+  }
+  const { data, error } = await supabase
+    .from("pessoas")
+    .insert({ nome, documento, tipo_pessoa: tipo, papeis: [dados.papel] })
+    .select("id, nome")
+    .single();
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  revalidatePath("/pessoas");
+  return { ok: true, id: data.id as string, nome: data.nome as string };
+}

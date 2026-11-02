@@ -6,6 +6,7 @@ import { obterContexto } from "@/lib/contexto";
 import { hojeISO } from "@/lib/dominio/datas";
 import { INDICES, NOME_INDICE } from "@/lib/dominio/reajuste";
 import { ROTULO_GARANTIA, ROTULO_REPASSE, type Imovel, type Pessoa } from "@/lib/tipos";
+import { SeletorPessoa } from "@/components/seletor-pessoa";
 import { criarContrato } from "../actions";
 
 export const metadata: Metadata = { title: "Novo contrato" };
@@ -53,16 +54,13 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
           <Cartao titulo={`Imóvel ${imovel.codigo} — ${[imovel.logradouro, imovel.numero].filter(Boolean).join(", ")}`}>
             <Grade colunas={4}>
               <Campo rotulo="Locatário">
-                <Selecao name="locatario_id" required defaultValue="">
-                  <option value="" disabled>
-                    Selecione…
-                  </option>
-                  {ps.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome}
-                    </option>
-                  ))}
-                </Selecao>
+                <SeletorPessoa
+                  name="locatario_id"
+                  pessoas={ps.map((p) => ({ id: p.id, nome: p.nome }))}
+                  papel="locatario"
+                  rotuloNovo="Novo locatário"
+                  obrigatorio
+                />
               </Campo>
               <Campo rotulo="Código interno (opcional)">
                 <Entrada name="codigo" />
@@ -74,11 +72,6 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
                   <option value="temporada">Temporada</option>
                 </Selecao>
               </Campo>
-              <div className="flex items-end text-sm">
-                <Link href="/pessoas/novo?papel=locatario" className="text-acento hover:underline" target="_blank">
-                  + cadastrar pessoa
-                </Link>
-              </div>
             </Grade>
           </Cartao>
 
@@ -196,14 +189,13 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
                 </Selecao>
               </Campo>
               <Campo rotulo="Fiador (se houver)">
-                <Selecao name="fiador_id" defaultValue="">
-                  <option value="">—</option>
-                  {ps.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome}
-                    </option>
-                  ))}
-                </Selecao>
+                <SeletorPessoa
+                  name="fiador_id"
+                  pessoas={ps.map((p) => ({ id: p.id, nome: p.nome }))}
+                  papel="fiador"
+                  rotuloNovo="Novo fiador"
+                  vazio="Sem fiador"
+                />
               </Campo>
               <Campo rotulo="Valor da garantia (R$)" dica="Caução, título ou cobertura do seguro.">
                 <Entrada name="garantia_valor" inputMode="decimal" />
