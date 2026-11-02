@@ -1,15 +1,24 @@
 import type { Metadata } from "next";
 import { Cabecalho } from "@/components/ui";
-import { FormPessoa } from "../form-pessoa";
+import { obterContexto } from "@/lib/contexto";
+import { FormPessoa, type ImovelOpcao } from "../form-pessoa";
 
 export const metadata: Metadata = { title: "Nova pessoa" };
 
 export default async function NovaPessoaPage({ searchParams }: PageProps<"/pessoas/novo">) {
   const sp = await searchParams;
+  const { supabase } = await obterContexto();
+  const { data } = await supabase
+    .from("imoveis")
+    .select("id, codigo, logradouro, numero, bairro, cidade")
+    .order("logradouro");
   return (
     <>
       <Cabecalho titulo="Nova pessoa" />
-      <FormPessoa papelInicial={typeof sp.papel === "string" ? sp.papel : undefined} />
+      <FormPessoa
+        papelInicial={typeof sp.papel === "string" ? sp.papel : undefined}
+        imoveis={(data ?? []) as ImovelOpcao[]}
+      />
     </>
   );
 }

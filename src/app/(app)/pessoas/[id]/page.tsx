@@ -6,7 +6,7 @@ import { BotaoLink, Cabecalho, Cartao, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { ROTULO_PAPEL, type Pessoa } from "@/lib/tipos";
 import { excluirPessoa } from "../actions";
-import { FormPessoa } from "../form-pessoa";
+import { FormPessoa, type ImovelOpcao } from "../form-pessoa";
 
 export const metadata: Metadata = { title: "Pessoa" };
 
@@ -25,6 +25,10 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
     .from("imovel_proprietarios")
     .select("percentual, imovel:imoveis(id, codigo, logradouro, numero, status)")
     .eq("pessoa_id", id);
+  const { data: todosImoveis } = await supabase
+    .from("imoveis")
+    .select("id, codigo, logradouro, numero, bairro, cidade")
+    .order("logradouro");
 
   type Vinc = {
     papel: string;
@@ -46,7 +50,11 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
         }
       />
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
-        <FormPessoa pessoa={pessoa} />
+        <FormPessoa
+          pessoa={pessoa}
+          imoveis={(todosImoveis ?? []) as ImovelOpcao[]}
+          imoveisVinculados={((imoveis ?? []) as unknown as Prop[]).map((i) => i.imovel.id)}
+        />
         <div className="space-y-6">
           <Cartao titulo="Imóveis (proprietário)">
             <ul className="space-y-2 text-sm">

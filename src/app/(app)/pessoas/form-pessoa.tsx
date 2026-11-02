@@ -4,7 +4,26 @@ import type { Pessoa } from "@/lib/tipos";
 import { ROTULO_PAPEL } from "@/lib/tipos";
 import { salvarPessoa } from "./actions";
 
-export function FormPessoa({ pessoa, papelInicial }: { pessoa?: Pessoa; papelInicial?: string }) {
+export interface ImovelOpcao {
+  id: string;
+  codigo: string;
+  logradouro: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cidade: string | null;
+}
+
+export function FormPessoa({
+  pessoa,
+  papelInicial,
+  imoveis = [],
+  imoveisVinculados = [],
+}: {
+  pessoa?: Pessoa;
+  papelInicial?: string;
+  imoveis?: ImovelOpcao[];
+  imoveisVinculados?: string[];
+}) {
   const p = pessoa;
   const papeis = p?.papeis ?? (papelInicial ? [papelInicial] : []);
   return (
@@ -56,6 +75,37 @@ export function FormPessoa({ pessoa, papelInicial }: { pessoa?: Pessoa; papelIni
             </div>
           </fieldset>
         </div>
+      </Cartao>
+
+      <Cartao titulo="Imóveis desta pessoa (como proprietária)">
+        <input type="hidden" name="vinculo_imoveis" value="1" />
+        {imoveis.length === 0 ? (
+          <p className="text-sm text-slate-500">Nenhum imóvel cadastrado ainda.</p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-slate-500">
+              Marque os imóveis dos quais esta pessoa é proprietária. Ao salvar, ela é vinculada com a participação que falta para
+              100% (ajuste as porcentagens na página do imóvel, se houver mais de um dono).
+            </p>
+            <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto md:grid-cols-2">
+              {imoveis.map((i) => (
+                <label
+                  key={i.id}
+                  className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
+                >
+                  <input type="checkbox" name="imoveis" value={i.id} defaultChecked={imoveisVinculados.includes(i.id)} className="mt-0.5" />
+                  <span>
+                    <span className="font-medium">{[i.logradouro, i.numero].filter(Boolean).join(", ") || "Sem endereço"}</span>
+                    <span className="block text-xs text-slate-500">
+                      {i.codigo}
+                      {i.bairro || i.cidade ? ` · ${[i.bairro, i.cidade].filter(Boolean).join(", ")}` : ""}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
       </Cartao>
 
       <Cartao titulo="Endereço">
