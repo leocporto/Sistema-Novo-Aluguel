@@ -37,6 +37,7 @@ type FaturaMes = {
   valor_total: number;
   valor_pago: number | null;
   pago_em: string | null;
+  comprovante_path: string | null;
 };
 
 export default async function AlugueisDoMesPage({ searchParams }: PageProps<"/faturas">) {
@@ -45,7 +46,7 @@ export default async function AlugueisDoMesPage({ searchParams }: PageProps<"/fa
   const mes = typeof sp.mes === "string" && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : hoje.slice(0, 7);
   const competencia = `${mes}-01`;
   const fim = fimDoMes(competencia);
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
 
   const [{ data: contratosRaw }, { data: faturasRaw }] = await Promise.all([
     supabase
@@ -57,7 +58,7 @@ export default async function AlugueisDoMesPage({ searchParams }: PageProps<"/fa
       .lte("data_inicio", fim),
     supabase
       .from("faturas")
-      .select("id, contrato_id, status, vencimento, valor_total, valor_pago, pago_em")
+      .select("id, contrato_id, status, vencimento, valor_total, valor_pago, pago_em, comprovante_path")
       .eq("competencia", competencia)
       .neq("status", "cancelada"),
   ]);
@@ -82,6 +83,7 @@ export default async function AlugueisDoMesPage({ searchParams }: PageProps<"/fa
         vencimento: f?.vencimento ?? (vencPrevisto < c.data_inicio ? c.data_inicio : vencPrevisto),
         pagoEm: f?.pago_em ?? null,
         valorPago: f?.valor_pago != null ? Number(f.valor_pago) : null,
+        comprovante: Boolean(f?.comprovante_path),
         multaPct: Number(c.multa_atraso_pct),
         jurosMesPct: Number(c.juros_mes_pct),
         carenciaDias: c.carencia_dias,
@@ -146,7 +148,7 @@ export default async function AlugueisDoMesPage({ searchParams }: PageProps<"/fa
         />
       </div>
 
-      <ControleMes key={mes} itens={itens} competencia={competencia} hoje={hoje} />
+      <ControleMes key={mes} itens={itens} competencia={competencia} hoje={hoje} organizacaoId={organizacao.id} />
     </>
   );
 }

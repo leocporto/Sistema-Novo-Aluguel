@@ -74,8 +74,9 @@ export async function marcarPago(dados: {
   pagoEm: string;
   formaPagamento: string;
   dispensarEncargos: boolean;
-}): Promise<{ ok: boolean; erro?: string }> {
+}): Promise<{ ok: boolean; erro?: string; faturaId?: string }> {
   const { supabase } = await obterContexto();
+  let faturaIdFinal: string | undefined;
   try {
     let faturaId = dados.faturaId;
     if (!faturaId) {
@@ -94,6 +95,7 @@ export async function marcarPago(dados: {
       }
       if (!faturaId) return { ok: false, erro: "O contrato não tem aluguel a cobrar neste mês." };
     }
+    faturaIdFinal = faturaId;
     await liquidarFatura(supabase, faturaId, {
       pagoEm: dados.pagoEm,
       formaPagamento: dados.formaPagamento,
@@ -103,7 +105,7 @@ export async function marcarPago(dados: {
     return { ok: false, erro: mensagemErro(e) };
   }
   revalidarTelas();
-  return { ok: true };
+  return { ok: true, faturaId: faturaIdFinal };
 }
 
 /** Desmarca o check: desfaz a baixa (só se o repasse ao proprietário ainda não foi pago). */
@@ -114,4 +116,25 @@ export async function desfazerPagamento(faturaId: string): Promise<{ ok: boolean
   revalidarTelas();
   revalidatePath(`/faturas/${faturaId}`);
   return { ok: true };
+}
+
+/** Grava na fatura o caminho do comprovante já enviado ao Storage. */
+export async function salvarComprovante(faturaId: string, caminho: string): Promise<{ ok: boolean; erro?: string }> {
+  const { supabase, organizacao } = await obterContexto();
+  if (!caminho.startsWith(`${organizacao.id}/faturas/${faturaId}/`)) return { ok: false, erro: "Caminho de comprovante inválido." };
+  const { error } = await supabase.from("faturas").update({ comprovante_path: caminho }).eq("id", faturaId);
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  revalidatePath("/faturas");
+  revalidatePath(`/faturas/${faturaId}`);
+  return { ok: true };
+}
+
+/** Link temporário (5 min) para abrir o comprovante da fatura. */
+export async function linkComprovante(faturaId: string): Promise<{ ok: boolean; url?: string; erro?: string }> {
+  const { supabase } = await obterContexto();
+  const { data: f } = await supabase.from("faturas").select("comprovante_path").eq("id", faturaId).maybeSingle();
+  if (!f?.comprovante_path) return { ok: false, erro: "Esta cobrança não tem comprovante." };
+  const { data, error } = await supabase.storage.from("comprovantes").createSignedUrl(f.comprovante_path as string, 300);
+  if (error || !data) return { ok: false, erro: "Não foi possível abrir o comprovante." };
+  return { ok: true, url: data.signedUrl };
 }

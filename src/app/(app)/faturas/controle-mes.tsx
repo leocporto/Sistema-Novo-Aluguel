@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Check, CircleDollarSign } from "lucide-react";
+import { Check, CircleDollarSign, Paperclip, Upload, X } from "lucide-react";
 import { AbasSegmentadas } from "@/components/abas-segmentadas";
 import { classeBotao } from "@/components/ui";
 import { diasEntre, formatarDataBR } from "@/lib/dominio/datas";
 import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { calcularAtraso } from "@/lib/dominio/encargos";
-import { desfazerPagamento, marcarPago } from "./actions";
+import { enviarComprovante, TAMANHO_MAX_COMPROVANTE, TIPOS_COMPROVANTE } from "@/lib/supabase/navegador";
+import { desfazerPagamento, linkComprovante, marcarPago, salvarComprovante } from "./actions";
 
 export interface AluguelDoMes {
   contratoId: string;
@@ -23,6 +24,8 @@ export interface AluguelDoMes {
   vencimento: string;
   pagoEm: string | null;
   valorPago: number | null;
+  /** Já tem comprovante anexado. */
+  comprovante: boolean;
   multaPct: number;
   jurosMesPct: number;
   carenciaDias: number;
@@ -35,7 +38,36 @@ const campo =
   "w-full min-h-[46px] rounded-btn border border-borda-forte bg-input px-3.5 text-[15px] text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-bg";
 
 /** Controle do mês: um check por aluguel; marcar abre a confirmação, desmarcar desfaz a baixa. */
-export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[]; competencia: string; hoje: string }) {
+function validarArquivo(f: File): string | null {
+  if (!TIPOS_COMPROVANTE.includes(f.type)) return "Envie uma imagem (JPG, PNG) ou PDF.";
+  if (f.size > TAMANHO_MAX_COMPROVANTE) return "O arquivo passa de 10 MB.";
+  return null;
+}
+
+/** Abre o comprovante em nova aba (a aba abre na hora para o navegador não bloquear). */
+async function abrirComprovante(faturaId: string) {
+  const aba = window.open("about:blank", "_blank");
+  const r = await linkComprovante(faturaId);
+  if (r.ok && r.url) {
+    if (aba) aba.location.href = r.url;
+    else window.open(r.url, "_blank");
+  } else {
+    aba?.close();
+    window.alert(r.erro ?? "Não foi possível abrir o comprovante.");
+  }
+}
+
+export function ControleMes({
+  itens,
+  competencia,
+  hoje,
+  organizacaoId,
+}: {
+  itens: AluguelDoMes[];
+  competencia: string;
+  hoje: string;
+  organizacaoId: string;
+}) {
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [aberto, setAberto] = useState<AluguelDoMes | null>(null);
   const [data, setData] = useState(hoje);
@@ -44,6 +76,43 @@ export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[
   const [erro, setErro] = useState("");
   const [pendente, iniciar] = useTransition();
   const [ocupado, setOcupado] = useState<string | null>(null);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [arrastando, setArrastando] = useState(false);
+  const entradaArquivo = useRef<HTMLInputElement>(null);
+  const anexarDepois = useRef<HTMLInputElement>(null);
+  const [anexandoEm, setAnexandoEm] = useState<AluguelDoMes | null>(null);
+
+  const escolherArquivo = (f: File | undefined | null) => {
+    if (!f) return;
+    const problema = validarArquivo(f);
+    if (problema) {
+      setErro(problema);
+      return;
+    }
+    setErro("");
+    setArquivo(f);
+  };
+
+  // Anexar a um aluguel já pago (sem abrir a janela de pagamento).
+  const anexarEmPago = (f: File | undefined | null) => {
+    const it = anexandoEm;
+    setAnexandoEm(null);
+    if (!f || !it?.faturaId) return;
+    const problema = validarArquivo(f);
+    if (problema) return window.alert(problema);
+    setOcupado(it.contratoId);
+    iniciar(async () => {
+      try {
+        const caminho = await enviarComprovante(organizacaoId, it.faturaId!, f);
+        const r = await salvarComprovante(it.faturaId!, caminho);
+        if (!r.ok) window.alert(r.erro);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : "Não foi possível anexar.");
+      } finally {
+        setOcupado(null);
+      }
+    });
+  };
 
   const visiveis = useMemo(() => {
     const ordem = (i: AluguelDoMes) => (i.situacao === "paga" ? 2 : i.vencimento < hoje ? 0 : 1);
@@ -69,6 +138,7 @@ export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[
     setForma("pix");
     setDispensar(false);
     setErro("");
+    setArquivo(null);
   };
 
   const confirmar = () => {
@@ -84,8 +154,24 @@ export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[
         formaPagamento: forma,
         dispensarEncargos: dispensar,
       });
-      if (r.ok) setAberto(null);
-      else setErro(r.erro ?? "Não foi possível registrar o pagamento.");
+      if (!r.ok) {
+        setErro(r.erro ?? "Não foi possível registrar o pagamento.");
+        return;
+      }
+      if (arquivo && r.faturaId) {
+        try {
+          const caminho = await enviarComprovante(organizacaoId, r.faturaId, arquivo);
+          const s2 = await salvarComprovante(r.faturaId, caminho);
+          if (!s2.ok) throw new Error(s2.erro);
+        } catch (e) {
+          setAberto(null);
+          window.alert(
+            `O pagamento foi registrado, mas o comprovante não foi anexado: ${e instanceof Error ? e.message : "erro"}. Use "Anexar" na linha para tentar de novo.`,
+          );
+          return;
+        }
+      }
+      setAberto(null);
     });
   };
 
@@ -133,7 +219,8 @@ export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[
               <li
                 key={it.contratoId}
                 onClick={(e) => {
-                  if ((e.target as HTMLElement).closest("a")) return;
+                  const alvo = e.target as HTMLElement;
+                  if (alvo.closest("a") || (alvo.closest("button") && !alvo.closest("[role=checkbox]"))) return;
                   if (pago) desfazer(it);
                   else abrir(it);
                 }}
@@ -183,13 +270,36 @@ export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[
                   <div className={`text-[16px] font-semibold tabular-nums ${pago ? "text-ok" : "text-texto"}`}>
                     {formatarReais(pago && it.valorPago ? it.valorPago : it.valor)}
                   </div>
-                  {it.faturaId ? (
-                    <Link href={`/faturas/${it.faturaId}`} className="text-xs text-mudo hover:text-acento hover:underline">
-                      ver cobrança
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-fraco">fatura não gerada</span>
-                  )}
+                  <div className="flex items-center justify-end gap-2 text-xs">
+                    {pago && it.faturaId && it.comprovante && (
+                      <button
+                        type="button"
+                        onClick={() => abrirComprovante(it.faturaId!)}
+                        className="inline-flex items-center gap-1 font-medium text-acento hover:underline"
+                      >
+                        <Paperclip className="size-3.5" /> Comprovante
+                      </button>
+                    )}
+                    {pago && it.faturaId && !it.comprovante && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAnexandoEm(it);
+                          anexarDepois.current?.click();
+                        }}
+                        className="inline-flex items-center gap-1 text-mudo hover:text-acento hover:underline"
+                      >
+                        <Paperclip className="size-3.5" /> Anexar
+                      </button>
+                    )}
+                    {it.faturaId ? (
+                      <Link href={`/faturas/${it.faturaId}`} className="text-mudo hover:text-acento hover:underline">
+                        ver cobrança
+                      </Link>
+                    ) : (
+                      <span className="text-fraco">fatura não gerada</span>
+                    )}
+                  </div>
                 </div>
               </li>
             );
@@ -263,6 +373,57 @@ export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[
                 </label>
               )}
 
+              <div className="mt-4">
+                <span className={rotulo}>Comprovante (opcional)</span>
+                <input
+                  ref={entradaArquivo}
+                  type="file"
+                  accept={TIPOS_COMPROVANTE.join(",")}
+                  className="hidden"
+                  onChange={(e) => {
+                    escolherArquivo(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+                {arquivo ? (
+                  <div className="mt-1.5 flex items-center gap-3 rounded-[14px] border border-ok-bd bg-ok-bg px-4 py-3 text-sm">
+                    <Paperclip className="size-4 shrink-0 text-ok" />
+                    <span className="min-w-0 flex-1 truncate text-texto">{arquivo.name}</span>
+                    <span className="shrink-0 text-xs text-mudo">{(arquivo.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <button
+                      type="button"
+                      onClick={() => setArquivo(null)}
+                      aria-label="Remover comprovante"
+                      className="grid size-7 place-items-center rounded-lg text-mudo hover:bg-card hover:text-ruim"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => entradaArquivo.current?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setArrastando(true);
+                    }}
+                    onDragLeave={() => setArrastando(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setArrastando(false);
+                      escolherArquivo(e.dataTransfer.files?.[0]);
+                    }}
+                    className={`mt-1.5 flex w-full flex-col items-center gap-1 rounded-[14px] border-2 border-dashed px-4 py-4 text-center transition ${
+                      arrastando ? "border-acento bg-acento-bg" : "border-borda-forte hover:border-acento hover:bg-acento-bg"
+                    }`}
+                  >
+                    <Upload className="size-5 text-acento" />
+                    <span className="text-sm font-medium text-texto">Anexar comprovante</span>
+                    <span className="text-xs text-mudo">Clique ou arraste a imagem ou o PDF (até 10 MB)</span>
+                  </button>
+                )}
+              </div>
+
               {erro && <div className="mt-3 rounded-[14px] border border-ruim-bd bg-ruim-bg px-4 py-2.5 text-sm text-ruim">{erro}</div>}
 
               <div className="mt-6 flex justify-end gap-2">
@@ -277,6 +438,16 @@ export function ControleMes({ itens, competencia, hoje }: { itens: AluguelDoMes[
           </div>,
           document.body,
         )}
+      <input
+        ref={anexarDepois}
+        type="file"
+        accept={TIPOS_COMPROVANTE.join(",")}
+        className="hidden"
+        onChange={(e) => {
+          anexarEmPago(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
     </>
   );
 }

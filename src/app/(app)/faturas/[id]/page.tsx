@@ -23,6 +23,10 @@ export default async function FaturaPage({ params, searchParams }: PageProps<"/f
   const dados = await carregarContrato(supabase, fatura.contrato_id);
   if (!dados) notFound();
   const { data: itensRaw } = await supabase.from("fatura_itens").select("*").eq("fatura_id", id);
+  const caminhoComprovante = (data as { comprovante_path?: string | null }).comprovante_path;
+  const linkComprovante = caminhoComprovante
+    ? ((await supabase.storage.from("comprovantes").createSignedUrl(caminhoComprovante, 300)).data?.signedUrl ?? null)
+    : null;
   const itens = (itensRaw ?? []) as FaturaItem[];
   const locatario = locatarioPrincipal(dados);
   const hoje = hojeISO();
@@ -111,6 +115,14 @@ export default async function FaturaPage({ params, searchParams }: PageProps<"/f
           {fatura.status === "paga" && (
             <p className="mt-4 text-sm text-acento">
               Pago em {formatarDataBR(fatura.pago_em)} via {fatura.forma_pagamento}.
+              {linkComprovante && (
+                <>
+                  {" "}
+                  <a href={linkComprovante} target="_blank" rel="noreferrer" className="nao-imprimir font-medium underline">
+                    Ver comprovante
+                  </a>
+                </>
+              )}
             </p>
           )}
         </article>
