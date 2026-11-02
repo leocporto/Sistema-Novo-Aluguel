@@ -11,6 +11,8 @@ import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { ArrowLeftRight, CalendarClock, Percent } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
 import { LinhaLink } from "@/components/linha-link";
+import { redirect } from "next/navigation";
+import { ehPessoal } from "@/lib/tipos";
 
 export const metadata: Metadata = { title: "Repasses" };
 
@@ -22,7 +24,8 @@ type Linha = Repasse & {
 export default async function RepassesPage({ searchParams }: PageProps<"/repasses">) {
   const sp = await searchParams;
   const status = typeof sp.status === "string" ? sp.status : "pendente";
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
+  if (ehPessoal(organizacao)) redirect("/");
   const hoje = hojeISO();
 
   let q = supabase

@@ -45,7 +45,8 @@ const corFatura = { aberta: "amarelo", paga: "verde", cancelada: "cinza" } as co
 export default async function ContratoPage({ params, searchParams }: PageProps<"/contratos/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
+  const pessoal = organizacao.modo === "pessoal";
   const dados = await carregarContrato(supabase, id);
   if (!dados) notFound();
   const { contrato: c, imovel, partes, encargos } = dados;
@@ -125,9 +126,13 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                 ["Vencimento", `Dia ${c.dia_vencimento} · mês ${c.modalidade}`],
                 ["Reajuste", `${NOME_INDICE[c.indice_reajuste as keyof typeof NOME_INDICE] ?? c.indice_reajuste} a cada ${c.periodicidade_reajuste_meses} meses`],
                 ["Próximo reajuste", formatarDataBR(dataReajuste)],
-                ["Taxa de administração", `${Number(c.taxa_administracao_pct)}%`],
-                ["Intermediação", `${Number(c.taxa_intermediacao_pct)}% do 1º aluguel`],
-                ["Repasse", `${ROTULO_REPASSE[c.tipo_repasse]} · ${c.dias_repasse} dia(s)`],
+                ...(pessoal
+                  ? []
+                  : ([
+                      ["Taxa de administração", `${Number(c.taxa_administracao_pct)}%`],
+                      ["Intermediação", `${Number(c.taxa_intermediacao_pct)}% do 1º aluguel`],
+                      ["Repasse", `${ROTULO_REPASSE[c.tipo_repasse]} · ${c.dias_repasse} dia(s)`],
+                    ] as [string, string][])),
                 ["Atraso", `Multa ${Number(c.multa_atraso_pct)}% + juros ${Number(c.juros_mes_pct)}% a.m.`],
                 ["Garantia", `${ROTULO_GARANTIA[c.garantia_tipo]}${c.garantia_valor ? ` · ${formatarReais(c.garantia_valor)}` : ""}`],
                 ["Seguro incêndio", c.seguro_incendio_apolice ? `${c.seguro_incendio_apolice} (vence ${formatarDataBR(c.seguro_incendio_vencimento)})` : "—"],
@@ -169,6 +174,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
             </Tabela>
           </Cartao>
 
+          {!pessoal && (
           <Cartao titulo="Repasses ao proprietário">
             <Tabela colunas={["Competência", "Proprietário", "Bruto", "Taxas", "Impostos", "Líquido", "Previsto", "Situação"]}>
               {repasses.length === 0 && <LinhaVazia colunas={8}>Nenhum repasse.</LinhaVazia>}
@@ -188,6 +194,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
               ))}
             </Tabela>
           </Cartao>
+          )}
 
           <Cartao titulo="Editar condições">
             <Formulario acao={atualizarContrato}>
@@ -214,6 +221,14 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                     ))}
                   </Selecao>
                 </Campo>
+                {pessoal ? (
+                  <>
+                    <input type="hidden" name="taxa_administracao_pct" value={String(c.taxa_administracao_pct)} />
+                    <input type="hidden" name="tipo_repasse" value={c.tipo_repasse} />
+                    <input type="hidden" name="dias_repasse" value={String(c.dias_repasse)} />
+                  </>
+                ) : (
+                  <>
                 <Campo rotulo="Taxa adm. (%)">
                   <Entrada name="taxa_administracao_pct" defaultValue={String(c.taxa_administracao_pct)} />
                 </Campo>
@@ -229,6 +244,8 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                 <Campo rotulo="Dias para repasse">
                   <Entrada type="number" min={0} name="dias_repasse" defaultValue={c.dias_repasse} />
                 </Campo>
+                  </>
+                )}
                 <Campo rotulo="Carência (dias)">
                   <Entrada type="number" min={0} name="carencia_dias" defaultValue={c.carencia_dias} />
                 </Campo>
@@ -260,10 +277,14 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                   <Entrada type="date" name="seguro_incendio_vencimento" defaultValue={c.seguro_incendio_vencimento ?? ""} />
                 </Campo>
               </Grade>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="repassar_multa_juros" defaultChecked={c.repassar_multa_juros} />
-                Repassar multa e juros ao proprietário
-              </label>
+              {pessoal ? (
+                c.repassar_multa_juros && <input type="hidden" name="repassar_multa_juros" value="on" />
+              ) : (
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="repassar_multa_juros" defaultChecked={c.repassar_multa_juros} />
+                  Repassar multa e juros ao proprietário
+                </label>
+              )}
               <Campo rotulo="Observações">
                 <AreaTexto name="observacoes" defaultValue={c.observacoes ?? ""} />
               </Campo>

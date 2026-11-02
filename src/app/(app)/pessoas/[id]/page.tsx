@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Pessoa" };
 
 export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">) {
   const { id } = await params;
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
   const { data } = await supabase.from("pessoas").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
   const pessoa = data as Pessoa;
@@ -42,7 +42,7 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
         titulo={pessoa.nome}
         descricao={pessoa.papeis.map((p) => ROTULO_PAPEL[p] ?? p).join(" · ")}
         acoes={
-          pessoa.papeis.includes("proprietario") ? (
+          pessoa.papeis.includes("proprietario") && organizacao.modo !== "pessoal" ? (
             <BotaoLink variante="secundario" href={`/repasses/extrato?pessoa=${pessoa.id}`}>
               Extrato de repasses
             </BotaoLink>
@@ -51,11 +51,13 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
       />
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
         <FormPessoa
+          pessoal={organizacao.modo === "pessoal"}
           pessoa={pessoa}
           imoveis={(todosImoveis ?? []) as ImovelOpcao[]}
           imoveisVinculados={((imoveis ?? []) as unknown as Prop[]).map((i) => i.imovel.id)}
         />
         <div className="space-y-6">
+          {organizacao.modo !== "pessoal" && (
           <Cartao titulo="Imóveis (proprietário)">
             <ul className="space-y-2 text-sm">
               {((imoveis ?? []) as unknown as Prop[]).map((i) => (
@@ -69,6 +71,7 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
               {!imoveis?.length && <li className="text-mudo">Nenhum.</li>}
             </ul>
           </Cartao>
+          )}
           <Cartao titulo="Contratos">
             <ul className="space-y-2 text-sm">
               {((vinculos ?? []) as unknown as Vinc[]).map((v) => (

@@ -25,7 +25,10 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
 
   return (
     <>
-      <Cabecalho titulo="Novo contrato de locação" descricao="Os proprietários e suas participações vêm do cadastro do imóvel." />
+      <Cabecalho
+        titulo="Novo contrato de locação"
+        descricao={org.modo === "pessoal" ? "Escolha o imóvel e o inquilino." : "Os proprietários e suas participações vêm do cadastro do imóvel."}
+      />
       {lista.length === 0 && (
         <Aviso tipo="alerta">
           Cadastre primeiro um <Link className="underline" href="/imoveis/novo">imóvel</Link> com finalidade locação e vincule o proprietário.
@@ -133,6 +136,7 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
             </Grade>
           </Cartao>
 
+          {org.modo !== "pessoal" && (
           <Cartao titulo="Administração e repasse">
             <Grade colunas={4}>
               <Campo rotulo="Taxa de administração (%)">
@@ -159,6 +163,7 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
               Repassar multa e juros de atraso ao proprietário
             </label>
           </Cartao>
+          )}
 
           <Cartao titulo="Atraso e rescisão">
             <Grade colunas={4}>

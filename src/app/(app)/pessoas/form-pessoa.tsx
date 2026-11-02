@@ -18,11 +18,14 @@ export function FormPessoa({
   papelInicial,
   imoveis = [],
   imoveisVinculados = [],
+  pessoal = false,
 }: {
   pessoa?: Pessoa;
   papelInicial?: string;
   imoveis?: ImovelOpcao[];
   imoveisVinculados?: string[];
+  /** Modo imóveis pessoais: sem vínculo de proprietário nem imposto de repasse. */
+  pessoal?: boolean;
 }) {
   const p = pessoa;
   const papeis = p?.papeis ?? (papelInicial ? [papelInicial] : []);
@@ -77,6 +80,7 @@ export function FormPessoa({
         </div>
       </Cartao>
 
+      {!pessoal && (
       <Cartao titulo="Imóveis desta pessoa (como proprietária)">
         <input type="hidden" name="vinculo_imoveis" value="1" />
         {imoveis.length === 0 ? (
@@ -107,6 +111,7 @@ export function FormPessoa({
           </>
         )}
       </Cartao>
+      )}
 
       <Cartao titulo="Endereço">
         <Grade colunas={4}>
@@ -134,6 +139,13 @@ export function FormPessoa({
         </Grade>
       </Cartao>
 
+      {pessoal ? (
+        <input
+          type="hidden"
+          name="imposto_pct"
+          value={p?.imposto_pct === null || p?.imposto_pct === undefined ? "" : String(p.imposto_pct)}
+        />
+      ) : (
       <Cartao titulo="Imposto sobre o repasse (proprietário)">
         <Grade colunas={3}>
           <Campo
@@ -149,6 +161,7 @@ export function FormPessoa({
           </Campo>
         </Grade>
       </Cartao>
+      )}
 
       <Cartao titulo="Dados bancários (para repasses)">
         <Grade colunas={4}>

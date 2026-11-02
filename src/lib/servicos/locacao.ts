@@ -16,6 +16,8 @@ export interface ContratoCompleto {
   encargos: ContratoEncargo[];
   /** % padrão de imposto do proprietário na imobiliária (quando o cadastro da pessoa está em branco). */
   impostoPadrao: { pf: number; pj: number };
+  /** Conta no modo "imóveis pessoais": sem proprietário de terceiros, taxa nem repasse. */
+  pessoal: boolean;
 }
 
 export async function carregarContrato(sb: SupabaseClient, id: string): Promise<ContratoCompleto | null> {
@@ -23,7 +25,7 @@ export async function carregarContrato(sb: SupabaseClient, id: string): Promise<
   const [rContrato, rPartes, rEncargos] = await Promise.all([
     sb
       .from("contratos")
-      .select("*, imovel:imoveis(*), organizacao:organizacoes(imposto_pf_pct, imposto_pj_pct)")
+      .select("*, imovel:imoveis(*), organizacao:organizacoes(imposto_pf_pct, imposto_pj_pct, modo)")
       .eq("id", id)
       .maybeSingle(),
     sb.from("contrato_partes").select("*, pessoa:pessoas(*)").eq("contrato_id", id),
@@ -35,12 +37,13 @@ export async function carregarContrato(sb: SupabaseClient, id: string): Promise<
   const encargos = verificar(rEncargos);
   const { imovel, organizacao, ...resto } = contrato as Contrato & {
     imovel: Imovel;
-    organizacao: { imposto_pf_pct: number | string; imposto_pj_pct: number | string } | null;
+    organizacao: { imposto_pf_pct: number | string; imposto_pj_pct: number | string; modo?: string } | null;
   };
   return {
     contrato: resto,
     imovel,
     impostoPadrao: { pf: Number(organizacao?.imposto_pf_pct ?? 0), pj: Number(organizacao?.imposto_pj_pct ?? 0) },
+    pessoal: organizacao?.modo === "pessoal",
     partes: partes as (ContratoParte & { pessoa: Pessoa })[],
     encargos: encargos as ContratoEncargo[],
   };
@@ -114,6 +117,7 @@ async function ehPrimeiraFatura(sb: SupabaseClient, contratoId: string, competen
 
 function validarProprietarios(c: ContratoCompleto) {
   const props = proprietariosDo(c);
+  if (c.pessoal) return props; // imóveis próprios: não há proprietário de terceiros
   if (props.length === 0) throw new ErroValidacao(`Contrato #${c.contrato.numero} não tem proprietário vinculado.`);
   const soma = props.reduce((s, p) => s + p.percentual, 0);
   if (Math.abs(soma - 100) > 0.01)
@@ -144,7 +148,7 @@ export async function gerarFaturaDoContrato(
   if (!f) return null;
 
   let repasses: ReturnType<typeof repassesParaJson> = [];
-  if (c.contrato.tipo_repasse === "garantido") {
+  if (c.contrato.tipo_repasse === "garantido" && !c.pessoal) {
     const primeira = await ehPrimeiraFatura(sb, c.contrato.id, comp);
     const r = aplicarIrrfIndividual(
       calcularRepasse(f.itens, {
@@ -273,11 +277,29 @@ export async function liquidarFatura(
       valor_pago: paraReais(sim.total),
       forma_pagamento: opcoes.formaPagamento,
       itens_extras: sim.itensExtras.map((i) => ({ ...i, valor: paraReais(i.valor) })),
-      repasses: garantido ? [] : repassesParaJson(calculo.repasses, somarDias(opcoes.pagoEm, c.contrato.dias_repasse)),
-      receita_imobiliaria: paraReais(calculo.receitaImobiliaria),
+      // Imóveis pessoais: sem repasse nem taxa; o aluguel entra inteiro no financeiro (abaixo).
+      repasses:
+        garantido || c.pessoal ? [] : repassesParaJson(calculo.repasses, somarDias(opcoes.pagoEm, c.contrato.dias_repasse)),
+      receita_imobiliaria: c.pessoal ? 0 : paraReais(calculo.receitaImobiliaria),
     },
   });
   if (error) throw new Error(error.message);
+
+  if (c.pessoal) {
+    const mes = `${fatura.competencia.slice(5, 7)}/${fatura.competencia.slice(0, 4)}`;
+    const { error: e2 } = await sb.from("lancamentos").insert({
+      tipo: "receber",
+      descricao: `Aluguel ${mes} — ${c.imovel.codigo}`,
+      categoria: "Aluguel",
+      valor: paraReais(sim.total),
+      vencimento: opcoes.pagoEm,
+      status: "liquidado",
+      liquidado_em: opcoes.pagoEm,
+      contrato_id: c.contrato.id,
+      fatura_id: faturaId,
+    });
+    if (e2) throw new Error(e2.message);
+  }
 }
 
 /** Calcula o reajuste do contrato com base nos índices cadastrados. */

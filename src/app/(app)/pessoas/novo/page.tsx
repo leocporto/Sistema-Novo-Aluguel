@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Nova pessoa" };
 
 export default async function NovaPessoaPage({ searchParams }: PageProps<"/pessoas/novo">) {
   const sp = await searchParams;
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
   const { data } = await supabase
     .from("imoveis")
     .select("id, codigo, logradouro, numero, bairro, cidade")
@@ -16,6 +16,7 @@ export default async function NovaPessoaPage({ searchParams }: PageProps<"/pesso
     <>
       <Cabecalho titulo="Nova pessoa" />
       <FormPessoa
+        pessoal={organizacao.modo === "pessoal"}
         papelInicial={typeof sp.papel === "string" ? sp.papel : undefined}
         imoveis={(data ?? []) as ImovelOpcao[]}
       />

@@ -25,6 +25,7 @@ function qualificacao(p: Pessoa) {
 export default async function DocumentoContratoPage({ params }: PageProps<"/contratos/[id]/documento">) {
   const { id } = await params;
   const { supabase, organizacao } = await obterContexto();
+  const pessoal = organizacao.modo === "pessoal";
   const dados = await carregarContrato(supabase, id);
   if (!dados) notFound();
   const { contrato: c, imovel, partes, encargos } = dados;
@@ -50,7 +51,11 @@ export default async function DocumentoContratoPage({ params }: PageProps<"/cont
         </h1>
 
         <p>
-          <strong>LOCADOR(ES):</strong> {locadores.map((p) => qualificacao(p.pessoa)).join("; ")}.
+          <strong>LOCADOR(ES):</strong>{" "}
+          {pessoal
+            ? `${organizacao.nome}${organizacao.documento ? `, CPF/CNPJ ${formatarDocumento(organizacao.documento)}` : ""}`
+            : locadores.map((p) => qualificacao(p.pessoa)).join("; ")}
+          .
         </p>
         <p>
           <strong>LOCATÁRIO(S):</strong> {locatarios.map((p) => qualificacao(p.pessoa)).join("; ")}.
@@ -60,11 +65,13 @@ export default async function DocumentoContratoPage({ params }: PageProps<"/cont
             <strong>FIADOR(ES):</strong> {fiadores.map((p) => qualificacao(p.pessoa)).join("; ")}.
           </p>
         )}
-        <p>
-          <strong>ADMINISTRADORA:</strong> {organizacao.nome}
-          {organizacao.documento ? `, CNPJ/CPF ${formatarDocumento(organizacao.documento)}` : ""}
-          {organizacao.creci ? `, CRECI ${organizacao.creci}` : ""}.
-        </p>
+        {!pessoal && (
+          <p>
+            <strong>ADMINISTRADORA:</strong> {organizacao.nome}
+            {organizacao.documento ? `, CNPJ/CPF ${formatarDocumento(organizacao.documento)}` : ""}
+            {organizacao.creci ? `, CRECI ${organizacao.creci}` : ""}.
+          </p>
+        )}
 
         <p>As partes acima ajustam a locação do imóvel descrito abaixo, regida pela Lei nº 8.245/1991 e pelas cláusulas seguintes.</p>
 
@@ -81,7 +88,7 @@ export default async function DocumentoContratoPage({ params }: PageProps<"/cont
         <p>
           <strong>{cl()} — Aluguel.</strong> O aluguel mensal é de {formatarReais(c.valor_aluguel)}, com vencimento no dia {c.dia_vencimento} de
           cada mês ({c.modalidade === "vencido" ? "referente ao mês anterior de uso" : "referente ao mês corrente"}), pago por meio do documento de
-          cobrança emitido pela ADMINISTRADORA.
+          cobrança emitido pelo {pessoal ? "LOCADOR" : "ADMINISTRADORA"}.
         </p>
         {encargos.length > 0 && (
           <p>
@@ -131,7 +138,13 @@ export default async function DocumentoContratoPage({ params }: PageProps<"/cont
           {imovel.cidade ?? "____"}, {formatarDataBR(c.data_inicio)}.
         </p>
         <div className="grid grid-cols-2 gap-10 pt-10 text-center text-sm">
-          {[...locadores, ...locatarios, ...fiadores].map((p) => (
+          {pessoal && (
+            <div className="border-t border-borda-forte pt-1">
+              {organizacao.nome}
+              <div className="text-xs uppercase text-mudo">locador</div>
+            </div>
+          )}
+          {[...(pessoal ? [] : locadores), ...locatarios, ...fiadores].map((p) => (
             <div key={`${p.pessoa_id}-${p.papel}`} className="border-t border-borda-forte pt-1">
               {p.pessoa.nome}
               <div className="text-xs uppercase text-mudo">{p.papel === "proprietario" ? "locador" : p.papel}</div>

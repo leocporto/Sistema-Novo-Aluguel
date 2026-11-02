@@ -13,7 +13,8 @@ export const metadata: Metadata = { title: "Imóvel" };
 
 export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">) {
   const { id } = await params;
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
+  const pessoal = organizacao.modo === "pessoal";
   const { data } = await supabase.from("imoveis").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
   const imovel = data as Imovel;
@@ -37,6 +38,7 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
       <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
         <FormImovel imovel={imovel} />
         <div className="space-y-6">
+          {!pessoal && (
           <Cartao titulo="Proprietários">
             <ul className="mb-4 space-y-2 text-sm">
               {proprietarios.map((p) => (
@@ -79,6 +81,7 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
               <BotaoEnviar variante="secundario">Vincular proprietário</BotaoEnviar>
             </Formulario>
           </Cartao>
+          )}
 
           <Cartao titulo="Contratos de locação">
             <ul className="space-y-2 text-sm">

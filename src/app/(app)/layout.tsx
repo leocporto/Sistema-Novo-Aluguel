@@ -12,7 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("status", "aberta")
     .lt("vencimento", hojeISO());
   return (
-    <CascaApp nomeOrganizacao={organizacao.nome} email={usuario.email ?? ""} acaoSair={sair} emAtraso={count ?? 0}>
+    <CascaApp nomeOrganizacao={organizacao.nome} email={usuario.email ?? ""} acaoSair={sair} emAtraso={count ?? 0} modo={organizacao.modo}>
       {children}
     </CascaApp>
   );

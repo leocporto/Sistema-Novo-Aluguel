@@ -15,6 +15,7 @@ const COR_STATUS = { disponivel: "vermelho", alugado: "verde", reservado: "amare
 
 export default async function PainelPage() {
   const { supabase, organizacao } = await obterContexto();
+  const pessoal = organizacao.modo === "pessoal";
   const hoje = hojeISO();
   const em7 = somarDias(hoje, 7);
   const em30 = somarDias(hoje, 30);
@@ -60,7 +61,7 @@ export default async function PainelPage() {
   const potencialDisponiveis = im.filter((i) => i.status === "disponivel").reduce((s, i) => s + Number(i.valor_aluguel ?? 0), 0);
   const pendenciasImoveis: { texto: string; href: string }[] = [];
   for (const i of im) {
-    if (i.imovel_proprietarios.length === 0)
+    if (!pessoal && i.imovel_proprietarios.length === 0)
       pendenciasImoveis.push({ texto: `${i.codigo}: sem proprietário vinculado`, href: `/imoveis/${i.id}` });
     if (i.status === "alugado" && !i.contratos.some((c) => c.status === "ativo"))
       pendenciasImoveis.push({ texto: `${i.codigo}: marcado como alugado, mas sem contrato ativo`, href: `/contratos/novo?imovel=${i.id}` });
@@ -106,13 +107,22 @@ export default async function PainelPage() {
           detalhe={`${aVencer.length} fatura(s)`}
           href="/faturas"
         />
-        <Indicador
-          rotulo="Repasses a pagar hoje" icone={<ArrowLeftRight />}
-          valor={<Contador valor={soma(repHoje, "valor_liquido")} formato="moeda" />}
-          detalhe={`${repHoje.length} de ${rep.length} pendente(s)`}
-          tom={repHoje.length ? "alerta" : "neutro"}
-          href="/repasses"
-        />
+        {pessoal ? (
+          <Indicador
+            rotulo="Aluguel previsto por mês" icone={<ArrowLeftRight />}
+            valor={<Contador valor={carteira} formato="moeda" />}
+            detalhe={`${ativos.length} contrato(s) ativo(s)`}
+            href="/faturas"
+          />
+        ) : (
+          <Indicador
+            rotulo="Repasses a pagar hoje" icone={<ArrowLeftRight />}
+            valor={<Contador valor={soma(repHoje, "valor_liquido")} formato="moeda" />}
+            detalhe={`${repHoje.length} de ${rep.length} pendente(s)`}
+            tom={repHoje.length ? "alerta" : "neutro"}
+            href="/repasses"
+          />
+        )}
         <Indicador
           rotulo="Recebido no mês" icone={<Wallet />}
           valor={<Contador valor={(recebidasMes.data ?? []).reduce((s, f) => s + Number(f.valor_pago ?? 0), 0)} formato="moeda" />}
@@ -124,7 +134,17 @@ export default async function PainelPage() {
           rotulo="Ocupação" icone={<PieChart />}
           valor={alugados + disponiveis ? <Contador valor={(alugados / (alugados + disponiveis)) * 100} formato="pct" /> : "—"}
         />
-        <Indicador rotulo="Taxa média de administração" icone={<Percent />} valor={`${Number(organizacao.taxa_administracao_pct)}%`} detalhe="padrão da imobiliária" />
+        {pessoal ? (
+          <Indicador
+            rotulo="Aluguel parado (desalugados)" icone={<Percent />}
+            valor={<Contador valor={potencialDisponiveis} formato="moeda" />}
+            detalhe="por mês, se alugasse os desalugados"
+            tom={potencialDisponiveis ? "alerta" : "neutro"}
+            href="/imoveis?status=disponivel"
+          />
+        ) : (
+          <Indicador rotulo="Taxa média de administração" icone={<Percent />} valor={`${Number(organizacao.taxa_administracao_pct)}%`} detalhe="padrão da imobiliária" />
+        )}
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">

@@ -18,7 +18,8 @@ type Inad = {
 };
 
 export default async function RelatoriosPage() {
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
+  const pessoal = organizacao.modo === "pessoal";
   const hoje = hojeISO();
   const anoAnterior = String(Number(hoje.slice(0, 4)) - 1);
   const { data } = await supabase
@@ -34,6 +35,7 @@ export default async function RelatoriosPage() {
     <>
       <Cabecalho titulo="Relatórios e obrigações" />
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        {!pessoal && (
         <Cartao titulo="DIMOB — dados anuais para a Receita Federal">
           <p className="mb-3 text-sm text-texto-2">
             Planilha por contrato e locador com aluguel bruto, comissão e IR retido mês a mês, a partir dos repasses registrados.
@@ -48,12 +50,15 @@ export default async function RelatoriosPage() {
             </Aviso>
           </div>
         </Cartao>
+        )}
+        {!pessoal && (
         <Cartao titulo="Informe de rendimentos dos proprietários">
           <p className="mb-3 text-sm text-texto-2">Extrato anual por proprietário, com aluguéis, taxas dedutíveis e IRRF, pronto para imprimir.</p>
           <Link href="/repasses/extrato" className={classeBotao("secundario")}>
             Abrir extratos
           </Link>
         </Cartao>
+        )}
       </div>
 
       <Cartao titulo={`Inadimplência — ${inad.length} fatura(s), ${formatarReais(total)}`}>

@@ -221,10 +221,12 @@ export function ControleMes({
                 onClick={(e) => {
                   const alvo = e.target as HTMLElement;
                   if (alvo.closest("a") || (alvo.closest("button") && !alvo.closest("[role=checkbox]"))) return;
-                  if (pago) desfazer(it);
-                  else abrir(it);
+                  // Desfazer só pelo botão do check (clicar no resto da linha paga não faz nada).
+                  if (pago) {
+                    if (alvo.closest("[role=checkbox]")) desfazer(it);
+                  } else abrir(it);
                 }}
-                className={`flex cursor-pointer flex-wrap items-center gap-x-5 gap-y-2 border-b border-borda-suave px-5 py-4 transition last:border-b-0 hover:bg-card-hover ${
+                className={`flex ${pago ? "cursor-default" : "cursor-pointer"} flex-wrap items-center gap-x-5 gap-y-2 border-b border-borda-suave px-5 py-4 transition last:border-b-0 hover:bg-card-hover ${
                   carregando ? "opacity-50" : ""
                 }`}
               >

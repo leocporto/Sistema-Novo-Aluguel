@@ -18,7 +18,8 @@ import {
 import { calcularReajusteDoContrato, carregarContrato, gerarFaturaDoContrato } from "@/lib/servicos/locacao";
 
 export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
+  const pessoal = organizacao.modo === "pessoal";
   let id: string | null = null;
   try {
     const imovelId = textoObrigatorio(fd, "imovel_id", "o imóvel");
@@ -34,9 +35,12 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
       .from("imovel_proprietarios")
       .select("pessoa_id, percentual")
       .eq("imovel_id", imovelId);
-    if (!props?.length) throw new ErroValidacao("Vincule ao menos um proprietário ao imóvel antes de criar o contrato.");
-    const soma = props.reduce((s, p) => s + Number(p.percentual), 0);
-    if (Math.abs(soma - 100) > 0.01) throw new ErroValidacao(`As participações dos proprietários do imóvel somam ${soma}%.`);
+    // Imóveis pessoais: o dono é a própria conta, não há proprietário de terceiros.
+    if (!pessoal) {
+      if (!props?.length) throw new ErroValidacao("Vincule ao menos um proprietário ao imóvel antes de criar o contrato.");
+      const soma = props.reduce((s, p) => s + Number(p.percentual), 0);
+      if (Math.abs(soma - 100) > 0.01) throw new ErroValidacao(`As participações dos proprietários do imóvel somam ${soma}%.`);
+    }
 
     const { data, error } = await supabase
       .from("contratos")
@@ -53,9 +57,9 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
         indice_reajuste: texto(fd, "indice_reajuste") ?? "IGPM",
         periodicidade_reajuste_meses: inteiro(fd, "periodicidade_reajuste_meses") ?? 12,
         data_base_reajuste: inicio,
-        taxa_administracao_pct: numero(fd, "taxa_administracao_pct") ?? 10,
-        taxa_intermediacao_pct: numero(fd, "taxa_intermediacao_pct") ?? 0,
-        tipo_repasse: texto(fd, "tipo_repasse") ?? "automatico",
+        taxa_administracao_pct: pessoal ? 0 : (numero(fd, "taxa_administracao_pct") ?? 10),
+        taxa_intermediacao_pct: pessoal ? 0 : (numero(fd, "taxa_intermediacao_pct") ?? 0),
+        tipo_repasse: pessoal ? "manual" : (texto(fd, "tipo_repasse") ?? "automatico"),
         dias_repasse: inteiro(fd, "dias_repasse") ?? 2,
         repassar_multa_juros: booleano(fd, "repassar_multa_juros"),
         multa_atraso_pct: numero(fd, "multa_atraso_pct") ?? 10,
@@ -76,7 +80,12 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
 
     try {
       const partes = [
-        ...props.map((p) => ({ contrato_id: id, pessoa_id: p.pessoa_id, papel: "proprietario", percentual: p.percentual })),
+        ...(pessoal ? [] : (props ?? [])).map((p) => ({
+          contrato_id: id,
+          pessoa_id: p.pessoa_id,
+          papel: "proprietario",
+          percentual: p.percentual,
+        })),
         { contrato_id: id, pessoa_id: locatarioId, papel: "locatario", percentual: null },
       ];
       const fiador = texto(fd, "fiador_id");

@@ -15,7 +15,11 @@ export interface Organizacao {
   carencia_dias: number;
   imposto_pf_pct: Num;
   imposto_pj_pct: Num;
+  /** imobiliaria = administra imóveis de terceiros; pessoal = imóveis próprios (sem taxa nem repasse). */
+  modo: "imobiliaria" | "pessoal";
 }
+
+export const ehPessoal = (o: Pick<Organizacao, "modo"> | null | undefined) => o?.modo === "pessoal";
 
 export interface Pessoa {
   id: string;

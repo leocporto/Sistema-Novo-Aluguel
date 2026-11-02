@@ -58,7 +58,7 @@ async function liquidar(fd: FormData) {
 export default async function FinanceiroPage({ searchParams }: PageProps<"/financeiro">) {
   const sp = await searchParams;
   const mes = typeof sp.mes === "string" && sp.mes ? sp.mes : hojeISO().slice(0, 7);
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
   const [{ data: lancRaw }, { data: repassesPend }] = await Promise.all([
     supabase.from("lancamentos").select("*").gte("vencimento", `${mes}-01`).lte("vencimento", fimDoMes(`${mes}-01`)).neq("status", "cancelado").order("vencimento"),
     supabase.from("repasses").select("valor_liquido").eq("status", "pendente").lte("previsto_para", fimDoMes(`${mes}-01`)),
@@ -79,7 +79,9 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
         <Indicador rotulo="Receitas do mês" icone={<TrendingUp />} valor={<Contador valor={receitas} formato="moeda" />} tom="sucesso" />
         <Indicador rotulo="Despesas do mês" icone={<TrendingDown />} valor={<Contador valor={despesas} formato="moeda" />} tom="perigo" />
         <Indicador rotulo="Resultado" icone={<Scale />} valor={<Contador valor={receitas - despesas} formato="moeda" />} tom={receitas - despesas >= 0 ? "sucesso" : "perigo"} />
-        <Indicador rotulo="Repasses pendentes até o fim do mês" icone={<ArrowLeftRight />} valor={<Contador valor={aRepassar} formato="moeda" />} href="/repasses" tom="alerta" />
+        {organizacao.modo !== "pessoal" && (
+          <Indicador rotulo="Repasses pendentes até o fim do mês" icone={<ArrowLeftRight />} valor={<Contador valor={aRepassar} formato="moeda" />} href="/repasses" tom="alerta" />
+        )}
       </div>
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div>

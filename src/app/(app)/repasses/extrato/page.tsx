@@ -7,6 +7,8 @@ import { formatarReais } from "@/lib/dominio/dinheiro";
 import { formatarDocumento } from "@/lib/dominio/documentos";
 import type { Pessoa, Repasse } from "@/lib/tipos";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { redirect } from "next/navigation";
+import { ehPessoal } from "@/lib/tipos";
 
 export const metadata: Metadata = { title: "Extrato do proprietário" };
 
@@ -18,6 +20,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
   const pessoaId = typeof sp.pessoa === "string" ? sp.pessoa : "";
   const ano = typeof sp.ano === "string" && sp.ano ? sp.ano : hojeISO().slice(0, 4);
   const { supabase, organizacao } = await obterContexto();
+  if (ehPessoal(organizacao)) redirect("/");
   const { data: props } = await supabase.from("pessoas").select("id, nome").contains("papeis", ["proprietario"]).order("nome");
 
   let pessoa: Pessoa | null = null;

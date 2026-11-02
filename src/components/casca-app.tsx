@@ -122,6 +122,7 @@ export function CascaApp({
   email,
   acaoSair,
   emAtraso = 0,
+  modo = "imobiliaria",
   children,
 }: {
   nomeOrganizacao: string;
@@ -129,8 +130,11 @@ export function CascaApp({
   acaoSair: () => Promise<void>;
   /** Cobranças vencidas sem pagamento (sininho da barra do topo). */
   emAtraso?: number;
+  /** No modo "pessoal" não existe repasse ao proprietário. */
+  modo?: "imobiliaria" | "pessoal";
   children: ReactNode;
 }) {
+  const topo = modo === "pessoal" ? TOPO.filter((i) => i.href !== "/repasses") : TOPO;
   const caminho = usePathname();
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
@@ -149,21 +153,21 @@ export function CascaApp({
   }, []);
 
   const ativa = rotaAtiva(caminho);
-  const noTopo = TOPO.some((i) => i.href === ativa);
+  const noTopo = topo.some((i) => i.href === ativa);
 
   const itensLateral = useMemo<ItemAba[]>(() => {
     const linhas: ItemAba[] = [];
     // Em telas menores a barra do topo não mostra a navegação: ela vem para o menu.
     if (!telaGrande) {
       linhas.push({ id: "g_principal", ehRotulo: true, className: "lateral-grupo", rotulo: "Principal" });
-      TOPO.forEach((i) => linhas.push(linhaLateral(i)));
+      topo.forEach((i) => linhas.push(linhaLateral(i)));
     }
     for (const g of LATERAL) {
       linhas.push({ id: "g_" + g.titulo, ehRotulo: true, className: "lateral-grupo", rotulo: g.titulo });
       g.itens.forEach((i) => linhas.push(linhaLateral(i)));
     }
     return linhas;
-  }, [telaGrande]);
+  }, [telaGrande, topo]);
 
   const ir = (href: string) => {
     setGavetaAberta(false);
@@ -204,7 +208,7 @@ export function CascaApp({
             valor={noTopo ? ativa : null}
             aoMudar={ir}
             aoPassar={(href) => router.prefetch(href)}
-            itens={TOPO.map((i) => ({ id: i.href, rotulo: i.rotulo }))}
+            itens={topo.map((i) => ({ id: i.href, rotulo: i.rotulo }))}
           />
         </nav>
 

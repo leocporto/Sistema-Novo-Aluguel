@@ -7,12 +7,12 @@ import { FormImovel } from "../form-imovel";
 export const metadata: Metadata = { title: "Novo imóvel" };
 
 export default async function NovoImovelPage() {
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
   const { data } = await supabase.from("pessoas").select("*").contains("papeis", ["proprietario"]).order("nome");
   return (
     <>
       <Cabecalho titulo="Novo imóvel" />
-      <FormImovel proprietarios={(data ?? []) as Pessoa[]} />
+      <FormImovel proprietarios={organizacao.modo === "pessoal" ? undefined : ((data ?? []) as Pessoa[])} />
     </>
   );
 }
