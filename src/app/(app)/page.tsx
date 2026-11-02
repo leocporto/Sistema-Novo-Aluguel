@@ -7,6 +7,7 @@ import { formatarReais } from "@/lib/dominio/dinheiro";
 import { proximoReajuste } from "@/lib/dominio/reajuste";
 import { ROTULO_STATUS_IMOVEL } from "@/lib/tipos";
 import { AlertTriangle, ArrowLeftRight, Building2, CalendarClock, FileText, Percent, PieChart, Wallet } from "lucide-react";
+import { Contador } from "@/components/abas-segmentadas";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -94,34 +95,34 @@ export default async function PainelPage() {
       <div className="entrar-cascata grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Indicador
           rotulo="Inadimplência" icone={<AlertTriangle />}
-          valor={formatarReais(soma(atrasadas, "valor_total"))}
+          valor={<Contador valor={soma(atrasadas, "valor_total")} formato="moeda" />}
           detalhe={`${atrasadas.length} fatura(s) em atraso`}
           tom={atrasadas.length ? "perigo" : "sucesso"}
           href="/faturas?situacao=atraso"
         />
         <Indicador
           rotulo="Vencendo em 7 dias" icone={<CalendarClock />}
-          valor={formatarReais(soma(aVencer, "valor_total"))}
+          valor={<Contador valor={soma(aVencer, "valor_total")} formato="moeda" />}
           detalhe={`${aVencer.length} fatura(s)`}
           href="/faturas"
         />
         <Indicador
           rotulo="Repasses a pagar hoje" icone={<ArrowLeftRight />}
-          valor={formatarReais(soma(repHoje, "valor_liquido"))}
+          valor={<Contador valor={soma(repHoje, "valor_liquido")} formato="moeda" />}
           detalhe={`${repHoje.length} de ${rep.length} pendente(s)`}
           tom={repHoje.length ? "alerta" : "neutro"}
           href="/repasses"
         />
         <Indicador
           rotulo="Recebido no mês" icone={<Wallet />}
-          valor={formatarReais((recebidasMes.data ?? []).reduce((s, f) => s + Number(f.valor_pago ?? 0), 0))}
+          valor={<Contador valor={(recebidasMes.data ?? []).reduce((s, f) => s + Number(f.valor_pago ?? 0), 0)} formato="moeda" />}
           tom="sucesso"
         />
-        <Indicador rotulo="Contratos ativos" icone={<FileText />} valor={ativos.length} detalhe={`Carteira: ${formatarReais(carteira)}/mês`} href="/contratos" />
-        <Indicador rotulo="Imóveis alugados" icone={<Building2 />} valor={alugados} detalhe={`${disponiveis} desalugado(s)`} href="/imoveis" />
+        <Indicador rotulo="Contratos ativos" icone={<FileText />} valor={<Contador valor={ativos.length} />} detalhe={`Carteira: ${formatarReais(carteira)}/mês`} href="/contratos" />
+        <Indicador rotulo="Imóveis alugados" icone={<Building2 />} valor={<Contador valor={alugados} />} detalhe={`${disponiveis} desalugado(s)`} href="/imoveis" />
         <Indicador
           rotulo="Ocupação" icone={<PieChart />}
-          valor={alugados + disponiveis ? `${Math.round((alugados / (alugados + disponiveis)) * 100)}%` : "—"}
+          valor={alugados + disponiveis ? <Contador valor={(alugados / (alugados + disponiveis)) * 100} formato="pct" /> : "—"}
         />
         <Indicador rotulo="Taxa média de administração" icone={<Percent />} valor={`${Number(organizacao.taxa_administracao_pct)}%`} detalhe="padrão da imobiliária" />
       </div>

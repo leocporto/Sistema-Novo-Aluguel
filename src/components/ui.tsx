@@ -17,7 +17,7 @@ export function Cabecalho({
   trilha?: string;
 }) {
   return (
-    <div className="entrar mb-[clamp(14px,1.5vw,18px)] flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-[clamp(14px,1.5vw,18px)] flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0 max-w-[760px]">
         <div className="flex items-center gap-2 text-[13px] text-mudo">
           <span>Novo Aluguel</span>

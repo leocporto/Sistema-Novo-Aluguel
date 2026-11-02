@@ -50,14 +50,30 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
 - `<select>` sempre sem a seta nativa, com a seta do sistema (definida no `globals.css`).
 - Filtros de lista se aplicam sozinhos (sem botão "Filtrar").
 
-## Menu lateral
-- 248px, `bg-sidebar`, marca no topo (quadrado com gradiente azul + "NOVO ALUGUEL" + nome da
-  imobiliária), grupos com rótulo mono 9px, itens 13,5px com ícone; **item ativo = fundo de
-  acento e texto branco**. Rodapé: usuário, Sair e o sol/lua.
+## Casca do sistema (`src/components/casca-app.tsx`)
+- **Barra do topo (76px)**: ☰ (só em telas < 1024px), marca (quadrado azul em gradiente +
+  "Novo Aluguel" + nome da imobiliária), relógio (≥ 1280px), **navegação principal só com nomes**
+  (Painel, Imóveis, Contratos, Cobranças, Repasses) em pílula, sol/lua e cartão do usuário
+  (avatar, nome/e-mail ≥ 1367px, Sair).
+- **Menu lateral**: recolhido em **69px só com ícones**; ao passar o mouse abre para **236px
+  empurrando o conteúdo**, com rótulos e grupos entrando em fade + 6px. Em telas < 1024px vira
+  gaveta (260px) aberta pelo ☰, com fundo desfocado, e recebe também os itens do topo.
+- **Uma seleção só no app**: se a tela é do topo, a pílula do menu some (encolhe até um ponto),
+  e vice-versa.
+- Item novo de navegação: acrescentar em `TOPO` ou `LATERAL` no `casca-app.tsx`.
 
-## Movimento
-- Entrada suave das telas: `entrar` (cabeçalho, cartões, tabelas) e `entrar-cascata` (grades de
-  KPI). Nada que responde a clique ou hover passa de 340ms. `prefers-reduced-motion` desliga tudo.
+## Movimento (`src/lib/movimento`, `src/components/abas-segmentadas.tsx`)
+- **`<AbasSegmentadas>`**: todo grupo de seleção única. A pílula azul é uma camada recortada por
+  `clip-path` (frente 220ms, trás 340ms) e há uma pílula de hover neutra por baixo. Variantes
+  `nav` (topo), `lateral` (menu) e `seg` (filtros).
+- **`<Contador>`**: todo número grande de KPI conta até o valor (0,85s ao abrir, 0,55s ao mudar);
+  formatos `moeda`, `inteiro`, `pct`.
+- **Entrada de toda tela**: a cada troca de rota os blocos da tela sobem em cascata (`.tela`);
+  grades de KPI usam `entrar-cascata`.
+- **Janelas (modais)**: abrem por **portal no `<body>`** (`createPortal`), camada escura
+  desfocada com a classe `janela-fundo` e a janela (`.janela`) como primeiro filho; animam ao
+  abrir e ao fechar (`useMovimentoJanelas`, ligado na casca).
+- Nada que responde a clique ou hover passa de 340ms; `prefers-reduced-motion` desliga tudo.
 
 ## Formatos
 - Moeda em BRL (`R$ 1.234,56`), datas `dd/mm/aaaa`, competência `mm/aaaa`.

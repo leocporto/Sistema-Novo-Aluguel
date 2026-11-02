@@ -9,6 +9,7 @@ import type { Repasse } from "@/lib/tipos";
 import { marcarRepassesPagos } from "./actions";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { ArrowLeftRight, CalendarClock, Percent } from "lucide-react";
+import { Contador } from "@/components/abas-segmentadas";
 
 export const metadata: Metadata = { title: "Repasses" };
 
@@ -41,16 +42,16 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
         descricao="Valores líquidos (aluguel − taxas − impostos) gerados na baixa das faturas ou agendados no repasse garantido."
       />
       <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Indicador rotulo="Pendentes" icone={<ArrowLeftRight />} valor={formatarReais(pendentes.reduce((s, r) => s + Number(r.valor_liquido), 0))} detalhe={`${pendentes.length} repasse(s)`} />
+        <Indicador rotulo="Pendentes" icone={<ArrowLeftRight />} valor={<Contador valor={pendentes.reduce((s, r) => s + Number(r.valor_liquido), 0)} formato="moeda" />} detalhe={`${pendentes.length} repasse(s)`} />
         <Indicador
           rotulo="Para pagar até hoje" icone={<CalendarClock />}
-          valor={formatarReais(vencidos.reduce((s, r) => s + Number(r.valor_liquido), 0))}
+          valor={<Contador valor={vencidos.reduce((s, r) => s + Number(r.valor_liquido), 0)} formato="moeda" />}
           tom={vencidos.length ? "alerta" : "neutro"}
           detalhe={`${vencidos.length} repasse(s)`}
         />
         <Indicador
           rotulo="Taxas retidas (lista)" icone={<Percent />}
-          valor={formatarReais(repasses.reduce((s, r) => s + Number(r.taxa_administracao) + Number(r.taxa_intermediacao), 0))}
+          valor={<Contador valor={repasses.reduce((s, r) => s + Number(r.taxa_administracao) + Number(r.taxa_intermediacao), 0)} formato="moeda" />}
           tom="sucesso"
         />
       </div>

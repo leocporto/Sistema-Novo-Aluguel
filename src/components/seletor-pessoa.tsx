@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { UserPlus } from "lucide-react";
 import { criarPessoaRapida } from "@/app/(app)/pessoas/actions";
 import { classeBotao, Entrada, Selecao } from "./ui";
@@ -94,14 +95,20 @@ export function SeletorPessoa({
         ))}
       </Selecao>
 
-      {aberto && (
+      {aberto &&
+        createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4"
+          className="janela-fundo fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-[rgba(10,14,20,.45)] p-4 backdrop-blur-[6px]"
           onClick={(e) => {
             if (e.target === e.currentTarget) fechar();
           }}
         >
-          <div role="dialog" aria-modal="true" className="entrar w-full max-w-md rounded-card border border-borda bg-card p-6 shadow-card">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={rotuloNovo}
+            className="janela w-full max-w-md rounded-card border border-borda bg-card p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,.45)]"
+          >
             <div className="mb-5 flex items-center gap-3">
               <span className="flex size-9 items-center justify-center rounded-[10px] border border-acento-bd bg-acento-bg text-acento-hot">
                 <UserPlus className="size-4" />
@@ -135,8 +142,9 @@ export function SeletorPessoa({
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </>
   );
 }

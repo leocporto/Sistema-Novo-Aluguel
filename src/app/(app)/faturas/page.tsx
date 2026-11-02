@@ -9,6 +9,7 @@ import type { Fatura } from "@/lib/tipos";
 import { gerarFaturasDoMes } from "./actions";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { AlertTriangle, CalendarClock, Wallet } from "lucide-react";
+import { Contador } from "@/components/abas-segmentadas";
 
 export const metadata: Metadata = { title: "Cobranças" };
 
@@ -58,9 +59,9 @@ export default async function FaturasPage({ searchParams }: PageProps<"/faturas"
         }
       />
       <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Indicador rotulo="A receber" icone={<CalendarClock />} valor={formatarReais(aReceber)} />
-        <Indicador rotulo="Em atraso" icone={<AlertTriangle />} valor={formatarReais(atraso)} tom={atraso > 0 ? "perigo" : "neutro"} />
-        <Indicador rotulo="Recebido" icone={<Wallet />} valor={formatarReais(recebido)} tom="sucesso" />
+        <Indicador rotulo="A receber" icone={<CalendarClock />} valor={<Contador valor={aReceber} formato="moeda" />} />
+        <Indicador rotulo="Em atraso" icone={<AlertTriangle />} valor={<Contador valor={atraso} formato="moeda" />} tom={atraso > 0 ? "perigo" : "neutro"} />
+        <Indicador rotulo="Recebido" icone={<Wallet />} valor={<Contador valor={recebido} formato="moeda" />} tom="sucesso" />
       </div>
       <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
         <Entrada type="month" name="mes" defaultValue={mes} className="w-44" />

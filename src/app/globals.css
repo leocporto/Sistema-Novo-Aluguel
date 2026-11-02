@@ -160,6 +160,481 @@ select option {
   width: auto;
 }
 
+/* ═══ Casca do sistema (mesmo layout do Gueco) ═══════════════════════════ */
+.casca {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+.casca-linha {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.casca-conteudo {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: clamp(18px, 2.2vw, 30px) clamp(16px, 2.6vw, 36px) 40px;
+}
+
+/* barra do topo */
+.topo {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 76px;
+  flex-shrink: 0;
+  padding: 0 clamp(14px, 1.8vw, 22px);
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+}
+.topo-esq {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.6vw, 20px);
+  min-width: 0;
+  flex: 1 1 0;
+}
+.topo-dir {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 0;
+}
+.topo-nav {
+  display: none;
+  flex-shrink: 0;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+@media (min-width: 1024px) {
+  .topo-nav {
+    display: flex;
+  }
+}
+.topo-btn {
+  display: grid;
+  place-items: center;
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.topo-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.topo-marca {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.topo-marca-ico {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  flex-shrink: 0;
+  color: #fff;
+  background: linear-gradient(150deg, #4c8dff, #2563eb);
+  box-shadow: 0 6px 16px -4px var(--accent-glow);
+}
+.topo-marca-nome {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.topo-marca-tag {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+.topo-relogio {
+  display: none;
+  flex-direction: column;
+  line-height: 1.15;
+  flex-shrink: 0;
+  padding-left: clamp(12px, 1.6vw, 20px);
+  border-left: 1px solid var(--border);
+}
+@media (min-width: 1280px) {
+  .topo-relogio {
+    display: flex;
+  }
+}
+.topo-relogio .t {
+  font-family: var(--font-spline-mono), monospace;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.topo-relogio .d {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+.topo-usuario {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 2px 4px 2px 2px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  max-width: 280px;
+  min-width: 0;
+}
+.topo-av {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  background: linear-gradient(150deg, #4c8dff, #2563eb);
+}
+.topo-usuario-txt {
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+@media (min-width: 1367px) {
+  .topo-usuario-txt {
+    display: flex;
+  }
+}
+.topo-usuario-nome {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.topo-usuario-mail {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.topo-sair {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+.topo-sair:hover {
+  background: var(--bg-card-hover);
+  color: var(--bad);
+}
+
+/* menu lateral: 69px só com ícones → 236px ao passar o mouse, empurrando o conteúdo */
+.lateral {
+  width: 69px;
+  flex-shrink: 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  z-index: 30;
+  transition: width 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lateral:hover,
+.lateral.aberta {
+  width: 236px;
+}
+.lateral-rolagem {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.lateral-rolagem::-webkit-scrollbar {
+  width: 0;
+}
+.lateral-grupo {
+  font-family: var(--font-spline-mono), monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 13px 0 5px 13px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.1s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lateral-ico {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.lateral-txt {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.1s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lateral:hover .lateral-txt,
+.lateral.aberta .lateral-txt,
+.lateral:hover .lateral-grupo,
+.lateral.aberta .lateral-grupo {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.16s ease 0.05s, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s;
+}
+/* celular/tablet: o menu vira gaveta sobre o conteúdo */
+@media (max-width: 1023px) {
+  .lateral {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    border-right: 0;
+  }
+  .lateral:hover {
+    width: 0;
+  }
+  .lateral.aberta {
+    width: 260px;
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+  .lateral.aberta .lateral-txt,
+  .lateral.aberta .lateral-grupo {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 1024px) {
+  .topo-menu,
+  .gaveta-fundo {
+    display: none !important;
+  }
+}
+.gaveta-fundo {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(10, 14, 20, 0.4);
+  backdrop-filter: blur(4px);
+  animation: janela-fundo-in 0.2s ease-out;
+}
+
+/* ── Abas com pílula elástica (barra do topo, menu, filtros) ── */
+.abas {
+  position: relative;
+  isolation: isolate;
+}
+.abas-hover {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--bg-card-hover);
+  opacity: 0;
+  transition: opacity 0.15s;
+  clip-path: inset(50% 50% 50% 50%);
+}
+.abas > .abas-btn {
+  position: relative;
+  z-index: 1;
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.15s;
+}
+.abas > .abas-btn:active {
+  transform: scale(0.95);
+}
+.abas-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.abas-camada {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--accent);
+  border: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+.abas-camada > .abas-btn {
+  color: #fff !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  font: inherit;
+  line-height: 1.2;
+}
+
+/* variante nav (barra do topo): só os nomes */
+.abas.v-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.v-nav > .abas-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.abas.v-nav > .abas-btn:hover {
+  color: var(--text-primary);
+}
+.abas.v-nav > .abas-btn:active {
+  transform: scale(0.92);
+}
+.abas-camada.v-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 16px;
+}
+
+/* variante lateral (menu, vertical) */
+.v-lateral {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 14px;
+}
+.v-lateral > .abas-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 13px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-align: left;
+}
+.abas.v-lateral > .abas-btn:hover {
+  color: var(--text-primary);
+}
+.abas.v-lateral > .abas-btn:active {
+  transform: scale(0.97);
+}
+.abas-camada.v-lateral > .abas-btn {
+  font-weight: 600;
+}
+
+/* variante seg (filtros em pílula) */
+.abas.v-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  width: max-content;
+  border-radius: 13px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+.v-seg > .abas-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.abas.v-seg > .abas-btn:hover {
+  color: var(--text-primary);
+}
+.abas-camada.v-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 13px;
+}
+
+/* ── Entrada de toda tela: cabeçalho, cartões, tabelas e grades sobem em cascata ── */
+@keyframes tela-subir {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tela > * {
+  animation: tela-subir 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.tela > *:nth-child(2) { animation-delay: 0.04s; }
+.tela > *:nth-child(3) { animation-delay: 0.08s; }
+.tela > *:nth-child(4) { animation-delay: 0.12s; }
+.tela > *:nth-child(5) { animation-delay: 0.16s; }
+.tela > *:nth-child(6) { animation-delay: 0.2s; }
+.tela > *:nth-child(n + 7) { animation-delay: 0.24s; }
+
 /* ── Movimento (nada que responde a clique/hover passa de 340ms) ── */
 @keyframes subir {
   from {
@@ -184,6 +659,37 @@ select option {
 .entrar-cascata > *:nth-child(6) { animation-delay: 200ms; }
 .entrar-cascata > *:nth-child(7) { animation-delay: 240ms; }
 .entrar-cascata > *:nth-child(8) { animation-delay: 280ms; }
+
+/* ── Janelas (modais): fundo escuro desfocado; a janela sobe/cresce ao abrir e some ao fechar ── */
+@keyframes janela-fundo-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes janela-fundo-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes janela-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes janela-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(8px) scale(0.97); }
+}
+.janela-fundo {
+  animation: janela-fundo-in 0.2s ease-out;
+}
+.janela-fundo > .janela {
+  animation: janela-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.janela-sai {
+  animation: janela-fundo-out 0.17s ease-in forwards !important;
+  pointer-events: none !important;
+}
+.janela-sai > .janela {
+  animation: janela-out 0.17s ease-in forwards !important;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,

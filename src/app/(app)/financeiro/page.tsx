@@ -8,6 +8,7 @@ import { formatarReais } from "@/lib/dominio/dinheiro";
 import { type EstadoAcao, ErroValidacao, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { ArrowLeftRight, Scale, TrendingDown, TrendingUp } from "lucide-react";
+import { Contador } from "@/components/abas-segmentadas";
 
 export const metadata: Metadata = { title: "Financeiro" };
 
@@ -75,10 +76,10 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
         descricao="Contas a pagar e a receber. As taxas de administração entram automaticamente na baixa das faturas."
       />
       <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <Indicador rotulo="Receitas do mês" icone={<TrendingUp />} valor={formatarReais(receitas)} tom="sucesso" />
-        <Indicador rotulo="Despesas do mês" icone={<TrendingDown />} valor={formatarReais(despesas)} tom="perigo" />
-        <Indicador rotulo="Resultado" icone={<Scale />} valor={formatarReais(receitas - despesas)} tom={receitas - despesas >= 0 ? "sucesso" : "perigo"} />
-        <Indicador rotulo="Repasses pendentes até o fim do mês" icone={<ArrowLeftRight />} valor={formatarReais(aRepassar)} href="/repasses" tom="alerta" />
+        <Indicador rotulo="Receitas do mês" icone={<TrendingUp />} valor={<Contador valor={receitas} formato="moeda" />} tom="sucesso" />
+        <Indicador rotulo="Despesas do mês" icone={<TrendingDown />} valor={<Contador valor={despesas} formato="moeda" />} tom="perigo" />
+        <Indicador rotulo="Resultado" icone={<Scale />} valor={<Contador valor={receitas - despesas} formato="moeda" />} tom={receitas - despesas >= 0 ? "sucesso" : "perigo"} />
+        <Indicador rotulo="Repasses pendentes até o fim do mês" icone={<ArrowLeftRight />} valor={<Contador valor={aRepassar} formato="moeda" />} href="/repasses" tom="alerta" />
       </div>
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div>
