@@ -7,6 +7,7 @@ import { formatarReais, paraReais } from "@/lib/dominio/dinheiro";
 import { calcularReajuste, proximoReajuste } from "@/lib/dominio/reajuste";
 import { paraCentavos } from "@/lib/dominio/dinheiro";
 import type { Contrato } from "@/lib/tipos";
+import { LinhaLink } from "@/components/linha-link";
 
 export const metadata: Metadata = { title: "Reajustes" };
 
@@ -42,7 +43,7 @@ export default async function ReajustesPage() {
       <Tabela colunas={["Contrato", "Data do reajuste", "Índice", "Acumulado", "Aluguel atual", "Novo aluguel", "Situação"]}>
         {lista.length === 0 && <LinhaVazia colunas={7}>Nenhum reajuste nos próximos 60 dias.</LinhaVazia>}
         {lista.map(({ c, data, r, dias }) => (
-          <tr key={c.id}>
+          <LinhaLink href={`/contratos/${c.id}`} key={c.id}>
             <Celula>
               <Link href={`/contratos/${c.id}`} className="font-medium text-acento hover:underline">
                 #{c.numero} · {c.imovel.codigo}
@@ -64,7 +65,7 @@ export default async function ReajustesPage() {
                 <Selo cor="azul">em {dias} dias</Selo>
               )}
             </Celula>
-          </tr>
+          </LinhaLink>
         ))}
       </Tabela>
     </>

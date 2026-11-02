@@ -6,6 +6,7 @@ import { formatarDataBR } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_GARANTIA } from "@/lib/tipos";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { LinhaLink } from "@/components/linha-link";
 
 export const metadata: Metadata = { title: "Contratos" };
 
@@ -54,7 +55,7 @@ export default async function ContratosPage({ searchParams }: PageProps<"/contra
       <Tabela colunas={["Nº", "Imóvel", "Locatário", "Proprietário(s)", "Vigência", "Aluguel", "Garantia", "Situação"]}>
         {contratos.length === 0 && <LinhaVazia colunas={8}>Nenhum contrato.</LinhaVazia>}
         {contratos.map((c) => (
-          <tr key={c.id} className="hover:bg-card-hover">
+          <LinhaLink href={`/contratos/${c.id}`} key={c.id} className="hover:bg-card-hover">
             <Celula>
               <Link href={`/contratos/${c.id}`} className="font-medium text-acento hover:underline">
                 #{c.numero}
@@ -77,7 +78,7 @@ export default async function ContratosPage({ searchParams }: PageProps<"/contra
             <Celula>
               <Selo cor={c.status === "ativo" ? "verde" : "cinza"}>{c.status}</Selo>
             </Celula>
-          </tr>
+          </LinhaLink>
         ))}
       </Tabela>
     </>

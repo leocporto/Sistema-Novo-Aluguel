@@ -1,107 +1,152 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BotaoEnviar, Formulario } from "@/components/formulario";
-import { Cabecalho, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
-import { obterContexto } from "@/lib/contexto";
-import { fimDoMes, formatarCompetencia, formatarDataBR, hojeISO, inicioDoMes } from "@/lib/dominio/datas";
-import { formatarReais } from "@/lib/dominio/dinheiro";
-import type { Fatura } from "@/lib/tipos";
-import { gerarFaturasDoMes } from "./actions";
-import { FiltroAutomatico } from "@/components/filtro-automatico";
-import { AlertTriangle, CalendarClock, Wallet } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronLeft, ChevronRight, ListChecks, Wallet } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
+import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { Cabecalho, Indicador, classeBotao } from "@/components/ui";
+import { obterContexto } from "@/lib/contexto";
+import { diaNoMes, fimDoMes, formatarCompetencia, hojeISO, somarMeses } from "@/lib/dominio/datas";
+import { gerarFaturasDoMes } from "./actions";
+import { ControleMes, type AluguelDoMes } from "./controle-mes";
 
-export const metadata: Metadata = { title: "Cobranças" };
+export const metadata: Metadata = { title: "Aluguéis do mês" };
 
-type Linha = Fatura & {
-  contrato: {
-    numero: number;
-    imovel: { codigo: string };
-    contrato_partes: { papel: string; pessoa: { nome: string } }[];
-  };
+const NOMES_MES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+type ContratoMes = {
+  id: string;
+  numero: number;
+  status: string;
+  data_inicio: string;
+  data_fim: string;
+  data_rescisao: string | null;
+  valor_aluguel: number;
+  dia_vencimento: number;
+  modalidade: "antecipado" | "vencido";
+  multa_atraso_pct: number;
+  juros_mes_pct: number;
+  carencia_dias: number;
+  imovel: { codigo: string; logradouro: string | null; numero: string | null };
+  contrato_partes: { papel: string; pessoa: { nome: string } }[];
+};
+type FaturaMes = {
+  id: string;
+  contrato_id: string;
+  status: "aberta" | "paga" | "cancelada";
+  vencimento: string;
+  valor_total: number;
+  valor_pago: number | null;
+  pago_em: string | null;
 };
 
-export default async function FaturasPage({ searchParams }: PageProps<"/faturas">) {
+export default async function AlugueisDoMesPage({ searchParams }: PageProps<"/faturas">) {
   const sp = await searchParams;
   const hoje = hojeISO();
-  const mes = typeof sp.mes === "string" && sp.mes ? sp.mes : hoje.slice(0, 7);
-  const situacao = typeof sp.situacao === "string" ? sp.situacao : "";
+  const mes = typeof sp.mes === "string" && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : hoje.slice(0, 7);
+  const competencia = `${mes}-01`;
+  const fim = fimDoMes(competencia);
   const { supabase } = await obterContexto();
 
-  let q = supabase
-    .from("faturas")
-    .select("*, contrato:contratos(numero, imovel:imoveis(codigo), contrato_partes(papel, pessoa:pessoas(nome)))")
-    .order("vencimento")
-    .limit(500);
-  if (situacao === "atraso") q = q.eq("status", "aberta").lt("vencimento", hoje);
-  else {
-    q = q.gte("vencimento", `${mes}-01`).lte("vencimento", fimDoMes(`${mes}-01`));
-    if (situacao) q = q.eq("status", situacao);
-  }
-  const { data } = await q;
-  const faturas = (data ?? []) as unknown as Linha[];
+  const [{ data: contratosRaw }, { data: faturasRaw }] = await Promise.all([
+    supabase
+      .from("contratos")
+      .select(
+        "id, numero, status, data_inicio, data_fim, data_rescisao, valor_aluguel, dia_vencimento, modalidade, multa_atraso_pct, juros_mes_pct, carencia_dias, imovel:imoveis(codigo, logradouro, numero), contrato_partes(papel, pessoa:pessoas(nome))",
+      )
+      .neq("status", "rascunho")
+      .lte("data_inicio", fim),
+    supabase
+      .from("faturas")
+      .select("id, contrato_id, status, vencimento, valor_total, valor_pago, pago_em")
+      .eq("competencia", competencia)
+      .neq("status", "cancelada"),
+  ]);
+  const faturaDo = new Map(((faturasRaw ?? []) as FaturaMes[]).map((f) => [f.contrato_id, f]));
 
-  const soma = (f: (x: Linha) => boolean) => faturas.filter(f).reduce((s, x) => s + Number(x.valor_pago ?? x.valor_total), 0);
-  const aReceber = soma((f) => f.status === "aberta" && f.vencimento >= hoje);
-  const atraso = soma((f) => f.status === "aberta" && f.vencimento < hoje);
-  const recebido = soma((f) => f.status === "paga");
+  // Um aluguel por contrato que cobre o mês (ou que já tem fatura dele).
+  const itens: AluguelDoMes[] = ((contratosRaw ?? []) as unknown as ContratoMes[])
+    .filter((c) => faturaDo.has(c.id) || (c.status === "ativo" && (c.data_rescisao ?? c.data_fim) >= competencia))
+    .map((c) => {
+      const f = faturaDo.get(c.id);
+      const mesVenc = c.modalidade === "vencido" ? somarMeses(competencia, 1) : competencia;
+      const vencPrevisto = diaNoMes(mesVenc, c.dia_vencimento);
+      const im = c.imovel;
+      return {
+        contratoId: c.id,
+        contratoNumero: c.numero,
+        faturaId: f?.id ?? null,
+        situacao: f ? (f.status === "paga" ? "paga" : "aberta") : "sem_fatura",
+        inquilino: c.contrato_partes.find((p) => p.papel === "locatario")?.pessoa.nome ?? "Locatário sem cadastro",
+        imovel: [im.logradouro, im.numero].filter(Boolean).join(", ") || im.codigo,
+        valor: Number(f?.valor_total ?? c.valor_aluguel),
+        vencimento: f?.vencimento ?? (vencPrevisto < c.data_inicio ? c.data_inicio : vencPrevisto),
+        pagoEm: f?.pago_em ?? null,
+        valorPago: f?.valor_pago != null ? Number(f.valor_pago) : null,
+        multaPct: Number(c.multa_atraso_pct),
+        jurosMesPct: Number(c.juros_mes_pct),
+        carenciaDias: c.carencia_dias,
+      } satisfies AluguelDoMes;
+    });
+
+  const pagos = itens.filter((i) => i.situacao === "paga");
+  const faltam = itens.filter((i) => i.situacao !== "paga");
+  const recebido = pagos.reduce((s, i) => s + (i.valorPago ?? i.valor), 0);
+  const falta = faltam.reduce((s, i) => s + i.valor, 0);
+  const atrasados = faltam.filter((i) => i.vencimento < hoje);
+  const valorAtraso = atrasados.reduce((s, i) => s + i.valor, 0);
+  const semFatura = itens.filter((i) => i.situacao === "sem_fatura").length;
+
+  const [ano, m] = mes.split("-").map(Number);
+  const anterior = somarMeses(competencia, -1).slice(0, 7);
+  const proximo = somarMeses(competencia, 1).slice(0, 7);
 
   return (
     <>
       <Cabecalho
-        titulo="Cobranças"
-        descricao="Faturas mensais dos locatários: geração, baixa e acompanhamento da inadimplência."
+        titulo="Aluguéis do mês"
+        descricao="Marque o check de quem já pagou. Desmarcar desfaz o pagamento."
         acoes={
-          <Formulario acao={gerarFaturasDoMes} className="flex flex-wrap items-center gap-2">
-            <Entrada type="month" name="competencia" defaultValue={inicioDoMes(hoje).slice(0, 7)} className="w-40" />
-            <BotaoEnviar>Gerar faturas do mês</BotaoEnviar>
-          </Formulario>
+          semFatura > 0 ? (
+            <Formulario acao={gerarFaturasDoMes} className="flex items-center gap-2">
+              <input type="hidden" name="competencia" value={mes} />
+              <BotaoEnviar variante="secundario">Gerar faturas de {formatarCompetencia(competencia)}</BotaoEnviar>
+            </Formulario>
+          ) : undefined
         }
       />
-      <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Indicador rotulo="A receber" icone={<CalendarClock />} valor={<Contador valor={aReceber} formato="moeda" />} />
-        <Indicador rotulo="Em atraso" icone={<AlertTriangle />} valor={<Contador valor={atraso} formato="moeda" />} tom={atraso > 0 ? "perigo" : "neutro"} />
-        <Indicador rotulo="Recebido" icone={<Wallet />} valor={<Contador valor={recebido} formato="moeda" />} tom="sucesso" />
+
+      <div className="mb-5 flex items-center gap-2">
+        <Link href={`/faturas?mes=${anterior}`} className={classeBotao("secundario")} aria-label="Mês anterior">
+          <ChevronLeft className="size-4" />
+        </Link>
+        <div className="min-w-44 text-center text-[17px] font-semibold capitalize text-texto">
+          {NOMES_MES[m - 1]} de {ano}
+        </div>
+        <Link href={`/faturas?mes=${proximo}`} className={classeBotao("secundario")} aria-label="Próximo mês">
+          <ChevronRight className="size-4" />
+        </Link>
+        {mes !== hoje.slice(0, 7) && (
+          <Link href="/faturas" className={classeBotao("fantasma", "sm")}>
+            Voltar para este mês
+          </Link>
+        )}
       </div>
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        <Entrada type="month" name="mes" defaultValue={mes} className="w-44" />
-        <Selecao name="situacao" defaultValue={situacao} className="max-w-48">
-          <option value="">Todas</option>
-          <option value="aberta">Em aberto</option>
-          <option value="paga">Pagas</option>
-          <option value="cancelada">Canceladas</option>
-          <option value="atraso">Todas em atraso</option>
-        </Selecao>
-      </FiltroAutomatico>
-      <Tabela colunas={["Nº", "Contrato", "Locatário", "Competência", "Vencimento", "Valor", "Situação"]}>
-        {faturas.length === 0 && <LinhaVazia colunas={7}>Nenhuma fatura no período.</LinhaVazia>}
-        {faturas.map((f) => {
-          const atrasada = f.status === "aberta" && f.vencimento < hoje;
-          return (
-            <tr key={f.id} className="hover:bg-card-hover">
-              <Celula>
-                <Link href={`/faturas/${f.id}`} className="font-medium text-acento hover:underline">
-                  #{f.numero}
-                </Link>
-              </Celula>
-              <Celula>
-                #{f.contrato.numero} · {f.contrato.imovel.codigo}
-              </Celula>
-              <Celula>
-                {f.contrato.contrato_partes.filter((p) => p.papel === "locatario").map((p) => p.pessoa.nome).join(", ")}
-              </Celula>
-              <Celula>{formatarCompetencia(f.competencia)}</Celula>
-              <Celula>{formatarDataBR(f.vencimento)}</Celula>
-              <Celula>{formatarReais(f.valor_pago ?? f.valor_total)}</Celula>
-              <Celula>
-                <Selo cor={atrasada ? "vermelho" : f.status === "paga" ? "verde" : f.status === "aberta" ? "amarelo" : "cinza"}>
-                  {atrasada ? "em atraso" : f.status}
-                </Selo>
-              </Celula>
-            </tr>
-          );
-        })}
-      </Tabela>
+
+      <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Indicador rotulo="Pagos" icone={<ListChecks />} tom="sucesso" valor={<><Contador valor={pagos.length} /> de {itens.length}</>} />
+        <Indicador rotulo="Recebido" icone={<Wallet />} tom="sucesso" valor={<Contador valor={recebido} formato="moeda" />} />
+        <Indicador rotulo="Falta receber" icone={<CalendarClock />} valor={<Contador valor={falta} formato="moeda" />} detalhe={`${faltam.length} aluguel(is)`} />
+        <Indicador
+          rotulo="Em atraso"
+          icone={<AlertTriangle />}
+          tom={atrasados.length ? "perigo" : "sucesso"}
+          valor={<Contador valor={valorAtraso} formato="moeda" />}
+          detalhe={atrasados.length ? `${atrasados.length} atrasado(s)` : "nenhum atrasado"}
+          href={atrasados.length ? "/regua" : undefined}
+        />
+      </div>
+
+      <ControleMes key={mes} itens={itens} competencia={competencia} hoje={hoje} />
     </>
   );
 }

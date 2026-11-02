@@ -164,6 +164,48 @@ describe("migração SQL", () => {
       ),
     ).rejects.toThrow(/não está em aberto/);
 
+    // Desfazer a baixa: volta para aberta e apaga repasse, multa/juros e receita
+    await comoUsuario(USER_A, () => db.query(`select public.estornar_baixa($1)`, [faturaId]));
+    const estornado = await comoUsuario(USER_A, async () => ({
+      fatura: (await db.query<{ status: string; pago_em: string | null }>(`select status, pago_em from faturas where id = $1`, [faturaId]))
+        .rows[0],
+      itens: (await db.query(`select * from fatura_itens where fatura_id = $1`, [faturaId])).rows.length,
+      repasses: (await db.query(`select * from repasses where fatura_id = $1`, [faturaId])).rows.length,
+      receita: (await db.query(`select * from lancamentos where fatura_id = $1`, [faturaId])).rows.length,
+    }));
+    expect(estornado).toEqual({ fatura: { status: "aberta", pago_em: null }, itens: 1, repasses: 0, receita: 0 });
+
+    // Paga de novo e, com o repasse já pago ao proprietário, não deixa desfazer
+    await comoUsuario(USER_A, () =>
+      db.query(`select public.liquidar_fatura($1, $2::jsonb)`, [
+        faturaId,
+        JSON.stringify({
+          pago_em: "2026-04-10",
+          valor_pago: 2000,
+          forma_pagamento: "pix",
+          repasses: [
+            {
+              pessoa_id: prop,
+              percentual: 100,
+              aluguel: 2000,
+              encargos: 0,
+              multa_juros: 0,
+              valor_bruto: 2000,
+              taxa_administracao: 200,
+              taxa_intermediacao: 0,
+              irrf: 0,
+              valor_liquido: 1800,
+              previsto_para: "2026-04-12",
+            },
+          ],
+        }),
+      ]),
+    );
+    await comoUsuario(USER_A, () => db.query(`update repasses set status = 'pago', pago_em = '2026-04-12' where fatura_id = $1`, [faturaId]));
+    await expect(comoUsuario(USER_A, () => db.query(`select public.estornar_baixa($1)`, [faturaId]))).rejects.toThrow(
+      /repasse ao proprietário já foi pago/,
+    );
+
     // Não permite duas faturas ativas para a mesma competência
     await expect(
       comoUsuario(USER_A, () =>

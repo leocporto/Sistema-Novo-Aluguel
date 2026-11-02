@@ -4,6 +4,7 @@ import { Aviso, Cabecalho, Cartao, Celula, Entrada, LinhaVazia, Tabela, classeBo
 import { obterContexto } from "@/lib/contexto";
 import { diasEntre, formatarCompetencia, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
+import { LinhaLink } from "@/components/linha-link";
 
 export const metadata: Metadata = { title: "Relatórios" };
 
@@ -61,7 +62,7 @@ export default async function RelatoriosPage() {
           {inad.map((f) => {
             const loc = f.contrato.contrato_partes.find((p) => p.papel === "locatario")?.pessoa;
             return (
-              <tr key={f.id}>
+              <LinhaLink href={`/faturas/${f.id}`} key={f.id}>
                 <Celula>
                   <Link className="text-acento hover:underline" href={`/faturas/${f.id}`}>
                     #{f.numero}
@@ -80,7 +81,7 @@ export default async function RelatoriosPage() {
                 <Celula>{formatarDataBR(f.vencimento)}</Celula>
                 <Celula className="text-ruim">{diasEntre(f.vencimento, hoje)}</Celula>
                 <Celula>{formatarReais(f.valor_total)}</Celula>
-              </tr>
+              </LinhaLink>
             );
           })}
         </Tabela>

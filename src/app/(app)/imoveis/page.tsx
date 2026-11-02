@@ -5,6 +5,7 @@ import { obterContexto } from "@/lib/contexto";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_STATUS_IMOVEL, type Imovel } from "@/lib/tipos";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { LinhaLink } from "@/components/linha-link";
 
 export const metadata: Metadata = { title: "Imóveis" };
 
@@ -43,7 +44,7 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
       <Tabela colunas={["Código", "Endereço", "Tipo", "Proprietário(s)", "Aluguel", "Situação"]}>
         {imoveis.length === 0 && <LinhaVazia colunas={6}>Nenhum imóvel cadastrado.</LinhaVazia>}
         {imoveis.map((i) => (
-          <tr key={i.id} className="hover:bg-card-hover">
+          <LinhaLink href={`/imoveis/${i.id}`} key={i.id} className="hover:bg-card-hover">
             <Celula>
               <Link href={`/imoveis/${i.id}`} className="font-medium text-acento hover:underline">
                 {i.codigo}
@@ -59,7 +60,7 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
             <Celula>
               <Selo cor={corStatus[i.status as keyof typeof corStatus] ?? "cinza"}>{ROTULO_STATUS_IMOVEL[i.status]}</Selo>
             </Celula>
-          </tr>
+          </LinhaLink>
         ))}
       </Tabela>
     </>

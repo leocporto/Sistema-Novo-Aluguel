@@ -10,6 +10,7 @@ import { marcarRepassesPagos } from "./actions";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { ArrowLeftRight, CalendarClock, Percent } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
+import { LinhaLink } from "@/components/linha-link";
 
 export const metadata: Metadata = { title: "Repasses" };
 
@@ -67,7 +68,7 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
         <Tabela colunas={["", "Previsto", "Proprietário", "Contrato", "Competência", "Bruto", "Taxas", "Impostos", "Líquido", "Dados bancários", "Situação"]}>
           {repasses.length === 0 && <LinhaVazia colunas={11}>Nenhum repasse.</LinhaVazia>}
           {repasses.map((r) => (
-            <tr key={r.id} className="hover:bg-card-hover">
+            <LinhaLink href={`/contratos/${r.contrato.id}`} key={r.id} className="hover:bg-card-hover">
               <Celula>{r.status === "pendente" && <input type="checkbox" name="ids" value={r.id} aria-label="Selecionar" />}</Celula>
               <Celula className={r.status === "pendente" && r.previsto_para <= hoje ? "font-medium text-alerta" : ""}>
                 {formatarDataBR(r.previsto_para)}
@@ -94,7 +95,7 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
                 <Selo cor={r.status === "pago" ? "verde" : r.status === "pendente" ? "amarelo" : "cinza"}>{r.status}</Selo>
                 {r.pago_em && <div className="text-xs text-mudo">{formatarDataBR(r.pago_em)}</div>}
               </Celula>
-            </tr>
+            </LinhaLink>
           ))}
         </Tabela>
         {pendentes.length > 0 && (

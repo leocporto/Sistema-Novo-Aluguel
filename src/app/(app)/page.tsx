@@ -98,7 +98,7 @@ export default async function PainelPage() {
           valor={<Contador valor={soma(atrasadas, "valor_total")} formato="moeda" />}
           detalhe={`${atrasadas.length} fatura(s) em atraso`}
           tom={atrasadas.length ? "perigo" : "sucesso"}
-          href="/faturas?situacao=atraso"
+          href="/regua"
         />
         <Indicador
           rotulo="Vencendo em 7 dias" icone={<CalendarClock />}

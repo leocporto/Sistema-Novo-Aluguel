@@ -5,6 +5,7 @@ import { obterContexto } from "@/lib/contexto";
 import { formatarDocumento } from "@/lib/dominio/documentos";
 import { ROTULO_PAPEL, type Pessoa } from "@/lib/tipos";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { LinhaLink } from "@/components/linha-link";
 
 export const metadata: Metadata = { title: "Pessoas" };
 
@@ -41,7 +42,7 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
       <Tabela colunas={["Nome", "Documento", "Contato", "Papéis"]}>
         {pessoas.length === 0 && <LinhaVazia colunas={4}>Nenhuma pessoa encontrada.</LinhaVazia>}
         {pessoas.map((p) => (
-          <tr key={p.id} className="hover:bg-card-hover">
+          <LinhaLink href={`/pessoas/${p.id}`} key={p.id} className="hover:bg-card-hover">
             <Celula>
               <Link href={`/pessoas/${p.id}`} className="font-medium text-acento hover:underline">
                 {p.nome}
@@ -62,7 +63,7 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
                 ))}
               </div>
             </Celula>
-          </tr>
+          </LinhaLink>
         ))}
       </Tabela>
     </>

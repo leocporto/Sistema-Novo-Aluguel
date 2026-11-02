@@ -41,7 +41,7 @@ const TOPO: Item[] = [
   { href: "/", rotulo: "Painel", icone: LayoutDashboard },
   { href: "/imoveis", rotulo: "Imóveis", icone: Building2 },
   { href: "/contratos", rotulo: "Contratos", icone: FileText },
-  { href: "/faturas", rotulo: "Cobranças", icone: Receipt },
+  { href: "/faturas", rotulo: "Aluguéis do mês", icone: Receipt },
   { href: "/repasses", rotulo: "Repasses", icone: ArrowLeftRight },
 ];
 

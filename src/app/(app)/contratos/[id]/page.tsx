@@ -26,6 +26,7 @@ import { INDICES, NOME_INDICE, proximoReajuste } from "@/lib/dominio/reajuste";
 import { calcularRescisao } from "@/lib/dominio/rescisao";
 import { calcularReajusteDoContrato, carregarContrato } from "@/lib/servicos/locacao";
 import { ROTULO_GARANTIA, ROTULO_PAPEL, ROTULO_REPASSE, type Fatura, type Pessoa, type Repasse } from "@/lib/tipos";
+import { LinhaLink } from "@/components/linha-link";
 import {
   adicionarEncargo,
   adicionarParte,
@@ -148,7 +149,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
             <Tabela colunas={["Nº", "Competência", "Vencimento", "Valor", "Situação", "Pago em"]}>
               {faturas.length === 0 && <LinhaVazia colunas={6}>Nenhuma fatura gerada.</LinhaVazia>}
               {faturas.map((f) => (
-                <tr key={f.id}>
+                <LinhaLink href={`/faturas/${f.id}`} key={f.id}>
                   <Celula>
                     <Link href={`/faturas/${f.id}`} className="text-acento hover:underline">
                       #{f.numero}
@@ -163,7 +164,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                     </Selo>
                   </Celula>
                   <Celula>{formatarDataBR(f.pago_em)}</Celula>
-                </tr>
+                </LinhaLink>
               ))}
             </Tabela>
           </Cartao>
