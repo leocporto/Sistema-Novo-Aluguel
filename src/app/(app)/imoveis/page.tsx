@@ -8,7 +8,7 @@ import { FiltroAutomatico } from "@/components/filtro-automatico";
 
 export const metadata: Metadata = { title: "Imóveis" };
 
-const corStatus = { disponivel: "verde", alugado: "azul", reservado: "amarelo", vendido: "cinza", inativo: "cinza" } as const;
+const corStatus = { disponivel: "vermelho", alugado: "verde", reservado: "amarelo", vendido: "cinza", inativo: "cinza" } as const;
 
 export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis">) {
   const sp = await searchParams;

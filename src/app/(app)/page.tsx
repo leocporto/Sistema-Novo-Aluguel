@@ -10,7 +10,7 @@ import { AlertTriangle, ArrowLeftRight, Building2, CalendarClock, FileText, Perc
 
 export const metadata: Metadata = { title: "Painel" };
 
-const COR_STATUS = { disponivel: "verde", alugado: "azul", reservado: "amarelo", vendido: "cinza", inativo: "cinza" } as const;
+const COR_STATUS = { disponivel: "vermelho", alugado: "verde", reservado: "amarelo", vendido: "cinza", inativo: "cinza" } as const;
 
 export default async function PainelPage() {
   const { supabase, organizacao } = await obterContexto();
