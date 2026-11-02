@@ -10,8 +10,8 @@ export const metadata: Metadata = { title: "Configurações" };
 
 async function salvar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   "use server";
-  const { supabase, organizacao, papel } = await obterContexto();
-  if (papel !== "admin") return { erro: "Apenas administradores podem alterar as configurações." };
+  // Qualquer membro da conta pode mudar (modo de uso, dados e padrões).
+  const { supabase, organizacao } = await obterContexto();
   try {
     const { error } = await supabase
       .from("organizacoes")
