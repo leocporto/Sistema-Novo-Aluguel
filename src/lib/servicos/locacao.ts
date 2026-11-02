@@ -4,7 +4,7 @@ import { paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { inicioDoMes, somarDias } from "@/lib/dominio/datas";
 import { calcularAtraso } from "@/lib/dominio/encargos";
 import { type ContratoParaFatura, type ItemFatura, gerarFatura } from "@/lib/dominio/fatura";
-import { aplicarIrrfIndividual, calcularRepasse, type RepasseCalculado } from "@/lib/dominio/repasse";
+import { aplicarIrrfIndividual, calcularRepasse, impostoEfetivo, type RepasseCalculado } from "@/lib/dominio/repasse";
 import { calcularReajuste, type ResultadoReajuste } from "@/lib/dominio/reajuste";
 import { ErroValidacao, verificar } from "@/lib/form";
 import type { Contrato, ContratoEncargo, ContratoParte, Fatura, FaturaItem, Imovel, Pessoa } from "@/lib/tipos";
@@ -14,17 +14,27 @@ export interface ContratoCompleto {
   imovel: Imovel;
   partes: (ContratoParte & { pessoa: Pessoa })[];
   encargos: ContratoEncargo[];
+  /** % padrão de imposto do proprietário na imobiliária (quando o cadastro da pessoa está em branco). */
+  impostoPadrao: { pf: number; pj: number };
 }
 
 export async function carregarContrato(sb: SupabaseClient, id: string): Promise<ContratoCompleto | null> {
-  const { data: contrato } = await sb.from("contratos").select("*, imovel:imoveis(*)").eq("id", id).maybeSingle();
+  const { data: contrato } = await sb
+    .from("contratos")
+    .select("*, imovel:imoveis(*), organizacao:organizacoes(imposto_pf_pct, imposto_pj_pct)")
+    .eq("id", id)
+    .maybeSingle();
   if (!contrato) return null;
   const partes = verificar(await sb.from("contrato_partes").select("*, pessoa:pessoas(*)").eq("contrato_id", id));
   const encargos = verificar(await sb.from("contrato_encargos").select("*").eq("contrato_id", id).order("descricao"));
-  const { imovel, ...resto } = contrato as Contrato & { imovel: Imovel };
+  const { imovel, organizacao, ...resto } = contrato as Contrato & {
+    imovel: Imovel;
+    organizacao: { imposto_pf_pct: number | string; imposto_pj_pct: number | string } | null;
+  };
   return {
     contrato: resto,
     imovel,
+    impostoPadrao: { pf: Number(organizacao?.imposto_pf_pct ?? 0), pj: Number(organizacao?.imposto_pj_pct ?? 0) },
     partes: partes as (ContratoParte & { pessoa: Pessoa })[],
     encargos: encargos as ContratoEncargo[],
   };
@@ -33,7 +43,12 @@ export async function carregarContrato(sb: SupabaseClient, id: string): Promise<
 export function proprietariosDo(c: ContratoCompleto) {
   return c.partes
     .filter((p) => p.papel === "proprietario")
-    .map((p) => ({ pessoaId: p.pessoa_id, percentual: Number(p.percentual ?? 0), tipoPessoa: p.pessoa.tipo_pessoa }));
+    .map((p) => ({
+      pessoaId: p.pessoa_id,
+      percentual: Number(p.percentual ?? 0),
+      tipoPessoa: p.pessoa.tipo_pessoa,
+      impostoPct: impostoEfetivo(p.pessoa.imposto_pct, p.pessoa.tipo_pessoa, c.impostoPadrao),
+    }));
 }
 
 export function locatarioPrincipal(c: ContratoCompleto) {
@@ -72,6 +87,8 @@ function repassesParaJson(lista: RepasseCalculado[], previsto: string) {
     taxa_administracao: paraReais(r.taxaAdministracao),
     taxa_intermediacao: paraReais(r.taxaIntermediacao),
     irrf: paraReais(r.irrf),
+    imposto: paraReais(r.imposto),
+    imposto_pct: r.impostoPct,
     valor_liquido: paraReais(r.valorLiquido),
     previsto_para: previsto,
   }));

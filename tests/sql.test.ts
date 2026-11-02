@@ -134,7 +134,9 @@ describe("migração SQL", () => {
               taxa_administracao: 200,
               taxa_intermediacao: 0,
               irrf: 0,
-              valor_liquido: 2010,
+              imposto: 100,
+              imposto_pct: 5,
+              valor_liquido: 1910,
               previsto_para: "2026-04-17",
             },
           ],
@@ -146,12 +148,13 @@ describe("migração SQL", () => {
     const estado = await comoUsuario(USER_A, async () => ({
       fatura: (await db.query<{ status: string }>(`select status from faturas where id = $1`, [faturaId])).rows[0],
       itens: (await db.query(`select * from fatura_itens where fatura_id = $1`, [faturaId])).rows.length,
-      repasses: (await db.query<{ valor_liquido: string }>(`select valor_liquido from repasses`)).rows,
+      repasses: (await db.query<{ valor_liquido: string; imposto: string }>(`select valor_liquido, imposto from repasses`)).rows,
       receita: (await db.query(`select * from lancamentos where tipo = 'receber'`)).rows.length,
     }));
     expect(estado.fatura.status).toBe("paga");
     expect(estado.itens).toBe(3);
-    expect(Number(estado.repasses[0].valor_liquido)).toBe(2010);
+    expect(Number(estado.repasses[0].valor_liquido)).toBe(1910);
+    expect(Number(estado.repasses[0].imposto)).toBe(100);
     expect(estado.receita).toBe(1);
 
     // Não permite liquidar duas vezes

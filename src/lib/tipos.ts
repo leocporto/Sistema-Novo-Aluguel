@@ -13,6 +13,8 @@ export interface Organizacao {
   taxa_administracao_pct: Num;
   taxa_intermediacao_pct: Num;
   carencia_dias: number;
+  imposto_pf_pct: Num;
+  imposto_pj_pct: Num;
 }
 
 export interface Pessoa {
@@ -40,6 +42,8 @@ export interface Pessoa {
   pix_chave: string | null;
   papeis: string[];
   observacoes: string | null;
+  /** % de imposto descontado no repasse; null = padrão da imobiliária. */
+  imposto_pct: Num | null;
 }
 
 export interface Imovel {
@@ -168,6 +172,8 @@ export interface Repasse {
   taxa_administracao: Num;
   taxa_intermediacao: Num;
   irrf: Num;
+  imposto: Num;
+  imposto_pct: Num;
   outros_descontos: Num;
   valor_liquido: Num;
   previsto_para: string;

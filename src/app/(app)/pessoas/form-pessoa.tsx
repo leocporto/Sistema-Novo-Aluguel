@@ -134,6 +134,22 @@ export function FormPessoa({
         </Grade>
       </Cartao>
 
+      <Cartao titulo="Imposto sobre o repasse (proprietário)">
+        <Grade colunas={3}>
+          <Campo
+            rotulo="Imposto descontado no repasse (%)"
+            dica="Em branco = padrão da imobiliária para pessoa física ou jurídica (Configurações). Use 0 para não descontar."
+          >
+            <Entrada
+              name="imposto_pct"
+              inputMode="decimal"
+              placeholder="padrão da imobiliária"
+              defaultValue={p?.imposto_pct === null || p?.imposto_pct === undefined ? "" : String(p.imposto_pct)}
+            />
+          </Campo>
+        </Grade>
+      </Cartao>
+
       <Cartao titulo="Dados bancários (para repasses)">
         <Grade colunas={4}>
           <Campo rotulo="Banco">

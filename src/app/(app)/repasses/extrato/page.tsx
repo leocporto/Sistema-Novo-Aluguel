@@ -70,8 +70,8 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
               </div>
             </div>
           </div>
-          <Tabela colunas={["Competência", "Contrato / imóvel", "Aluguel", "Encargos", "Multa/juros", "Taxa adm.", "Intermediação", "IRRF", "Líquido", "Pago em"]}>
-            {repasses.length === 0 && <LinhaVazia colunas={10}>Nenhum repasse no ano.</LinhaVazia>}
+          <Tabela colunas={["Competência", "Contrato / imóvel", "Aluguel", "Encargos", "Multa/juros", "Taxa adm.", "Intermediação", "IRRF", "Imposto", "Líquido", "Pago em"]}>
+            {repasses.length === 0 && <LinhaVazia colunas={11}>Nenhum repasse no ano.</LinhaVazia>}
             {repasses.map((r) => (
               <tr key={r.id}>
                 <Celula>{formatarCompetencia(r.competencia)}</Celula>
@@ -84,6 +84,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
                 <Celula>{formatarReais(r.taxa_administracao)}</Celula>
                 <Celula>{formatarReais(r.taxa_intermediacao)}</Celula>
                 <Celula>{formatarReais(r.irrf)}</Celula>
+                <Celula>{formatarReais(r.imposto ?? 0)}</Celula>
                 <Celula className="font-medium">{formatarReais(r.valor_liquido)}</Celula>
                 <Celula>{r.status === "pago" ? formatarDataBR(r.pago_em) : "pendente"}</Celula>
               </tr>
@@ -98,6 +99,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
                 <Celula>{formatarReais(tot("taxa_administracao"))}</Celula>
                 <Celula>{formatarReais(tot("taxa_intermediacao"))}</Celula>
                 <Celula>{formatarReais(tot("irrf"))}</Celula>
+                <Celula>{formatarReais(tot("imposto"))}</Celula>
                 <Celula>{formatarReais(tot("valor_liquido"))}</Celula>
                 <Celula />
               </tr>
@@ -106,7 +108,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
           <Aviso>
             Para a declaração de IR: rendimento bruto de aluguéis {formatarReais(tot("aluguel") + tot("multa_juros"))}; despesas dedutíveis
             (administração e intermediação) {formatarReais(tot("taxa_administracao") + tot("taxa_intermediacao"))}; imposto retido na fonte{" "}
-            {formatarReais(tot("irrf"))}. Confirme os valores com seu contador.
+            {formatarReais(tot("irrf"))}; imposto descontado no repasse {formatarReais(tot("imposto"))}. Confirme os valores com seu contador.
           </Aviso>
         </div>
       )}

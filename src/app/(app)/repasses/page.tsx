@@ -38,7 +38,7 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
     <>
       <Cabecalho
         titulo="Repasses aos proprietários"
-        descricao="Valores líquidos (aluguel − taxas − IRRF) gerados na baixa das faturas ou agendados no repasse garantido."
+        descricao="Valores líquidos (aluguel − taxas − impostos) gerados na baixa das faturas ou agendados no repasse garantido."
       />
       <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Indicador rotulo="Pendentes" icone={<ArrowLeftRight />} valor={formatarReais(pendentes.reduce((s, r) => s + Number(r.valor_liquido), 0))} detalhe={`${pendentes.length} repasse(s)`} />
@@ -63,7 +63,7 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
         </Selecao>
       </FiltroAutomatico>
       <Formulario acao={marcarRepassesPagos} className="space-y-4">
-        <Tabela colunas={["", "Previsto", "Proprietário", "Contrato", "Competência", "Bruto", "Taxas", "IRRF", "Líquido", "Dados bancários", "Situação"]}>
+        <Tabela colunas={["", "Previsto", "Proprietário", "Contrato", "Competência", "Bruto", "Taxas", "Impostos", "Líquido", "Dados bancários", "Situação"]}>
           {repasses.length === 0 && <LinhaVazia colunas={11}>Nenhum repasse.</LinhaVazia>}
           {repasses.map((r) => (
             <tr key={r.id} className="hover:bg-card-hover">
@@ -84,7 +84,7 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
               <Celula>{formatarCompetencia(r.competencia)}</Celula>
               <Celula>{formatarReais(r.valor_bruto)}</Celula>
               <Celula>{formatarReais(Number(r.taxa_administracao) + Number(r.taxa_intermediacao))}</Celula>
-              <Celula>{formatarReais(r.irrf)}</Celula>
+              <Celula>{formatarReais(Number(r.irrf) + Number(r.imposto ?? 0))}</Celula>
               <Celula className="font-semibold">{formatarReais(r.valor_liquido)}</Celula>
               <Celula className="text-xs text-mudo">
                 {r.pessoa.pix_chave ? `Pix: ${r.pessoa.pix_chave}` : [r.pessoa.banco, r.pessoa.agencia, r.pessoa.conta].filter(Boolean).join(" / ") || "—"}

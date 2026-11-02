@@ -169,7 +169,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
           </Cartao>
 
           <Cartao titulo="Repasses ao proprietário">
-            <Tabela colunas={["Competência", "Proprietário", "Bruto", "Taxas", "IRRF", "Líquido", "Previsto", "Situação"]}>
+            <Tabela colunas={["Competência", "Proprietário", "Bruto", "Taxas", "Impostos", "Líquido", "Previsto", "Situação"]}>
               {repasses.length === 0 && <LinhaVazia colunas={8}>Nenhum repasse.</LinhaVazia>}
               {repasses.map((r) => (
                 <tr key={r.id}>
@@ -177,7 +177,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                   <Celula>{r.pessoa.nome}</Celula>
                   <Celula>{formatarReais(r.valor_bruto)}</Celula>
                   <Celula>{formatarReais(Number(r.taxa_administracao) + Number(r.taxa_intermediacao))}</Celula>
-                  <Celula>{formatarReais(r.irrf)}</Celula>
+                  <Celula>{formatarReais(Number(r.irrf) + Number(r.imposto ?? 0))}</Celula>
                   <Celula className="font-medium">{formatarReais(r.valor_liquido)}</Celula>
                   <Celula>{formatarDataBR(r.previsto_para)}</Celula>
                   <Celula>

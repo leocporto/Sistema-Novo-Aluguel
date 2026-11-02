@@ -25,6 +25,8 @@ async function salvar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
         taxa_administracao_pct: numero(fd, "taxa_administracao_pct") ?? 10,
         taxa_intermediacao_pct: numero(fd, "taxa_intermediacao_pct") ?? 100,
         carencia_dias: inteiro(fd, "carencia_dias") ?? 0,
+        imposto_pf_pct: numero(fd, "imposto_pf_pct") ?? 0,
+        imposto_pj_pct: numero(fd, "imposto_pj_pct") ?? 0,
       })
       .eq("id", organizacao.id);
     if (error) throw error;
@@ -76,6 +78,20 @@ export default async function ConfiguracoesPage() {
             </Campo>
             <Campo rotulo="Carência (dias)">
               <Entrada type="number" min={0} name="carencia_dias" defaultValue={o.carencia_dias} />
+            </Campo>
+          </Grade>
+        </Cartao>
+        <Cartao titulo="Imposto do proprietário (descontado no repasse)">
+          <p className="mb-4 text-[13px] text-texto-2">
+            Valem para os proprietários sem % próprio no cadastro. O imposto incide sobre o aluguel da parte do proprietário,
+            já descontadas as taxas de administração e intermediação.
+          </p>
+          <Grade colunas={3}>
+            <Campo rotulo="Pessoa física (%)">
+              <Entrada name="imposto_pf_pct" inputMode="decimal" defaultValue={String(o.imposto_pf_pct ?? 0)} />
+            </Campo>
+            <Campo rotulo="Pessoa jurídica (%)">
+              <Entrada name="imposto_pj_pct" inputMode="decimal" defaultValue={String(o.imposto_pj_pct ?? 0)} />
             </Campo>
           </Grade>
         </Cartao>

@@ -5,7 +5,7 @@ import { calcularAtraso } from "@/lib/dominio/encargos";
 import { acumular, calcularReajuste, mesesDoPeriodo } from "@/lib/dominio/reajuste";
 import { calcularIRRF } from "@/lib/dominio/irrf";
 import { competenciasDoContrato, gerarFatura, type ContratoParaFatura } from "@/lib/dominio/fatura";
-import { aplicarIrrfIndividual, calcularRepasse } from "@/lib/dominio/repasse";
+import { aplicarIrrfIndividual, calcularRepasse, impostoEfetivo } from "@/lib/dominio/repasse";
 import { calcularRescisao } from "@/lib/dominio/rescisao";
 import { enviosDevidos, renderizarMensagem } from "@/lib/dominio/regua";
 import { validarCNPJ, validarCPF } from "@/lib/dominio/documentos";
@@ -180,6 +180,49 @@ describe("repasse ao proprietário", () => {
     );
     const r = aplicarIrrfIndividual(base, { p1: 105129 });
     expect(r.repasses[0].valorLiquido).toBe(800000 - 80000 - 105129);
+  });
+});
+
+describe("imposto do proprietário no repasse", () => {
+  const itens = [
+    { descricao: "Aluguel", tipo: "aluguel" as const, valor: 200000, destino: "proprietario" as const },
+    { descricao: "Condomínio", tipo: "encargo" as const, valor: 50000, destino: "proprietario" as const },
+  ];
+  const base = {
+    taxaAdministracaoPct: 10,
+    taxaIntermediacaoPct: 0,
+    primeiraFatura: false,
+    valorAluguelContrato: 200000,
+    repassarMultaJuros: true,
+  };
+  it("desconta o % de cada proprietário sobre aluguel menos taxa (encargos não entram)", () => {
+    const r = calcularRepasse(itens, {
+      ...base,
+      proprietarios: [
+        { pessoaId: "pf", percentual: 50, impostoPct: 15 },
+        { pessoaId: "pj", percentual: 50, impostoPct: 6 },
+      ],
+    });
+    // parte de cada: aluguel 1.000 − taxa 100 = 900 de base
+    expect(r.repasses[0].imposto).toBe(13500);
+    expect(r.repasses[1].imposto).toBe(5400);
+    expect(r.repasses[0].valorLiquido).toBe(100000 + 25000 - 10000 - 13500);
+    expect(r.repasses[1].valorLiquido).toBe(100000 + 25000 - 10000 - 5400);
+  });
+  it("sem % não desconta nada e IRRF individual preserva o imposto", () => {
+    const r = calcularRepasse(itens, { ...base, proprietarios: [{ pessoaId: "a", percentual: 100 }] });
+    expect(r.repasses[0].imposto).toBe(0);
+    const comIr = aplicarIrrfIndividual(
+      calcularRepasse(itens, { ...base, proprietarios: [{ pessoaId: "a", percentual: 100, impostoPct: 10 }] }),
+      { a: 1000 },
+    );
+    expect(comIr.repasses[0].valorLiquido).toBe(250000 - 20000 - 1000 - 18000);
+  });
+  it("usa o padrão PF/PJ da imobiliária quando o cadastro está em branco", () => {
+    expect(impostoEfetivo(null, "PF", { pf: 15, pj: 6 })).toBe(15);
+    expect(impostoEfetivo(null, "PJ", { pf: 15, pj: 6 })).toBe(6);
+    expect(impostoEfetivo("0", "PJ", { pf: 15, pj: 6 })).toBe(0);
+    expect(impostoEfetivo(8.5, "PF", { pf: 15, pj: 6 })).toBe(8.5);
   });
 });
 

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { obterContexto } from "@/lib/contexto";
 import { validarCNPJ, validarCPF, somenteDigitos } from "@/lib/dominio/documentos";
-import { type EstadoAcao, ErroValidacao, lista, mensagemErro, texto, textoObrigatorio } from "@/lib/form";
+import { type EstadoAcao, ErroValidacao, lista, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 
 function lerPessoa(fd: FormData) {
   const tipo = texto(fd, "tipo_pessoa") === "PJ" ? "PJ" : "PF";
@@ -38,7 +38,15 @@ function lerPessoa(fd: FormData) {
     pix_chave: texto(fd, "pix_chave"),
     papeis: papeis.length ? papeis : ["cliente"],
     observacoes: texto(fd, "observacoes"),
+    imposto_pct: lerImposto(fd),
   };
+}
+
+function lerImposto(fd: FormData): number | null {
+  const v = numero(fd, "imposto_pct");
+  if (v === null) return null;
+  if (v < 0 || v > 100) throw new ErroValidacao("O imposto deve ficar entre 0% e 100%.");
+  return v;
 }
 
 export async function salvarPessoa(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {

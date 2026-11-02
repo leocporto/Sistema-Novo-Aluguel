@@ -13,7 +13,11 @@ export interface ConfigRepasse {
   valorAluguelContrato: Centavos;
   /** Multa e juros pagos pelo locatário vão para o proprietário? */
   repassarMultaJuros: boolean;
-  proprietarios: { pessoaId: string; percentual: number }[];
+  /**
+   * impostoPct: % de imposto descontado no repasse de cada proprietário
+   * (definido no cadastro da pessoa ou pelo padrão PF/PJ da imobiliária).
+   */
+  proprietarios: { pessoaId: string; percentual: number; impostoPct?: number }[];
 }
 
 export interface RepasseCalculado {
@@ -26,6 +30,9 @@ export interface RepasseCalculado {
   taxaAdministracao: Centavos;
   taxaIntermediacao: Centavos;
   irrf: Centavos;
+  /** Imposto descontado pela imobiliária (% do cadastro do proprietário). */
+  imposto: Centavos;
+  impostoPct: number;
   valorLiquido: Centavos;
 }
 
@@ -42,7 +49,12 @@ export interface ResultadoRepasse {
  * pagos de uma fatura (incluindo multa/juros lançados na liquidação).
  *
  * Líquido = aluguel + encargos do proprietário (+ multa/juros, se repassados)
- *           − taxa de administração − intermediação (1ª fatura) − IRRF retido.
+ *           − taxa de administração − intermediação (1ª fatura) − IRRF retido
+ *           − imposto do proprietário.
+ *
+ * O imposto do proprietário incide sobre o rendimento do aluguel da parte dele
+ * (aluguel + multa/juros repassados − taxa de administração − intermediação),
+ * nunca negativo.
  */
 export function calcularRepasse(itens: ItemFatura[], cfg: ConfigRepasse): ResultadoRepasse {
   const soma = (f: (i: ItemFatura) => boolean) => itens.filter(f).reduce((s, i) => s + i.valor, 0);
@@ -71,7 +83,9 @@ export function calcularRepasse(itens: ItemFatura[], cfg: ConfigRepasse): Result
 
   const repasses = cfg.proprietarios.map((p, i) => {
     const valorBruto = pAluguel[i] + pEnc[i] + pMJ[i];
-    const valorLiquido = valorBruto - pAdm[i] - pInt[i] - pIr[i];
+    const impostoPct = p.impostoPct ?? 0;
+    const imposto = calcularImpostoProprietario(pAluguel[i] + pMJ[i] - pAdm[i] - pInt[i], impostoPct);
+    const valorLiquido = valorBruto - pAdm[i] - pInt[i] - pIr[i] - imposto;
     return {
       pessoaId: p.pessoaId,
       percentual: p.percentual,
@@ -82,6 +96,8 @@ export function calcularRepasse(itens: ItemFatura[], cfg: ConfigRepasse): Result
       taxaAdministracao: pAdm[i],
       taxaIntermediacao: pInt[i],
       irrf: pIr[i],
+      imposto,
+      impostoPct,
       valorLiquido,
     };
   });
@@ -103,7 +119,27 @@ export function aplicarIrrfIndividual(
     ...r,
     repasses: r.repasses.map((rep) => {
       const irrf = irrfPorProprietario[rep.pessoaId] ?? 0;
-      return { ...rep, irrf, valorLiquido: rep.valorBruto - rep.taxaAdministracao - rep.taxaIntermediacao - irrf };
+      return {
+        ...rep,
+        irrf,
+        valorLiquido: rep.valorBruto - rep.taxaAdministracao - rep.taxaIntermediacao - irrf - rep.imposto,
+      };
     }),
   };
+}
+
+/** Imposto do proprietário sobre a base informada (nunca negativo). */
+export function calcularImpostoProprietario(base: Centavos, impostoPct: number): Centavos {
+  if (base <= 0 || !impostoPct || impostoPct <= 0) return 0;
+  return percentual(base, impostoPct);
+}
+
+/** % efetivo: o do cadastro da pessoa; em branco, o padrão da imobiliária para PF ou PJ. */
+export function impostoEfetivo(
+  impostoPessoa: number | string | null | undefined,
+  tipoPessoa: "PF" | "PJ",
+  padrao: { pf: number; pj: number },
+): number {
+  if (impostoPessoa !== null && impostoPessoa !== undefined && impostoPessoa !== "") return Number(impostoPessoa);
+  return tipoPessoa === "PJ" ? padrao.pj : padrao.pf;
 }
