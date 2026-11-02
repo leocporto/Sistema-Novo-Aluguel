@@ -9,7 +9,13 @@ export const metadata: Metadata = { title: "Cadastrar imobiliária" };
 
 async function criar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   "use server";
-  const { supabase } = await obterUsuarioSemOrganizacao();
+  const { supabase, usuario } = await obterUsuarioSemOrganizacao();
+  // Quem já faz parte de uma imobiliária não cria outra por esta tela.
+  const { count } = await supabase
+    .from("membros")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", usuario.id);
+  if (count && count > 0) redirect("/");
   const nome = texto(fd, "nome");
   if (!nome) return { erro: "Informe o nome da imobiliária." };
   const { error } = await supabase.rpc("criar_organizacao", {

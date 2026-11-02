@@ -77,6 +77,7 @@ export async function salvarImovel(_: EstadoAcao, fd: FormData): Promise<EstadoA
     return { erro: mensagemErro(e) };
   }
   revalidatePath("/imoveis");
+  revalidatePath("/");
   if (novoId) redirect(`/imoveis/${novoId}`);
   return { ok: "Imóvel salvo." };
 }
@@ -96,6 +97,7 @@ export async function adicionarProprietario(_: EstadoAcao, fd: FormData): Promis
         await supabase.from("pessoas").update({ papeis: [...data.papeis, "proprietario"] }).eq("id", pessoa_id);
     });
     revalidatePath(`/imoveis/${imovel_id}`);
+    revalidatePath("/");
     return { ok: "Proprietário vinculado." };
   } catch (e) {
     return { erro: mensagemErro(e) };
@@ -107,4 +109,5 @@ export async function removerProprietario(fd: FormData) {
   const imovel_id = String(fd.get("imovel_id"));
   await supabase.from("imovel_proprietarios").delete().eq("imovel_id", imovel_id).eq("pessoa_id", String(fd.get("pessoa_id")));
   revalidatePath(`/imoveis/${imovel_id}`);
+  revalidatePath("/");
 }

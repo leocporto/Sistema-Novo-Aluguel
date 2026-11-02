@@ -11,6 +11,7 @@ export async function gerarFaturasDoMes(_: EstadoAcao, fd: FormData): Promise<Es
     const comp = textoObrigatorio(fd, "competencia", "a competência");
     const r = await gerarFaturasDaCompetencia(supabase, `${comp}-01`);
     revalidatePath("/faturas");
+    revalidatePath("/");
     const partes = [`${r.criadas} fatura(s) gerada(s)`, `${r.ignoradas} contrato(s) sem nova cobrança`];
     if (r.erros.length) return { erro: `${partes.join(", ")}. Problemas: ${r.erros.join(" | ")}` };
     return { ok: `${partes.join(", ")}.` };
@@ -32,6 +33,7 @@ export async function darBaixa(_: EstadoAcao, fd: FormData): Promise<EstadoAcao>
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/faturas/${id}`);
+  revalidatePath("/");
   revalidatePath("/faturas");
   revalidatePath("/repasses");
   return { ok: "Pagamento registrado e repasse gerado." };
@@ -52,6 +54,7 @@ export async function cancelarFatura(_: EstadoAcao, fd: FormData): Promise<Estad
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/faturas/${id}`);
+  revalidatePath("/");
   revalidatePath("/faturas");
   return { ok: "Fatura cancelada." };
 }

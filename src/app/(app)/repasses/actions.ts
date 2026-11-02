@@ -16,6 +16,7 @@ export async function marcarRepassesPagos(_: EstadoAcao, fd: FormData): Promise<
       .eq("status", "pendente");
     if (error) throw error;
     revalidatePath("/repasses");
+    revalidatePath("/");
     return { ok: `${count ?? ids.length} repasse(s) marcado(s) como pago(s).` };
   } catch (e) {
     return { erro: mensagemErro(e) };

@@ -122,6 +122,7 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
     return { erro: mensagemErro(e) };
   }
   revalidatePath("/contratos");
+  revalidatePath("/");
   redirect(`/contratos/${id}`);
 }
 
@@ -156,6 +157,7 @@ export async function atualizarContrato(_: EstadoAcao, fd: FormData): Promise<Es
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/contratos/${id}`);
+  revalidatePath("/");
   return { ok: "Contrato atualizado." };
 }
 
@@ -175,6 +177,7 @@ export async function adicionarParte(_: EstadoAcao, fd: FormData): Promise<Estad
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath("/");
   return { ok: "Parte adicionada." };
 }
 
@@ -188,6 +191,7 @@ export async function removerParte(fd: FormData) {
     .eq("pessoa_id", String(fd.get("pessoa_id")))
     .eq("papel", String(fd.get("papel")));
   revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath("/");
 }
 
 export async function adicionarEncargo(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
@@ -212,6 +216,7 @@ export async function adicionarEncargo(_: EstadoAcao, fd: FormData): Promise<Est
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath("/");
   return { ok: "Encargo adicionado." };
 }
 
@@ -220,6 +225,7 @@ export async function removerEncargo(fd: FormData) {
   const contrato_id = String(fd.get("contrato_id"));
   await supabase.from("contrato_encargos").delete().eq("id", String(fd.get("id")));
   revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath("/");
 }
 
 export async function gerarFaturaManual(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
@@ -235,6 +241,7 @@ export async function gerarFaturaManual(_: EstadoAcao, fd: FormData): Promise<Es
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath("/");
   return { ok: "Fatura gerada." };
 }
 
@@ -272,6 +279,7 @@ export async function aplicarReajuste(_: EstadoAcao, fd: FormData): Promise<Esta
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath("/");
   revalidatePath("/reajustes");
   return { ok: "Reajuste aplicado. O novo valor vale para as próximas faturas." };
 }
@@ -294,6 +302,7 @@ export async function encerrarContrato(_: EstadoAcao, fd: FormData): Promise<Est
     return { erro: mensagemErro(e) };
   }
   revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath("/");
   revalidatePath("/contratos");
   return { ok: "Contrato encerrado e imóvel marcado como disponível." };
 }
