@@ -6,6 +6,7 @@ import { formatarDataBR, hojeISO, somarDias } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { proximoReajuste } from "@/lib/dominio/reajuste";
 import { ROTULO_STATUS_IMOVEL } from "@/lib/tipos";
+import { AlertTriangle, ArrowLeftRight, Building2, CalendarClock, FileText, Percent, PieChart, Wallet } from "lucide-react";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -90,46 +91,46 @@ export default async function PainelPage() {
           </>
         }
       />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="entrar-cascata grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Indicador
-          rotulo="Inadimplência"
+          rotulo="Inadimplência" icone={<AlertTriangle />}
           valor={formatarReais(soma(atrasadas, "valor_total"))}
           detalhe={`${atrasadas.length} fatura(s) em atraso`}
           tom={atrasadas.length ? "perigo" : "sucesso"}
           href="/faturas?situacao=atraso"
         />
         <Indicador
-          rotulo="Vencendo em 7 dias"
+          rotulo="Vencendo em 7 dias" icone={<CalendarClock />}
           valor={formatarReais(soma(aVencer, "valor_total"))}
           detalhe={`${aVencer.length} fatura(s)`}
           href="/faturas"
         />
         <Indicador
-          rotulo="Repasses a pagar hoje"
+          rotulo="Repasses a pagar hoje" icone={<ArrowLeftRight />}
           valor={formatarReais(soma(repHoje, "valor_liquido"))}
           detalhe={`${repHoje.length} de ${rep.length} pendente(s)`}
           tom={repHoje.length ? "alerta" : "neutro"}
           href="/repasses"
         />
         <Indicador
-          rotulo="Recebido no mês"
+          rotulo="Recebido no mês" icone={<Wallet />}
           valor={formatarReais((recebidasMes.data ?? []).reduce((s, f) => s + Number(f.valor_pago ?? 0), 0))}
           tom="sucesso"
         />
-        <Indicador rotulo="Contratos ativos" valor={ativos.length} detalhe={`Carteira: ${formatarReais(carteira)}/mês`} href="/contratos" />
-        <Indicador rotulo="Imóveis alugados" valor={alugados} detalhe={`${disponiveis} desalugado(s)`} href="/imoveis" />
+        <Indicador rotulo="Contratos ativos" icone={<FileText />} valor={ativos.length} detalhe={`Carteira: ${formatarReais(carteira)}/mês`} href="/contratos" />
+        <Indicador rotulo="Imóveis alugados" icone={<Building2 />} valor={alugados} detalhe={`${disponiveis} desalugado(s)`} href="/imoveis" />
         <Indicador
-          rotulo="Ocupação"
+          rotulo="Ocupação" icone={<PieChart />}
           valor={alugados + disponiveis ? `${Math.round((alugados / (alugados + disponiveis)) * 100)}%` : "—"}
         />
-        <Indicador rotulo="Taxa média de administração" valor={`${Number(organizacao.taxa_administracao_pct)}%`} detalhe="padrão da imobiliária" />
+        <Indicador rotulo="Taxa média de administração" icone={<Percent />} valor={`${Number(organizacao.taxa_administracao_pct)}%`} detalhe="padrão da imobiliária" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
         <Cartao
           titulo={`Imóveis (${im.length})`}
           acoes={
-            <Link href="/imoveis/novo" className="text-xs text-emerald-700 hover:underline">
+            <Link href="/imoveis/novo" className="text-xs text-acento hover:underline">
               + novo imóvel
             </Link>
           }
@@ -145,37 +146,37 @@ export default async function PainelPage() {
                 </Link>
               ))}
             {im.length > 0 && (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-mudo">
                 Aluguel potencial dos desalugados: {formatarReais(potencialDisponiveis)}/mês
               </span>
             )}
           </div>
-          <ul className="divide-y divide-slate-100 text-sm">
+          <ul className="divide-y divide-borda-suave text-sm">
             {im.slice(0, 8).map((i) => (
               <li key={i.id} className="flex items-center justify-between gap-2 py-2">
                 <div>
-                  <Link href={`/imoveis/${i.id}`} className="font-medium text-emerald-700 hover:underline">
+                  <Link href={`/imoveis/${i.id}`} className="font-medium text-acento hover:underline">
                     {i.codigo}
                   </Link>
-                  <span className="text-slate-500"> — {[i.logradouro, i.numero, i.bairro].filter(Boolean).join(", ") || "sem endereço"}</span>
+                  <span className="text-mudo"> — {[i.logradouro, i.numero, i.bairro].filter(Boolean).join(", ") || "sem endereço"}</span>
                 </div>
                 <div className="flex items-center gap-2 whitespace-nowrap">
-                  {i.valor_aluguel ? <span className="text-slate-600">{formatarReais(i.valor_aluguel)}</span> : null}
+                  {i.valor_aluguel ? <span className="text-texto-2">{formatarReais(i.valor_aluguel)}</span> : null}
                   <Selo cor={COR_STATUS[i.status as keyof typeof COR_STATUS] ?? "cinza"}>{ROTULO_STATUS_IMOVEL[i.status] ?? i.status}</Selo>
                 </div>
               </li>
             ))}
             {im.length === 0 && (
-              <li className="py-2 text-slate-500">
+              <li className="py-2 text-mudo">
                 Nenhum imóvel cadastrado.{" "}
-                <Link href="/imoveis/novo" className="text-emerald-700 hover:underline">
+                <Link href="/imoveis/novo" className="text-acento hover:underline">
                   Cadastrar o primeiro
                 </Link>
               </li>
             )}
           </ul>
           {im.length > 8 && (
-            <Link href="/imoveis" className="mt-2 inline-block text-xs text-emerald-700 hover:underline">
+            <Link href="/imoveis" className="mt-2 inline-block text-xs text-acento hover:underline">
               Ver todos os {im.length} imóveis
             </Link>
           )}
@@ -185,27 +186,27 @@ export default async function PainelPage() {
           <ul className="space-y-2 text-sm">
             {pendenciasImoveis.slice(0, 10).map((p, i) => (
               <li key={i}>
-                <Link href={p.href} className="text-amber-700 hover:underline">
+                <Link href={p.href} className="text-alerta hover:underline">
                   {p.texto}
                 </Link>
               </li>
             ))}
-            {pendenciasImoveis.length === 0 && <li className="text-slate-500">Nenhuma pendência.</li>}
+            {pendenciasImoveis.length === 0 && <li className="text-mudo">Nenhuma pendência.</li>}
           </ul>
         </Cartao>
       </div>
 
       <Cartao titulo="Próximos eventos" className="mt-6">
-        <ul className="divide-y divide-slate-100 text-sm">
+        <ul className="divide-y divide-borda-suave text-sm">
           {alertas.slice(0, 15).map((a, i) => (
             <li key={i} className="flex justify-between py-2">
-              <Link href={a.href} className="text-emerald-700 hover:underline">
+              <Link href={a.href} className="text-acento hover:underline">
                 {a.texto}
               </Link>
-              <span className={a.data < hoje ? "text-red-600" : "text-slate-500"}>{formatarDataBR(a.data)}</span>
+              <span className={a.data < hoje ? "text-ruim" : "text-mudo"}>{formatarDataBR(a.data)}</span>
             </li>
           ))}
-          {alertas.length === 0 && <li className="py-2 text-slate-500">Nada nos próximos 30 dias.</li>}
+          {alertas.length === 0 && <li className="py-2 text-mudo">Nada nos próximos 30 dias.</li>}
         </ul>
       </Cartao>
     </>

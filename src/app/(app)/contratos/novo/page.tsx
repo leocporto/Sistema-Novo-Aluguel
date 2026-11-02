@@ -44,7 +44,7 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
               ))}
             </Selecao>
           </Campo>
-          <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">Continuar</button>
+          <button className="rounded-lg border border-borda-forte bg-card px-3 py-2 text-sm">Continuar</button>
         </form>
       )}
       {imovel && (
@@ -75,7 +75,7 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
                 </Selecao>
               </Campo>
               <div className="flex items-end text-sm">
-                <Link href="/pessoas/novo?papel=locatario" className="text-emerald-700 hover:underline" target="_blank">
+                <Link href="/pessoas/novo?papel=locatario" className="text-acento hover:underline" target="_blank">
                   + cadastrar pessoa
                 </Link>
               </div>

@@ -1,20 +1,216 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Design do Novo Aluguel — mesmo sistema visual do Gueco (tema "Shapefy").
+   Regras completas em docs/DESIGN.md.
+   CLARO é o padrão; o escuro vale só para quem clicar no sol/lua
+   (atributo data-tema="escuro" no <html>, gravado em localStorage).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg-app: #f4f6f9;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f0f3f7;
+  --bg-elev: #f7f9fb;
+  --bg-input: #f1f4f8;
+  --border: #e3e8ef;
+  --border-strong: #d0d7e0;
+  --border-soft: #eef1f5;
+  --text-primary: #1a2230;
+  --text-secondary: #54606e;
+  --text-muted: #828d9b;
+  --text-faint: #aab2bd;
+  --accent: #2563eb;
+  --accent-hot: #1d4ed8;
+  --accent-bg: rgba(37, 99, 235, 0.08);
+  --accent-bd: rgba(37, 99, 235, 0.22);
+  --accent-glow: rgba(37, 99, 235, 0.22);
+  --bad: #dc2626;
+  --bad-bg: rgba(220, 38, 38, 0.08);
+  --bad-bd: rgba(220, 38, 38, 0.24);
+  --warn: #d97706;
+  --warn-bg: rgba(217, 119, 6, 0.09);
+  --warn-bd: rgba(217, 119, 6, 0.26);
+  --ok: #16a34a;
+  --ok-bg: rgba(22, 163, 74, 0.1);
+  --ok-bd: rgba(22, 163, 74, 0.26);
+  --violet: #7c3aed;
+  --shadow: 0 16px 34px -20px rgba(20, 40, 80, 0.28);
+  --seta-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2354606e' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  color-scheme: light;
+}
+
+:root[data-tema="escuro"] {
+  --bg-app: #0d1117;
+  --bg-sidebar: #0a0d12;
+  --bg-card: #11161d;
+  --bg-card-hover: #161c25;
+  --bg-elev: #0f141a;
+  --bg-input: #0d1117;
+  --border: #1f2630;
+  --border-strong: #2a3340;
+  --border-soft: #171c24;
+  --text-primary: #e6edf3;
+  --text-secondary: #9ba8b8;
+  --text-muted: #6e7a8a;
+  --text-faint: #4a5462;
+  --accent: #3b82f6;
+  --accent-hot: #5a98ff;
+  --accent-bg: rgba(59, 130, 246, 0.12);
+  --accent-bd: rgba(59, 130, 246, 0.35);
+  --accent-glow: rgba(59, 130, 246, 0.35);
+  --bad: #f87171;
+  --bad-bg: rgba(248, 113, 113, 0.1);
+  --bad-bd: rgba(248, 113, 113, 0.28);
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, 0.1);
+  --warn-bd: rgba(251, 191, 36, 0.28);
+  --ok: #4ade80;
+  --ok-bg: rgba(74, 222, 128, 0.1);
+  --ok-bd: rgba(74, 222, 128, 0.28);
+  --violet: #a78bfa;
+  --shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.85);
+  --seta-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ba8b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  color-scheme: dark;
+}
+
+/* Tokens viram classes do Tailwind: bg-card, text-texto, border-borda, text-acento… */
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-outfit), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-spline-mono), ui-monospace, monospace;
+
+  --color-app: var(--bg-app);
+  --color-sidebar: var(--bg-sidebar);
+  --color-card: var(--bg-card);
+  --color-card-hover: var(--bg-card-hover);
+  --color-elev: var(--bg-elev);
+  --color-input: var(--bg-input);
+
+  --color-borda: var(--border);
+  --color-borda-forte: var(--border-strong);
+  --color-borda-suave: var(--border-soft);
+
+  --color-texto: var(--text-primary);
+  --color-texto-2: var(--text-secondary);
+  --color-mudo: var(--text-muted);
+  --color-fraco: var(--text-faint);
+
+  --color-acento: var(--accent);
+  --color-acento-hot: var(--accent-hot);
+  --color-acento-bg: var(--accent-bg);
+  --color-acento-bd: var(--accent-bd);
+
+  --color-ruim: var(--bad);
+  --color-ruim-bg: var(--bad-bg);
+  --color-ruim-bd: var(--bad-bd);
+  --color-alerta: var(--warn);
+  --color-alerta-bg: var(--warn-bg);
+  --color-alerta-bd: var(--warn-bd);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-bd: var(--ok-bd);
+  --color-violeta: var(--violet);
+
+  --radius-card: 18px;
+  --radius-btn: 11px;
+  --shadow-card: var(--shadow);
+}
+
+html,
+body {
+  background: var(--bg-app);
+  color: var(--text-primary);
 }
 
 body {
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-outfit), "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* Caixas de seleção: sem a seta nativa, com a seta do sistema */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: var(--seta-select);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px 14px;
+  padding-right: 34px !important;
+}
+select option {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* Barra de filtros/ferramentas: tudo lado a lado com a altura do botão (40px) */
+.barra-filtros input,
+.barra-filtros select {
+  height: 40px;
+  min-height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  background-color: var(--bg-card);
+  border-color: var(--border);
+}
+.barra-filtros select {
+  width: auto;
+}
+
+/* ── Movimento (nada que responde a clique/hover passa de 340ms) ── */
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.entrar {
+  animation: subir 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.entrar-cascata > * {
+  animation: subir 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.entrar-cascata > *:nth-child(2) { animation-delay: 40ms; }
+.entrar-cascata > *:nth-child(3) { animation-delay: 80ms; }
+.entrar-cascata > *:nth-child(4) { animation-delay: 120ms; }
+.entrar-cascata > *:nth-child(5) { animation-delay: 160ms; }
+.entrar-cascata > *:nth-child(6) { animation-delay: 200ms; }
+.entrar-cascata > *:nth-child(7) { animation-delay: 240ms; }
+.entrar-cascata > *:nth-child(8) { animation-delay: 280ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Impressão: sempre no tema claro, sem menu */
 @media print {
+  :root,
+  :root[data-tema="escuro"] {
+    --bg-app: #ffffff;
+    --bg-card: #ffffff;
+    --bg-elev: #f7f9fb;
+    --border: #e3e8ef;
+    --border-soft: #eef1f5;
+    --text-primary: #1a2230;
+    --text-secondary: #54606e;
+    --text-muted: #828d9b;
+    color-scheme: light;
+  }
   .nao-imprimir {
     display: none !important;
-  }
-  body {
-    background: white;
   }
   main {
     padding: 0 !important;

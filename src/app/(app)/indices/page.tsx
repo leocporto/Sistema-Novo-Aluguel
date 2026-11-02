@@ -126,7 +126,7 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
                 </Selecao>
               </Campo>
               <Campo rotulo="Dados (um mês por linha)" dica="Formato: MM/AAAA;variação — ex.: 01/2026;0,27">
-                <textarea name="dados" rows={8} className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs" />
+                <textarea name="dados" rows={8} className="w-full rounded-lg border border-borda-forte px-3 py-2 font-mono text-xs" />
               </Campo>
               <BotaoEnviar variante="secundario">Importar</BotaoEnviar>
             </Formulario>

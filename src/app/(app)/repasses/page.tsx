@@ -8,6 +8,7 @@ import { formatarReais } from "@/lib/dominio/dinheiro";
 import type { Repasse } from "@/lib/tipos";
 import { marcarRepassesPagos } from "./actions";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { ArrowLeftRight, CalendarClock, Percent } from "lucide-react";
 
 export const metadata: Metadata = { title: "Repasses" };
 
@@ -39,16 +40,16 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
         titulo="Repasses aos proprietários"
         descricao="Valores líquidos (aluguel − taxas − IRRF) gerados na baixa das faturas ou agendados no repasse garantido."
       />
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Indicador rotulo="Pendentes" valor={formatarReais(pendentes.reduce((s, r) => s + Number(r.valor_liquido), 0))} detalhe={`${pendentes.length} repasse(s)`} />
+      <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Indicador rotulo="Pendentes" icone={<ArrowLeftRight />} valor={formatarReais(pendentes.reduce((s, r) => s + Number(r.valor_liquido), 0))} detalhe={`${pendentes.length} repasse(s)`} />
         <Indicador
-          rotulo="Para pagar até hoje"
+          rotulo="Para pagar até hoje" icone={<CalendarClock />}
           valor={formatarReais(vencidos.reduce((s, r) => s + Number(r.valor_liquido), 0))}
           tom={vencidos.length ? "alerta" : "neutro"}
           detalhe={`${vencidos.length} repasse(s)`}
         />
         <Indicador
-          rotulo="Taxas retidas (lista)"
+          rotulo="Taxas retidas (lista)" icone={<Percent />}
           valor={formatarReais(repasses.reduce((s, r) => s + Number(r.taxa_administracao) + Number(r.taxa_intermediacao), 0))}
           tom="sucesso"
         />
@@ -65,13 +66,13 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
         <Tabela colunas={["", "Previsto", "Proprietário", "Contrato", "Competência", "Bruto", "Taxas", "IRRF", "Líquido", "Dados bancários", "Situação"]}>
           {repasses.length === 0 && <LinhaVazia colunas={11}>Nenhum repasse.</LinhaVazia>}
           {repasses.map((r) => (
-            <tr key={r.id} className="hover:bg-slate-50">
+            <tr key={r.id} className="hover:bg-card-hover">
               <Celula>{r.status === "pendente" && <input type="checkbox" name="ids" value={r.id} aria-label="Selecionar" />}</Celula>
-              <Celula className={r.status === "pendente" && r.previsto_para <= hoje ? "font-medium text-amber-700" : ""}>
+              <Celula className={r.status === "pendente" && r.previsto_para <= hoje ? "font-medium text-alerta" : ""}>
                 {formatarDataBR(r.previsto_para)}
               </Celula>
               <Celula>
-                <Link href={`/repasses/extrato?pessoa=${r.pessoa.id}`} className="text-emerald-700 hover:underline">
+                <Link href={`/repasses/extrato?pessoa=${r.pessoa.id}`} className="text-acento hover:underline">
                   {r.pessoa.nome}
                 </Link>
               </Celula>
@@ -85,12 +86,12 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
               <Celula>{formatarReais(Number(r.taxa_administracao) + Number(r.taxa_intermediacao))}</Celula>
               <Celula>{formatarReais(r.irrf)}</Celula>
               <Celula className="font-semibold">{formatarReais(r.valor_liquido)}</Celula>
-              <Celula className="text-xs text-slate-500">
+              <Celula className="text-xs text-mudo">
                 {r.pessoa.pix_chave ? `Pix: ${r.pessoa.pix_chave}` : [r.pessoa.banco, r.pessoa.agencia, r.pessoa.conta].filter(Boolean).join(" / ") || "—"}
               </Celula>
               <Celula>
                 <Selo cor={r.status === "pago" ? "verde" : r.status === "pendente" ? "amarelo" : "cinza"}>{r.status}</Selo>
-                {r.pago_em && <div className="text-xs text-slate-500">{formatarDataBR(r.pago_em)}</div>}
+                {r.pago_em && <div className="text-xs text-mudo">{formatarDataBR(r.pago_em)}</div>}
               </Celula>
             </tr>
           ))}

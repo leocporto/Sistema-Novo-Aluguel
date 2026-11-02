@@ -41,7 +41,7 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
             <ul className="mb-4 space-y-2 text-sm">
               {proprietarios.map((p) => (
                 <li key={p.pessoa.id} className="flex items-center justify-between gap-2">
-                  <Link href={`/pessoas/${p.pessoa.id}`} className="text-emerald-700 hover:underline">
+                  <Link href={`/pessoas/${p.pessoa.id}`} className="text-acento hover:underline">
                     {p.pessoa.nome}
                   </Link>
                   <span className="flex items-center gap-2">
@@ -49,15 +49,15 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
                     <form action={removerProprietario}>
                       <input type="hidden" name="imovel_id" value={id} />
                       <input type="hidden" name="pessoa_id" value={p.pessoa.id} />
-                      <button className="text-xs text-red-600 hover:underline">remover</button>
+                      <button className="text-xs text-ruim hover:underline">remover</button>
                     </form>
                   </span>
                 </li>
               ))}
-              {proprietarios.length === 0 && <li className="text-slate-500">Nenhum proprietário vinculado.</li>}
+              {proprietarios.length === 0 && <li className="text-mudo">Nenhum proprietário vinculado.</li>}
             </ul>
             {proprietarios.length > 0 && Math.abs(soma - 100) > 0.01 && (
-              <p className="mb-3 text-xs text-amber-700">As participações somam {soma}% — devem somar 100%.</p>
+              <p className="mb-3 text-xs text-alerta">As participações somam {soma}% — devem somar 100%.</p>
             )}
             <Formulario acao={adicionarProprietario} className="space-y-3">
               <input type="hidden" name="imovel_id" value={id} />
@@ -84,24 +84,24 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
             <ul className="space-y-2 text-sm">
               {(contratos ?? []).map((c) => (
                 <li key={c.id} className="flex items-center justify-between">
-                  <Link href={`/contratos/${c.id}`} className="text-emerald-700 hover:underline">
+                  <Link href={`/contratos/${c.id}`} className="text-acento hover:underline">
                     #{c.numero} · {formatarReais(c.valor_aluguel)}
                   </Link>
                   <Selo cor={c.status === "ativo" ? "verde" : "cinza"}>{c.status}</Selo>
                 </li>
               ))}
-              {!contratos?.length && <li className="text-slate-500">Nenhum contrato.</li>}
+              {!contratos?.length && <li className="text-mudo">Nenhum contrato.</li>}
             </ul>
           </Cartao>
 
-          <Cartao titulo="Chaves" acoes={<Link href="/chaves" className="text-xs text-emerald-700">gerenciar</Link>}>
+          <Cartao titulo="Chaves" acoes={<Link href="/chaves" className="text-xs text-acento">gerenciar</Link>}>
             <ul className="space-y-1 text-sm">
               {(chaves ?? []).map((c) => (
                 <li key={c.id}>
-                  {c.identificacao} <span className="text-slate-500">— {c.local ?? "sem local"}</span>
+                  {c.identificacao} <span className="text-mudo">— {c.local ?? "sem local"}</span>
                 </li>
               ))}
-              {!chaves?.length && <li className="text-slate-500">Nenhuma chave cadastrada.</li>}
+              {!chaves?.length && <li className="text-mudo">Nenhuma chave cadastrada.</li>}
             </ul>
           </Cartao>
         </div>

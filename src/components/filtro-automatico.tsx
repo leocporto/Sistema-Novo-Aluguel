@@ -39,7 +39,7 @@ export function FiltroAutomatico({
   }
 
   return (
-    <Form action={action ?? caminho} className={className} onChange={aoMudar}>
+    <Form action={action ?? caminho} className={`barra-filtros ${className}`} onChange={aoMudar}>
       {children}
     </Form>
   );

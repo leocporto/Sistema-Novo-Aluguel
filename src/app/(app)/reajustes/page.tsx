@@ -44,7 +44,7 @@ export default async function ReajustesPage() {
         {lista.map(({ c, data, r, dias }) => (
           <tr key={c.id}>
             <Celula>
-              <Link href={`/contratos/${c.id}`} className="font-medium text-emerald-700 hover:underline">
+              <Link href={`/contratos/${c.id}`} className="font-medium text-acento hover:underline">
                 #{c.numero} · {c.imovel.codigo}
               </Link>
             </Celula>

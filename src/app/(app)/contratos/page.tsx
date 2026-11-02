@@ -54,16 +54,16 @@ export default async function ContratosPage({ searchParams }: PageProps<"/contra
       <Tabela colunas={["Nº", "Imóvel", "Locatário", "Proprietário(s)", "Vigência", "Aluguel", "Garantia", "Situação"]}>
         {contratos.length === 0 && <LinhaVazia colunas={8}>Nenhum contrato.</LinhaVazia>}
         {contratos.map((c) => (
-          <tr key={c.id} className="hover:bg-slate-50">
+          <tr key={c.id} className="hover:bg-card-hover">
             <Celula>
-              <Link href={`/contratos/${c.id}`} className="font-medium text-emerald-700 hover:underline">
+              <Link href={`/contratos/${c.id}`} className="font-medium text-acento hover:underline">
                 #{c.numero}
               </Link>
-              {c.codigo && <div className="text-xs text-slate-500">{c.codigo}</div>}
+              {c.codigo && <div className="text-xs text-mudo">{c.codigo}</div>}
             </Celula>
             <Celula>
               {c.imovel.codigo}
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-mudo">
                 {c.imovel.logradouro} {c.imovel.numero}
               </div>
             </Celula>

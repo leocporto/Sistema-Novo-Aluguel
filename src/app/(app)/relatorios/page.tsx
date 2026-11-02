@@ -34,7 +34,7 @@ export default async function RelatoriosPage() {
       <Cabecalho titulo="Relatórios e obrigações" />
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Cartao titulo="DIMOB — dados anuais para a Receita Federal">
-          <p className="mb-3 text-sm text-slate-600">
+          <p className="mb-3 text-sm text-texto-2">
             Planilha por contrato e locador com aluguel bruto, comissão e IR retido mês a mês, a partir dos repasses registrados.
           </p>
           <form action="/relatorios/dimob" className="flex gap-2">
@@ -48,7 +48,7 @@ export default async function RelatoriosPage() {
           </div>
         </Cartao>
         <Cartao titulo="Informe de rendimentos dos proprietários">
-          <p className="mb-3 text-sm text-slate-600">Extrato anual por proprietário, com aluguéis, taxas dedutíveis e IRRF, pronto para imprimir.</p>
+          <p className="mb-3 text-sm text-texto-2">Extrato anual por proprietário, com aluguéis, taxas dedutíveis e IRRF, pronto para imprimir.</p>
           <Link href="/repasses/extrato" className={classeBotao("secundario")}>
             Abrir extratos
           </Link>
@@ -63,7 +63,7 @@ export default async function RelatoriosPage() {
             return (
               <tr key={f.id}>
                 <Celula>
-                  <Link className="text-emerald-700 hover:underline" href={`/faturas/${f.id}`}>
+                  <Link className="text-acento hover:underline" href={`/faturas/${f.id}`}>
                     #{f.numero}
                   </Link>
                 </Celula>
@@ -74,11 +74,11 @@ export default async function RelatoriosPage() {
                 </Celula>
                 <Celula>
                   {loc?.nome}
-                  <div className="text-xs text-slate-500">{loc?.telefone}</div>
+                  <div className="text-xs text-mudo">{loc?.telefone}</div>
                 </Celula>
                 <Celula>{formatarCompetencia(f.competencia)}</Celula>
                 <Celula>{formatarDataBR(f.vencimento)}</Celula>
-                <Celula className="text-red-600">{diasEntre(f.vencimento, hoje)}</Celula>
+                <Celula className="text-ruim">{diasEntre(f.vencimento, hoje)}</Celula>
                 <Celula>{formatarReais(f.valor_total)}</Celula>
               </tr>
             );

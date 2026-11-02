@@ -41,17 +41,17 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
       <Tabela colunas={["Nome", "Documento", "Contato", "Papéis"]}>
         {pessoas.length === 0 && <LinhaVazia colunas={4}>Nenhuma pessoa encontrada.</LinhaVazia>}
         {pessoas.map((p) => (
-          <tr key={p.id} className="hover:bg-slate-50">
+          <tr key={p.id} className="hover:bg-card-hover">
             <Celula>
-              <Link href={`/pessoas/${p.id}`} className="font-medium text-emerald-700 hover:underline">
+              <Link href={`/pessoas/${p.id}`} className="font-medium text-acento hover:underline">
                 {p.nome}
               </Link>
-              <div className="text-xs text-slate-500">{p.tipo_pessoa === "PF" ? "Pessoa física" : "Pessoa jurídica"}</div>
+              <div className="text-xs text-mudo">{p.tipo_pessoa === "PF" ? "Pessoa física" : "Pessoa jurídica"}</div>
             </Celula>
             <Celula>{formatarDocumento(p.documento) || "—"}</Celula>
             <Celula>
               <div>{p.email ?? "—"}</div>
-              <div className="text-xs text-slate-500">{p.telefone}</div>
+              <div className="text-xs text-mudo">{p.telefone}</div>
             </Celula>
             <Celula>
               <div className="flex flex-wrap gap-1">

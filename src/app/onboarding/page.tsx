@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { BotaoTema } from "@/components/menu-lateral";
 import { Campo, Entrada } from "@/components/ui";
 import { obterUsuarioSemOrganizacao } from "@/lib/contexto";
 import { type EstadoAcao, mensagemErro, texto } from "@/lib/form";
@@ -35,10 +36,11 @@ export default async function OnboardingPage() {
   if (count && count > 0) redirect("/");
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-semibold">Cadastre sua imobiliária</h1>
-        <p className="mb-6 mt-1 text-sm text-slate-500">
+    <main className="relative flex min-h-screen items-center justify-center px-4">
+      <BotaoTema className="absolute right-4 top-4" />
+      <div className="entrar w-full max-w-md rounded-card border border-borda bg-card p-8 shadow-card">
+        <h1 className="text-[26px] font-semibold tracking-[-0.025em]">Cadastre sua imobiliária</h1>
+        <p className="mb-6 mt-1 text-sm text-mudo">
           Você será o administrador. Depois é possível ajustar taxas e padrões em Configurações.
         </p>
         <Formulario acao={criar}>

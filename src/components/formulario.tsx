@@ -21,12 +21,12 @@ export function Formulario({
   return (
     <form action={executar} className={className}>
       {estado.erro && (
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div role="alert" className="rounded-[14px] border border-ruim-bd bg-ruim-bg px-4 py-3 text-sm text-ruim">
           {estado.erro}
         </div>
       )}
       {estado.ok && (
-        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div role="status" className="rounded-[14px] border border-ok-bd bg-ok-bg px-4 py-3 text-sm text-ok">
           {estado.ok}
         </div>
       )}

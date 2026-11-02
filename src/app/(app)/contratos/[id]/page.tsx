@@ -90,7 +90,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
         titulo={`Contrato #${c.numero}${c.codigo ? ` · ${c.codigo}` : ""}`}
         descricao={
           <>
-            <Link href={`/imoveis/${imovel.id}`} className="text-emerald-700 hover:underline">
+            <Link href={`/imoveis/${imovel.id}`} className="text-acento hover:underline">
               {imovel.codigo}
             </Link>{" "}
             — {[imovel.logradouro, imovel.numero, imovel.complemento, imovel.bairro, imovel.cidade].filter(Boolean).join(", ")}
@@ -150,7 +150,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
               {faturas.map((f) => (
                 <tr key={f.id}>
                   <Celula>
-                    <Link href={`/faturas/${f.id}`} className="text-emerald-700 hover:underline">
+                    <Link href={`/faturas/${f.id}`} className="text-acento hover:underline">
                       #{f.numero}
                     </Link>
                   </Celula>
@@ -279,10 +279,10 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
               {partes.map((p) => (
                 <li key={`${p.pessoa_id}-${p.papel}`} className="flex items-start justify-between gap-2">
                   <div>
-                    <Link href={`/pessoas/${p.pessoa_id}`} className="font-medium text-emerald-700 hover:underline">
+                    <Link href={`/pessoas/${p.pessoa_id}`} className="font-medium text-acento hover:underline">
                       {p.pessoa.nome}
                     </Link>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-mudo">
                       {ROTULO_PAPEL[p.papel]}
                       {p.papel === "proprietario" && ` · ${Number(p.percentual)}%`} · {formatarDocumento(p.pessoa.documento)}
                     </div>
@@ -291,7 +291,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                     <input type="hidden" name="contrato_id" value={id} />
                     <input type="hidden" name="pessoa_id" value={p.pessoa_id} />
                     <input type="hidden" name="papel" value={p.papel} />
-                    <button className="text-xs text-red-600 hover:underline">remover</button>
+                    <button className="text-xs text-ruim hover:underline">remover</button>
                   </form>
                 </li>
               ))}
@@ -332,7 +332,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                 <li key={e.id} className="flex items-start justify-between gap-2">
                   <div>
                     {e.descricao} · <strong>{formatarReais(e.valor)}</strong>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-mudo">
                       destino: {e.destino}
                       {e.inicio && ` · de ${formatarCompetencia(e.inicio)}`}
                       {e.fim && ` até ${formatarCompetencia(e.fim)}`}
@@ -341,11 +341,11 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                   <form action={removerEncargo}>
                     <input type="hidden" name="contrato_id" value={id} />
                     <input type="hidden" name="id" value={e.id} />
-                    <button className="text-xs text-red-600 hover:underline">remover</button>
+                    <button className="text-xs text-ruim hover:underline">remover</button>
                   </form>
                 </li>
               ))}
-              {encargos.length === 0 && <li className="text-slate-500">Nenhum encargo.</li>}
+              {encargos.length === 0 && <li className="text-mudo">Nenhum encargo.</li>}
             </ul>
             <Formulario acao={adicionarEncargo} className="space-y-3">
               <input type="hidden" name="contrato_id" value={id} />
@@ -376,11 +376,11 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
           </Cartao>
 
           <Cartao titulo="Reajuste">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-texto-2">
               Próximo aniversário: <strong>{formatarDataBR(dataReajuste)}</strong>
             </p>
             {previa.mesesFaltantes.length > 0 ? (
-              <p className="mt-2 text-xs text-amber-700">
+              <p className="mt-2 text-xs text-alerta">
                 Faltam índices de {previa.mesesFaltantes.length} mês(es) do {c.indice_reajuste}.{" "}
                 <Link href="/indices" className="underline">
                   Cadastrar índices
@@ -405,7 +405,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
               </BotaoEnviar>
             </Formulario>
             {(reajustes ?? []).length > 0 && (
-              <ul className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-xs text-slate-600">
+              <ul className="mt-4 space-y-1 border-t border-borda-suave pt-3 text-xs text-texto-2">
                 {(reajustes ?? []).map((r) => (
                   <li key={r.id}>
                     {formatarDataBR(r.data_reajuste)} · {r.indice} {Number(r.percentual).toFixed(2)}% ·{" "}
@@ -433,7 +433,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
               <button className={classeBotao("secundario")}>Calcular</button>
             </form>
             {rescisao && (
-              <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-sm">
+              <div className="mt-4 space-y-1 border-t border-borda-suave pt-3 text-sm">
                 <div className="flex justify-between">
                   <span>Saldo de aluguel ({rescisao.diasSaldo} dias)</span>
                   <span>{formatarReais(paraReais(rescisao.saldoAluguel))}</span>
@@ -442,7 +442,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                   <span>Multa</span>
                   <span>{formatarReais(paraReais(rescisao.multa))}</span>
                 </div>
-                <div className="text-xs text-slate-500">{rescisao.multaFundamento}</div>
+                <div className="text-xs text-mudo">{rescisao.multaFundamento}</div>
                 <div className="flex justify-between">
                   <span>Faturas em aberto</span>
                   <span>{formatarReais(paraReais(rescisao.debitosPendentes))}</span>
@@ -453,7 +453,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                     <span>{formatarReais(paraReais(rescisao.caucao))}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-slate-100 pt-1 font-semibold">
+                <div className="flex justify-between border-t border-borda-suave pt-1 font-semibold">
                   <span>{rescisao.totalDevido >= 0 ? "Total a cobrar" : "A devolver ao locatário"}</span>
                   <span>{formatarReais(Math.abs(paraReais(rescisao.totalDevido)))}</span>
                 </div>

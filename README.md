@@ -7,7 +7,7 @@ proprietários, reajustes, rescisões, régua de cobrança, DIMOB e financeiro.
 - **Multi-imobiliária:** cada organização só enxerga os próprios dados (Row Level Security).
 - **Regras de negócio** puras e testadas em `src/lib/dominio` (centavos inteiros, datas em UTC).
 
-O que já existe e o que vem a seguir: [docs/ROADMAP.md](docs/ROADMAP.md). Análise funcional que
+O que já existe e o que vem a seguir: [docs/ROADMAP.md](docs/ROADMAP.md). Regras de design (mesmo padrão do Gueco): [docs/DESIGN.md](docs/DESIGN.md). Análise funcional que
 orientou o escopo: [docs/pesquisa-jetimob.md](docs/pesquisa-jetimob.md).
 
 ## Como rodar

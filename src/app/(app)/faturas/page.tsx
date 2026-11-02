@@ -8,6 +8,7 @@ import { formatarReais } from "@/lib/dominio/dinheiro";
 import type { Fatura } from "@/lib/tipos";
 import { gerarFaturasDoMes } from "./actions";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { AlertTriangle, CalendarClock, Wallet } from "lucide-react";
 
 export const metadata: Metadata = { title: "Cobranças" };
 
@@ -56,10 +57,10 @@ export default async function FaturasPage({ searchParams }: PageProps<"/faturas"
           </Formulario>
         }
       />
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Indicador rotulo="A receber" valor={formatarReais(aReceber)} />
-        <Indicador rotulo="Em atraso" valor={formatarReais(atraso)} tom={atraso > 0 ? "perigo" : "neutro"} />
-        <Indicador rotulo="Recebido" valor={formatarReais(recebido)} tom="sucesso" />
+      <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Indicador rotulo="A receber" icone={<CalendarClock />} valor={formatarReais(aReceber)} />
+        <Indicador rotulo="Em atraso" icone={<AlertTriangle />} valor={formatarReais(atraso)} tom={atraso > 0 ? "perigo" : "neutro"} />
+        <Indicador rotulo="Recebido" icone={<Wallet />} valor={formatarReais(recebido)} tom="sucesso" />
       </div>
       <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
         <Entrada type="month" name="mes" defaultValue={mes} className="w-44" />
@@ -76,9 +77,9 @@ export default async function FaturasPage({ searchParams }: PageProps<"/faturas"
         {faturas.map((f) => {
           const atrasada = f.status === "aberta" && f.vencimento < hoje;
           return (
-            <tr key={f.id} className="hover:bg-slate-50">
+            <tr key={f.id} className="hover:bg-card-hover">
               <Celula>
-                <Link href={`/faturas/${f.id}`} className="font-medium text-emerald-700 hover:underline">
+                <Link href={`/faturas/${f.id}`} className="font-medium text-acento hover:underline">
                   #{f.numero}
                 </Link>
               </Celula>

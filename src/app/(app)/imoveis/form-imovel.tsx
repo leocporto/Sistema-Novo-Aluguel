@@ -49,7 +49,7 @@ export function FormImovel({ imovel, proprietarios }: { imovel?: Imovel; proprie
             )}
           </Grade>
           <fieldset>
-            <legend className="mb-1 text-sm font-medium text-slate-700">Finalidades</legend>
+            <legend className="mb-1 text-sm font-medium text-texto-2">Finalidades</legend>
             <div className="flex gap-4 text-sm">
               {[
                 ["locacao", "Locação"],

@@ -78,7 +78,7 @@ export default async function ChavesPage() {
                   {aberta ? (
                     <>
                       <Selo cor={atrasada ? "vermelho" : "amarelo"}>{atrasada ? "devolução atrasada" : "retirada"}</Selo>
-                      <div className="mt-1 text-xs text-slate-500">
+                      <div className="mt-1 text-xs text-mudo">
                         {aberta.retirada_por} · {fmt(aberta.retirada_em)}
                         {aberta.motivo && ` · ${aberta.motivo}`}
                         {aberta.previsao_devolucao && ` · prev. ${fmt(aberta.previsao_devolucao)}`}
@@ -92,7 +92,7 @@ export default async function ChavesPage() {
                   {aberta ? (
                     <form action={devolver}>
                       <input type="hidden" name="mov_id" value={aberta.id} />
-                      <button className="text-sm text-emerald-700 hover:underline">Registrar devolução</button>
+                      <button className="text-sm text-acento hover:underline">Registrar devolução</button>
                     </form>
                   ) : (
                     <Formulario acao={retirar} className="flex flex-col gap-1">

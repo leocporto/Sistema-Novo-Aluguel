@@ -126,19 +126,19 @@ export default async function ReguaPage() {
                 <Celula>
                   <input type="hidden" name="envio" value={`${d.regraId}|${d.faturaId}|${d.destinatario}`} />
                   {d.regra.nome}
-                  <div className="text-xs text-slate-500">{d.regra.canal}</div>
+                  <div className="text-xs text-mudo">{d.regra.canal}</div>
                 </Celula>
                 <Celula>
                   #{d.fatura.numero} · vence {formatarDataBR(d.fatura.vencimento)}
                 </Celula>
                 <Celula>
                   {d.loc?.nome}
-                  <div className="text-xs text-slate-500">{d.destinatario || "sem contato"}</div>
+                  <div className="text-xs text-mudo">{d.destinatario || "sem contato"}</div>
                 </Celula>
                 <Celula className="max-w-md text-xs">{d.corpo}</Celula>
                 <Celula>
                   {d.link ? (
-                    <a href={d.link} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">
+                    <a href={d.link} target="_blank" rel="noreferrer" className="text-acento hover:underline">
                       Abrir {d.regra.canal === "whatsapp" ? "WhatsApp" : "e-mail"}
                     </a>
                   ) : (

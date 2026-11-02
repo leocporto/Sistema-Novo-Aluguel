@@ -54,18 +54,18 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
       </div>
       {pessoa && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm">
+          <div className="rounded-xl border border-borda bg-card p-6 text-sm">
             <div className="flex flex-wrap justify-between gap-2">
               <div>
-                <div className="text-xs uppercase text-slate-500">Fonte pagadora / administradora</div>
+                <div className="text-xs uppercase text-mudo">Fonte pagadora / administradora</div>
                 {organizacao.nome} · {formatarDocumento(organizacao.documento)}
               </div>
               <div>
-                <div className="text-xs uppercase text-slate-500">Beneficiário</div>
+                <div className="text-xs uppercase text-mudo">Beneficiário</div>
                 {pessoa.nome} · {formatarDocumento(pessoa.documento)}
               </div>
               <div>
-                <div className="text-xs uppercase text-slate-500">Ano-calendário</div>
+                <div className="text-xs uppercase text-mudo">Ano-calendário</div>
                 {ano}
               </div>
             </div>
@@ -89,7 +89,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
               </tr>
             ))}
             {repasses.length > 0 && (
-              <tr className="bg-slate-50 font-semibold">
+              <tr className="bg-elev font-semibold">
                 <Celula>Total</Celula>
                 <Celula />
                 <Celula>{formatarReais(tot("aluguel"))}</Celula>

@@ -41,10 +41,10 @@ export default async function DocumentoContratoPage({ params }: PageProps<"/cont
   return (
     <div className="mx-auto max-w-3xl">
       <div className="nao-imprimir mb-4 flex justify-between">
-        <p className="text-sm text-amber-700">Minuta gerada automaticamente — revise antes de assinar.</p>
+        <p className="text-sm text-alerta">Minuta gerada automaticamente — revise antes de assinar.</p>
         <BotaoImprimir />
       </div>
-      <article className="space-y-4 rounded-xl border border-slate-200 bg-white p-10 text-[15px] leading-relaxed text-slate-800 print:border-0 print:p-0">
+      <article className="space-y-4 rounded-xl border border-borda bg-card p-10 text-[15px] leading-relaxed text-texto print:border-0 print:p-0">
         <h1 className="text-center text-lg font-bold uppercase">
           Contrato de locação {c.finalidade === "comercial" ? "não residencial" : "residencial"}
         </h1>
@@ -132,9 +132,9 @@ export default async function DocumentoContratoPage({ params }: PageProps<"/cont
         </p>
         <div className="grid grid-cols-2 gap-10 pt-10 text-center text-sm">
           {[...locadores, ...locatarios, ...fiadores].map((p) => (
-            <div key={`${p.pessoa_id}-${p.papel}`} className="border-t border-slate-400 pt-1">
+            <div key={`${p.pessoa_id}-${p.papel}`} className="border-t border-borda-forte pt-1">
               {p.pessoa.nome}
-              <div className="text-xs uppercase text-slate-500">{p.papel === "proprietario" ? "locador" : p.papel}</div>
+              <div className="text-xs uppercase text-mudo">{p.papel === "proprietario" ? "locador" : p.papel}</div>
             </div>
           ))}
         </div>

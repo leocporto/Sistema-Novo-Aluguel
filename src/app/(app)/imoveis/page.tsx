@@ -43,15 +43,15 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
       <Tabela colunas={["Código", "Endereço", "Tipo", "Proprietário(s)", "Aluguel", "Situação"]}>
         {imoveis.length === 0 && <LinhaVazia colunas={6}>Nenhum imóvel cadastrado.</LinhaVazia>}
         {imoveis.map((i) => (
-          <tr key={i.id} className="hover:bg-slate-50">
+          <tr key={i.id} className="hover:bg-card-hover">
             <Celula>
-              <Link href={`/imoveis/${i.id}`} className="font-medium text-emerald-700 hover:underline">
+              <Link href={`/imoveis/${i.id}`} className="font-medium text-acento hover:underline">
                 {i.codigo}
               </Link>
             </Celula>
             <Celula>
               {[i.logradouro, i.numero, i.complemento].filter(Boolean).join(", ") || "—"}
-              <div className="text-xs text-slate-500">{[i.bairro, i.cidade].filter(Boolean).join(" · ")}</div>
+              <div className="text-xs text-mudo">{[i.bairro, i.cidade].filter(Boolean).join(" · ")}</div>
             </Celula>
             <Celula className="capitalize">{i.tipo}</Celula>
             <Celula>{i.imovel_proprietarios.map((p) => p.pessoa.nome).join(", ") || "—"}</Celula>

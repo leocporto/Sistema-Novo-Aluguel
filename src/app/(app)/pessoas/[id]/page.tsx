@@ -60,26 +60,26 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
             <ul className="space-y-2 text-sm">
               {((imoveis ?? []) as unknown as Prop[]).map((i) => (
                 <li key={i.imovel.id}>
-                  <Link className="text-emerald-700 hover:underline" href={`/imoveis/${i.imovel.id}`}>
+                  <Link className="text-acento hover:underline" href={`/imoveis/${i.imovel.id}`}>
                     {i.imovel.codigo}
                   </Link>{" "}
                   — {i.imovel.logradouro} {i.imovel.numero} ({Number(i.percentual)}%)
                 </li>
               ))}
-              {!imoveis?.length && <li className="text-slate-500">Nenhum.</li>}
+              {!imoveis?.length && <li className="text-mudo">Nenhum.</li>}
             </ul>
           </Cartao>
           <Cartao titulo="Contratos">
             <ul className="space-y-2 text-sm">
               {((vinculos ?? []) as unknown as Vinc[]).map((v) => (
                 <li key={`${v.contrato.id}-${v.papel}`} className="flex items-center justify-between gap-2">
-                  <Link className="text-emerald-700 hover:underline" href={`/contratos/${v.contrato.id}`}>
+                  <Link className="text-acento hover:underline" href={`/contratos/${v.contrato.id}`}>
                     #{v.contrato.numero} · {v.contrato.imovel.codigo}
                   </Link>
                   <Selo>{ROTULO_PAPEL[v.papel] ?? v.papel}</Selo>
                 </li>
               ))}
-              {!vinculos?.length && <li className="text-slate-500">Nenhum.</li>}
+              {!vinculos?.length && <li className="text-mudo">Nenhum.</li>}
             </ul>
           </Cartao>
           <form action={excluirPessoa}>

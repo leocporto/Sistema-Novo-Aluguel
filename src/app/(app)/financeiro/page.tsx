@@ -7,6 +7,7 @@ import { fimDoMes, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { type EstadoAcao, ErroValidacao, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { ArrowLeftRight, Scale, TrendingDown, TrendingUp } from "lucide-react";
 
 export const metadata: Metadata = { title: "Financeiro" };
 
@@ -73,11 +74,11 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
         titulo="Financeiro da imobiliária"
         descricao="Contas a pagar e a receber. As taxas de administração entram automaticamente na baixa das faturas."
       />
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <Indicador rotulo="Receitas do mês" valor={formatarReais(receitas)} tom="sucesso" />
-        <Indicador rotulo="Despesas do mês" valor={formatarReais(despesas)} tom="perigo" />
-        <Indicador rotulo="Resultado" valor={formatarReais(receitas - despesas)} tom={receitas - despesas >= 0 ? "sucesso" : "perigo"} />
-        <Indicador rotulo="Repasses pendentes até o fim do mês" valor={formatarReais(aRepassar)} href="/repasses" tom="alerta" />
+      <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <Indicador rotulo="Receitas do mês" icone={<TrendingUp />} valor={formatarReais(receitas)} tom="sucesso" />
+        <Indicador rotulo="Despesas do mês" icone={<TrendingDown />} valor={formatarReais(despesas)} tom="perigo" />
+        <Indicador rotulo="Resultado" icone={<Scale />} valor={formatarReais(receitas - despesas)} tom={receitas - despesas >= 0 ? "sucesso" : "perigo"} />
+        <Indicador rotulo="Repasses pendentes até o fim do mês" icone={<ArrowLeftRight />} valor={formatarReais(aRepassar)} href="/repasses" tom="alerta" />
       </div>
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div>
@@ -97,11 +98,11 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
                 <Celula className="font-medium">{formatarReais(l.valor)}</Celula>
                 <Celula>
                   {l.status === "liquidado" ? (
-                    <span className="text-xs text-slate-500">liquidado {formatarDataBR(l.liquidado_em)}</span>
+                    <span className="text-xs text-mudo">liquidado {formatarDataBR(l.liquidado_em)}</span>
                   ) : (
                     <form action={liquidar}>
                       <input type="hidden" name="id" value={l.id} />
-                      <button className="text-sm text-emerald-700 hover:underline">Liquidar</button>
+                      <button className="text-sm text-acento hover:underline">Liquidar</button>
                     </form>
                   )}
                 </Celula>
