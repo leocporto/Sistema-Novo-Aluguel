@@ -205,6 +205,8 @@ export interface SimulacaoLiquidacao {
   juros: number;
   total: number;
   itensExtras: ItemFatura[];
+  /** Quanto o contrato sugere de multa + juros (em centavos), para mostrar como dica. */
+  sugestao: number;
 }
 
 export function simularLiquidacao(
@@ -212,6 +214,8 @@ export function simularLiquidacao(
   contrato: Contrato,
   pagoEm: string,
   dispensarEncargos = false,
+  /** Multa digitada pelo usuário (R$). Quando informada, substitui o cálculo automático; 0 = sem multa. */
+  multaManual?: number | null,
 ): SimulacaoLiquidacao {
   const base = paraCentavos(fatura.valor_total);
   const atraso = calcularAtraso({
@@ -224,6 +228,12 @@ export function simularLiquidacao(
   });
   const destino =
     contrato.repassar_multa_juros && contrato.tipo_repasse !== "garantido" ? "proprietario" : "imobiliaria";
+  const sugestao = atraso.multa + atraso.juros;
+  if (multaManual !== undefined && multaManual !== null) {
+    const valor = Math.max(0, paraCentavos(multaManual));
+    const itens: ItemFatura[] = valor > 0 ? [{ descricao: "Multa por atraso", tipo: "multa", valor, destino }] : [];
+    return { diasAtraso: atraso.diasAtraso, multa: valor, juros: 0, total: base + valor, itensExtras: itens, sugestao };
+  }
   const itensExtras: ItemFatura[] = [];
   if (atraso.multa > 0)
     itensExtras.push({ descricao: `Multa por atraso (${contrato.multa_atraso_pct}%)`, tipo: "multa", valor: atraso.multa, destino });
@@ -234,14 +244,14 @@ export function simularLiquidacao(
       valor: atraso.juros,
       destino,
     });
-  return { diasAtraso: atraso.diasAtraso, multa: atraso.multa, juros: atraso.juros, total: atraso.total, itensExtras };
+  return { diasAtraso: atraso.diasAtraso, multa: atraso.multa, juros: atraso.juros, total: atraso.total, itensExtras, sugestao };
 }
 
 /** Dá baixa na fatura, lança multa/juros e cria os repasses aos proprietários. */
 export async function liquidarFatura(
   sb: SupabaseClient,
   faturaId: string,
-  opcoes: { pagoEm: string; formaPagamento: string; dispensarEncargos?: boolean },
+  opcoes: { pagoEm: string; formaPagamento: string; dispensarEncargos?: boolean; multa?: number | null },
 ) {
   const fatura = verificar(await sb.from("faturas").select("*").eq("id", faturaId).single()) as Fatura;
   if (fatura.status !== "aberta") throw new ErroValidacao("Esta fatura não está em aberto.");
@@ -250,7 +260,7 @@ export async function liquidarFatura(
   validarProprietarios(c);
   const itens = verificar(await sb.from("fatura_itens").select("*").eq("fatura_id", faturaId)) as FaturaItem[];
 
-  const sim = simularLiquidacao(fatura, c.contrato, opcoes.pagoEm, opcoes.dispensarEncargos);
+  const sim = simularLiquidacao(fatura, c.contrato, opcoes.pagoEm, opcoes.dispensarEncargos, opcoes.multa);
   const todos: ItemFatura[] = [
     ...itens.map((i) => ({ descricao: i.descricao, tipo: i.tipo as ItemFatura["tipo"], valor: paraCentavos(i.valor), destino: i.destino })),
     ...sim.itensExtras,

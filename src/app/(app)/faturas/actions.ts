@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { obterContexto } from "@/lib/contexto";
-import { type EstadoAcao, booleano, mensagemErro, texto, textoObrigatorio } from "@/lib/form";
+import { type EstadoAcao, booleano, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 import { carregarContrato, gerarFaturaDoContrato, gerarFaturasDaCompetencia, liquidarFatura } from "@/lib/servicos/locacao";
 
 export async function gerarFaturasDoMes(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
@@ -27,7 +27,8 @@ export async function darBaixa(_: EstadoAcao, fd: FormData): Promise<EstadoAcao>
     await liquidarFatura(supabase, id, {
       pagoEm: textoObrigatorio(fd, "pago_em", "a data do pagamento"),
       formaPagamento: texto(fd, "forma_pagamento") ?? "pix",
-      dispensarEncargos: booleano(fd, "dispensar"),
+      // Multa só se o usuário aplicar (valor digitado); vazio = sem multa.
+      multa: booleano(fd, "aplicar_multa") ? (numero(fd, "multa") ?? 0) : 0,
     });
   } catch (e) {
     return { erro: mensagemErro(e) };
@@ -73,7 +74,8 @@ export async function marcarPago(dados: {
   faturaId: string | null;
   pagoEm: string;
   formaPagamento: string;
-  dispensarEncargos: boolean;
+  /** Multa em R$ aplicada pelo usuário (0 = sem multa). */
+  multa: number;
 }): Promise<{ ok: boolean; erro?: string; faturaId?: string }> {
   const { supabase } = await obterContexto();
   let faturaIdFinal: string | undefined;
@@ -99,7 +101,7 @@ export async function marcarPago(dados: {
     await liquidarFatura(supabase, faturaId, {
       pagoEm: dados.pagoEm,
       formaPagamento: dados.formaPagamento,
-      dispensarEncargos: dados.dispensarEncargos,
+      multa: Number.isFinite(dados.multa) && dados.multa > 0 ? dados.multa : 0,
     });
   } catch (e) {
     return { ok: false, erro: mensagemErro(e) };

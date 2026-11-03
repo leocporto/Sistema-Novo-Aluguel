@@ -72,7 +72,8 @@ export function ControleMes({
   const [aberto, setAberto] = useState<AluguelDoMes | null>(null);
   const [data, setData] = useState(hoje);
   const [forma, setForma] = useState("pix");
-  const [dispensar, setDispensar] = useState(false);
+  const [aplicarMulta, setAplicarMulta] = useState(false);
+  const [multaTexto, setMultaTexto] = useState("");
   const [erro, setErro] = useState("");
   const [pendente, iniciar] = useTransition();
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -121,22 +122,34 @@ export function ControleMes({
       .sort((a, b) => ordem(a) - ordem(b) || a.vencimento.localeCompare(b.vencimento));
   }, [itens, filtro, hoje]);
 
+  // Só uma sugestão: a multa entra apenas se o usuário clicar em "Aplicar multa".
   const calculo = aberto
     ? calcularAtraso({
         valor: paraCentavos(aberto.valor),
         vencimento: aberto.vencimento,
         pagamento: data,
-        multaPct: dispensar ? 0 : aberto.multaPct,
-        jurosMesPct: dispensar ? 0 : aberto.jurosMesPct,
+        multaPct: aberto.multaPct,
+        jurosMesPct: aberto.jurosMesPct,
         carenciaDias: aberto.carenciaDias,
       })
     : null;
+  const sugestao = calculo ? paraReais(calculo.multa + calculo.juros) : 0;
+  const multaDigitada = (() => {
+    const t = multaTexto.trim();
+    if (!t) return 0;
+    const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
+  })();
+  const multaFinal = aplicarMulta ? multaDigitada : 0;
+  const totalFinal = aberto ? Math.round((aberto.valor + multaFinal) * 100) / 100 : 0;
+  const diasAtrasados = aberto ? diasEntre(aberto.vencimento, data) : 0;
 
   const abrir = (it: AluguelDoMes) => {
     setAberto(it);
     setData(hoje);
     setForma("pix");
-    setDispensar(false);
+    setAplicarMulta(false);
+    setMultaTexto("");
     setErro("");
     setArquivo(null);
   };
@@ -152,7 +165,7 @@ export function ControleMes({
         faturaId: it.faturaId,
         pagoEm: data,
         formaPagamento: forma,
-        dispensarEncargos: dispensar,
+        multa: multaFinal,
       });
       if (!r.ok) {
         setErro(r.erro ?? "Não foi possível registrar o pagamento.");
@@ -354,25 +367,68 @@ export function ControleMes({
                   <span>Aluguel (vence {formatarDataBR(aberto.vencimento)})</span>
                   <span>{formatarReais(aberto.valor)}</span>
                 </div>
-                {calculo.multa + calculo.juros > 0 && (
+                {multaFinal > 0 && (
                   <div className="flex justify-between text-ruim">
-                    <span>
-                      Multa e juros ({calculo.diasAtraso} {calculo.diasAtraso === 1 ? "dia" : "dias"})
-                    </span>
-                    <span>{formatarReais(paraReais(calculo.multa + calculo.juros))}</span>
+                    <span>Multa por atraso</span>
+                    <span>{formatarReais(multaFinal)}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-borda pt-1.5 text-[15px] font-semibold text-texto">
                   <span>Total recebido</span>
-                  <span>{formatarReais(paraReais(calculo.total))}</span>
+                  <span>{formatarReais(totalFinal)}</span>
                 </div>
               </div>
 
-              {diasEntre(aberto.vencimento, data) > aberto.carenciaDias && (
-                <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-texto-2">
-                  <input type="checkbox" checked={dispensar} onChange={(e) => setDispensar(e.target.checked)} className="size-4 accent-[var(--accent)]" />
-                  Dispensar multa e juros
-                </label>
+              {diasAtrasados > 0 && (
+                <div className="mt-3 rounded-[14px] border border-alerta-bd bg-alerta-bg px-4 py-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-alerta">
+                      Pago com {diasAtrasados} {diasAtrasados === 1 ? "dia" : "dias"} de atraso
+                    </span>
+                    {aplicarMulta ? (
+                      <button
+                        type="button"
+                        className="text-xs text-mudo hover:text-ruim hover:underline"
+                        onClick={() => {
+                          setAplicarMulta(false);
+                          setMultaTexto("");
+                        }}
+                      >
+                        tirar multa
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className={classeBotao("secundario", "sm")}
+                        onClick={() => {
+                          setAplicarMulta(true);
+                          setMultaTexto(sugestao > 0 ? sugestao.toFixed(2).replace(".", ",") : "");
+                        }}
+                      >
+                        + Aplicar multa
+                      </button>
+                    )}
+                  </div>
+                  {aplicarMulta ? (
+                    <label className="mt-3 flex flex-col gap-1.5">
+                      <span className={rotulo}>Valor da multa (R$)</span>
+                      <input
+                        autoFocus
+                        inputMode="decimal"
+                        value={multaTexto}
+                        onChange={(e) => setMultaTexto(e.target.value)}
+                        placeholder="0,00"
+                        className={campo}
+                      />
+                      <span className="text-xs text-texto-2">
+                        Sugestão pelo contrato: {formatarReais(sugestao)} ({aberto.multaPct}% de multa + {aberto.jurosMesPct}% de juros ao mês
+                        {aberto.carenciaDias ? `, ${aberto.carenciaDias} dia(s) de carência` : ""}). Você decide o valor.
+                      </span>
+                    </label>
+                  ) : (
+                    <p className="mt-1 text-xs text-texto-2">Sem multa. Se quiser cobrar, clique em “Aplicar multa” e digite o valor.</p>
+                  )}
+                </div>
               )}
 
               <div className="mt-4">

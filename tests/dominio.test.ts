@@ -413,3 +413,19 @@ describe("modos: telas do imóvel", () => {
     expect(rotaPermitida("/imoveis/abc/comercializacao", "imobiliaria")).toBe(true);
   });
 });
+
+import { simularLiquidacao } from "@/lib/servicos/locacao";
+
+describe("multa manual na baixa", () => {
+  const fatura = { valor_total: 2000, vencimento: "2026-10-10" } as never;
+  const contrato = { multa_atraso_pct: 10, juros_mes_pct: 1, carencia_dias: 0, repassar_multa_juros: true, tipo_repasse: "automatico" } as never;
+  it("sem multa quando o usuário não aplica (0) e com o valor digitado quando aplica", () => {
+    const sem = simularLiquidacao(fatura, contrato, "2026-10-20", false, 0);
+    expect(sem.total).toBe(200000);
+    expect(sem.itensExtras).toEqual([]);
+    expect(sem.sugestao).toBeGreaterThan(20000);
+    const com = simularLiquidacao(fatura, contrato, "2026-10-20", false, 150);
+    expect(com.total).toBe(215000);
+    expect(com.itensExtras).toEqual([{ descricao: "Multa por atraso", tipo: "multa", valor: 15000, destino: "proprietario" }]);
+  });
+});

@@ -141,18 +141,12 @@ export default async function FaturaPage({ params, searchParams }: PageProps<"/f
                   <span>Valor da fatura</span>
                   <span>{formatarReais(fatura.valor_total)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Multa</span>
-                  <span>{formatarReais(paraReais(simulacao.multa))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Juros ({simulacao.diasAtraso > 0 ? simulacao.diasAtraso : 0} dias)</span>
-                  <span>{formatarReais(paraReais(simulacao.juros))}</span>
-                </div>
-                <div className="flex justify-between border-t border-borda-suave pt-1 font-semibold">
-                  <span>Total a receber</span>
-                  <span>{formatarReais(paraReais(simulacao.total))}</span>
-                </div>
+                {simulacao.diasAtraso > 0 && (
+                  <div className="flex justify-between text-alerta">
+                    <span>Atraso</span>
+                    <span>{simulacao.diasAtraso} dia(s)</span>
+                  </div>
+                )}
               </div>
               <Formulario acao={darBaixa} className="space-y-3">
                 <input type="hidden" name="fatura_id" value={fatura.id} />
@@ -167,9 +161,16 @@ export default async function FaturaPage({ params, searchParams }: PageProps<"/f
                     <option value="outro">Outro</option>
                   </Selecao>
                 </Campo>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="dispensar" /> Dispensar multa e juros
-                </label>
+                {simulacao.diasAtraso > 0 && (
+                  <div className="space-y-2 rounded-[14px] border border-alerta-bd bg-alerta-bg p-3">
+                    <label className="flex items-center gap-2 text-sm font-medium text-texto">
+                      <input type="checkbox" name="aplicar_multa" /> Aplicar multa por atraso
+                    </label>
+                    <Campo rotulo="Valor da multa (R$)" dica={`Sugestão pelo contrato: ${formatarReais(paraReais(simulacao.sugestao))}. Só é cobrada se marcar a caixa acima.`}>
+                      <Entrada name="multa" inputMode="decimal" defaultValue={paraReais(simulacao.sugestao).toFixed(2).replace(".", ",")} />
+                    </Campo>
+                  </div>
+                )}
                 <BotaoEnviar>Dar baixa em {formatarDataBR(dataPagamento)}</BotaoEnviar>
               </Formulario>
             </Cartao>
