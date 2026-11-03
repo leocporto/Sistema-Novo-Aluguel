@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClipboardCheck, Copy, ImageIcon, Wrench } from "lucide-react";
+import { ClipboardCheck, Copy, ImageIcon, Megaphone, Wrench } from "lucide-react";
 import { BotaoEnviar } from "@/components/formulario";
 import { SubAbas } from "@/components/sub-abas";
 import { BotaoLink, Cabecalho, Selo } from "@/components/ui";
@@ -91,6 +91,11 @@ export default async function ImovelLayout({ children, params }: LayoutProps<"/i
                 <BotaoLink href={`/manutencao/historico?imovel=${id}`} variante="secundario">
                   <Wrench className="size-4" /> Reparos
                 </BotaoLink>
+                {rotaPermitida("/marketing", organizacao.modo) && (
+                  <BotaoLink href={`/marketing/materiais/${id}`} variante="secundario">
+                    <Megaphone className="size-4" /> Divulgar
+                  </BotaoLink>
+                )}
                 <BotaoLink href={`/contratos/novo?imovel=${id}`}>Novo contrato de locação</BotaoLink>
               </>
             }

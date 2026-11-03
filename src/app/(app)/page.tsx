@@ -17,6 +17,8 @@ import {
   Handshake,
   Home,
   Inbox,
+  Megaphone,
+  MessageCircle,
   KeyRound,
   MessageSquareWarning,
   DoorOpen,
@@ -107,7 +109,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN, siteContatosR, portaisFalhaR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN, siteContatosR, portaisFalhaR, mktConversasR, mktFilaR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -168,6 +170,10 @@ export default async function PainelPage() {
         ? Promise.resolve({ count: 0 })
         : supabase.from("site_solicitacoes").select("id", { count: "exact", head: true }).neq("tipo", "portal").gte("created_at", `${somarDias(hoje, -30)}T00:00:00-03:00`),
       pessoal ? Promise.resolve({ count: 0 }) : supabase.from("portal_imoveis").select("id", { count: "exact", head: true }).eq("ultimo_status", "falha"),
+      pessoal ? Promise.resolve({ count: 0 }) : supabase.from("mkt_conversas").select("id", { count: "exact", head: true }).eq("status", "aberta"),
+      pessoal
+        ? Promise.resolve({ count: 0 })
+        : supabase.from("mkt_envios").select("id", { count: "exact", head: true }).eq("status", "pendente").lte("agendado_para", new Date().toISOString()),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -718,6 +724,36 @@ export default async function PainelPage() {
           detalhe={portaisFalhaR.count ? "corrija o cadastro para voltar ao portal" : "nenhuma falha"}
           tom={portaisFalhaR.count ? "perigo" : "sucesso"}
           href="/site/portais/imoveis?filtro=falha"
+        />
+      ),
+    },
+    !pessoal && {
+      id: "mkt_conversas",
+      titulo: "Conversas do WhatsApp",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Conversas esperando resposta"
+          icone={<MessageCircle />}
+          valor={<Contador valor={mktConversasR.count ?? 0} />}
+          detalhe="caixa de entrada do Marketing"
+          tom={mktConversasR.count ? "alerta" : "sucesso"}
+          href="/marketing/conversas"
+        />
+      ),
+    },
+    !pessoal && {
+      id: "mkt_fila",
+      titulo: "Fila de envio",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Mensagens para enviar agora"
+          icone={<Megaphone />}
+          valor={<Contador valor={mktFilaR.count ?? 0} />}
+          detalhe="campanhas e automações"
+          tom={mktFilaR.count ? "alerta" : "neutro"}
+          href="/marketing/fila"
         />
       ),
     },

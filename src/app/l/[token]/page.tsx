@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Formulario, BotaoEnviar } from "@/components/formulario";
 import { AreaTexto, Campo, Entrada, Selecao } from "@/components/ui";
+import { lerUtm } from "@/lib/dominio/marketing";
 import { clienteAnonimo } from "@/lib/supabase/anonimo";
 import { enviarLeadPublico } from "./actions";
 
@@ -27,6 +28,9 @@ export default async function CaptacaoPublicaPage({ params, searchParams }: Page
               <input type="hidden" name="token" value={token} />
               <input type="hidden" name="origem" value={s("origem") || "site"} />
               {s("imovel") && <input type="hidden" name="imovel" value={s("imovel")} />}
+              {Object.entries(lerUtm(sp)).map(([k, v]) => (
+                <input key={k} type="hidden" name={k} value={v} />
+              ))}
               <input type="text" name="site_url" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
               <Campo rotulo="Seu nome">
                 <Entrada name="nome" required autoComplete="name" />

@@ -1,3 +1,4 @@
+import { CAMPOS_UTM } from "@/lib/dominio/marketing";
 import { clienteAnonimo } from "@/lib/supabase/anonimo";
 
 const CORS = {
@@ -12,7 +13,9 @@ export function OPTIONS() {
 
 /**
  * Entrada de leads por integração (site próprio, portais, Zapier/Make…).
- * POST JSON: { nome, telefone?, email?, mensagem?, origem?, funil?, imovel? }
+ * POST JSON: { nome, telefone?, email?, mensagem?, origem?, funil?, imovel?,
+ *   utm_source?, utm_medium?, utm_campaign?, utm_content?, utm_term?, gclid?, fbclid? }
+ * A origem da conversão (UTM, gclid, fbclid) fica gravada no lead.
  */
 export async function POST(req: Request, ctx: RouteContext<"/api/leads/[token]">) {
   const { token } = await ctx.params;
@@ -24,9 +27,9 @@ export async function POST(req: Request, ctx: RouteContext<"/api/leads/[token]">
     return Response.json({ ok: false, erro: "Corpo inválido." }, { status: 400, headers: CORS });
   }
   const p = Object.fromEntries(
-    ["nome", "telefone", "email", "mensagem", "origem", "funil", "imovel"].map((k) => [k, corpo[k] == null ? undefined : String(corpo[k]).slice(0, 2000)]),
+    ["nome", "telefone", "email", "mensagem", "origem", "funil", "imovel", ...CAMPOS_UTM].map((k) => [k, corpo[k] == null ? undefined : String(corpo[k]).slice(0, 2000)]),
   );
-  const { data, error } = await clienteAnonimo().rpc("receber_lead", { p_token: token, p });
+  const { data, error } = await clienteAnonimo().rpc("receber_lead_marketing", { p_token: token, p });
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 400, headers: CORS });
   return Response.json({ ok: true, ...(data as object) }, { headers: CORS });
 }

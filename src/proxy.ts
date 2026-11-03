@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabaseConfig } from "@/lib/supabase/config";
 import { reescreverDominioProprio } from "@/lib/servicos/site-dominio";
 
-const ROTAS_PUBLICAS = ["/login", "/l", "/api/leads", "/api/agenda", "/assinar", "/pagar", "/contestar", "/chamado", "/ficha", "/s", "/api/portais"];
+const ROTAS_PUBLICAS = ["/login", "/l", "/api/leads", "/api/agenda", "/assinar", "/pagar", "/contestar", "/chamado", "/ficha", "/s", "/api/portais", "/lp", "/pesquisa", "/preferencias", "/api/marketing"];
 
 /**
  * Renova a sessão do Supabase a cada requisição e redireciona visitantes não
