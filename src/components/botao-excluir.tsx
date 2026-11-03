@@ -58,7 +58,7 @@ export function BotaoExcluir({
       disabled={rodando}
       title={rotulo}
       aria-label={rotulo}
-      className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-borda bg-card text-texto-2 transition hover:border-ruim-bd hover:bg-ruim-bg hover:text-ruim disabled:opacity-50"
+      className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-ruim-bd bg-ruim-bg text-ruim transition hover:brightness-95 disabled:opacity-50"
     >
       <X className="size-4" />
     </button>
