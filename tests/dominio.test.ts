@@ -320,3 +320,29 @@ describe("DIMOB", () => {
     expect(csv.split("\n")[1]).toContain("1000,00;100,00;0,00");
   });
 });
+
+import { aplicarPreferencia, contarPorMes, mesAnoAnterior, mesesAte, progressoMeta, somarPorMes, variacaoPct } from "@/lib/dominio/painel";
+
+describe("painel", () => {
+  it("monta os meses atravessando o ano", () => {
+    expect(mesesAte("2026-02", 4)).toEqual(["2025-11", "2025-12", "2026-01", "2026-02"]);
+    expect(mesAnoAnterior("2026-02")).toBe("2025-02");
+  });
+  it("soma e conta por mês", () => {
+    const meses = ["2026-10", "2026-11"];
+    expect(somarPorMes([{ data: "2026-10-05", valor: 100 }, { data: "2026-11-01T10:00:00Z", valor: 50.5 }, { data: "2026-09-01", valor: 9 }], meses)).toEqual([100, 50.5]);
+    expect(contarPorMes(["2026-11-02", "2026-11-30", null], meses)).toEqual([0, 2]);
+  });
+  it("calcula variação e metas", () => {
+    expect(variacaoPct(120, 100)).toBe(20);
+    expect(variacaoPct(5, 0)).toBeNull();
+    expect(progressoMeta(3, 4)).toEqual({ pct: 75, atingida: false });
+    expect(progressoMeta(5, 4)?.atingida).toBe(true);
+    expect(progressoMeta(5, 0)).toBeNull();
+  });
+  it("aplica ordem e escondidos, encaixando quadros novos", () => {
+    const padrao = ["a", "b", "c", "d"];
+    expect(aplicarPreferencia(padrao, null)).toEqual({ visiveis: padrao, ocultos: [] });
+    expect(aplicarPreferencia(padrao, { ordem: ["c", "a", "x"], ocultos: ["a"] })).toEqual({ visiveis: ["c", "d", "b"], ocultos: ["a"] });
+  });
+});

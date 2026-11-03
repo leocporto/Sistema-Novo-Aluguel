@@ -23,10 +23,19 @@ export const TAMANHO_MAX_COMPROVANTE = 10 * 1024 * 1024;
  * da organização. Devolve o caminho gravado.
  */
 export async function enviarComprovante(organizacaoId: string, faturaId: string, arquivo: File): Promise<string> {
+  return enviarArquivoComprovante(organizacaoId, "faturas", faturaId, arquivo);
+}
+
+/** Comprovante de uma despesa (pasta <org>/despesas/<id>/). */
+export async function enviarComprovanteDespesa(organizacaoId: string, despesaId: string, arquivo: File): Promise<string> {
+  return enviarArquivoComprovante(organizacaoId, "despesas", despesaId, arquivo);
+}
+
+async function enviarArquivoComprovante(organizacaoId: string, pasta: string, id: string, arquivo: File): Promise<string> {
   if (!TIPOS_COMPROVANTE.includes(arquivo.type)) throw new Error("Envie uma imagem (JPG, PNG) ou PDF.");
   if (arquivo.size > TAMANHO_MAX_COMPROVANTE) throw new Error("O arquivo passa de 10 MB.");
   const nome = arquivo.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80);
-  const caminho = `${organizacaoId}/faturas/${faturaId}/${Date.now()}-${nome}`;
+  const caminho = `${organizacaoId}/${pasta}/${id}/${Date.now()}-${nome}`;
   const { error } = await clienteNavegador().storage.from("comprovantes").upload(caminho, arquivo, {
     contentType: arquivo.type,
     upsert: false,

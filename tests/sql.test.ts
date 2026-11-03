@@ -239,3 +239,58 @@ describe("migração SQL", () => {
     expect(regras).toBe(3);
   });
 });
+
+describe("comercial, comissões e preferências do painel", () => {
+  const USER_C = "00000000-0000-0000-0000-00000000000c";
+  const USER_D = "00000000-0000-0000-0000-00000000000d";
+
+  it("aceitar proposta fecha o negócio, marca o imóvel e gera a comissão", async () => {
+    const orgC = await comoUsuario(USER_C, async () => (await db.query<{ id: string }>(`select public.criar_organizacao('Imob C') as id`)).rows[0].id);
+    await comoUsuario(USER_D, () => db.query(`select public.criar_organizacao('Imob D')`));
+
+    const r = await comoUsuario(USER_C, async () => {
+      const um = async (sql: string, p: unknown[] = []) => (await db.query<{ id: string }>(sql, p)).rows[0].id;
+      const corretor = await um(`insert into pessoas (nome, papeis) values ('Carla Corretora','{corretor}') returning id`);
+      const casa = await um(`insert into imoveis (codigo, finalidades) values ('CA-1','{venda}') returning id`);
+      const ap = await um(`insert into imoveis (codigo) values ('AP-2') returning id`);
+      const lead = await um(`insert into leads (nome, origem, interesse, imovel_id) values ('Diego','whatsapp','compra',$1) returning id`, [casa]);
+      await db.query(`insert into visitas (lead_id, imovel_id, corretor_id, data_hora) values ($1,$2,$3, now() + interval '1 day')`, [lead, casa, corretor]);
+      const pVenda = await um(
+        `insert into propostas (lead_id, imovel_id, tipo, valor, corretor_id, comissao_pct) values ($1,$2,'venda',500000,$3,6) returning id`,
+        [lead, casa, corretor],
+      );
+      const pLoc = await um(`insert into propostas (imovel_id, tipo, valor) values ($1,'locacao',2500) returning id`, [ap]);
+      await db.query(`select public.aceitar_proposta($1)`, [pVenda]);
+      await db.query(`select public.aceitar_proposta($1)`, [pLoc]);
+      const imoveis = (await db.query<{ codigo: string; status: string; vendido_em: string | null; captado_em: string }>(
+        `select codigo, status, vendido_em::text, captado_em::text from imoveis order by codigo`,
+      )).rows;
+      const leadSt = (await db.query<{ status: string }>(`select status from leads where id = $1`, [lead])).rows[0].status;
+      const comissoes = (await db.query<{ valor: string; categoria: string; pessoa_id: string }>(
+        `select valor, categoria, pessoa_id from lancamentos where proposta_id is not null`,
+      )).rows;
+      await db.query(`insert into painel_preferencias (organizacao_id, widgets) values ($1, '{"ordem":["a"]}')`, [orgC]);
+      return { imoveis, leadSt, comissoes, corretor, pVenda };
+    });
+
+    expect(r.imoveis.find((i) => i.codigo === "CA-1")?.status).toBe("vendido");
+    expect(r.imoveis.find((i) => i.codigo === "CA-1")?.vendido_em).toBeTruthy();
+    expect(r.imoveis.find((i) => i.codigo === "AP-2")?.status).toBe("reservado");
+    expect(r.imoveis.every((i) => Boolean(i.captado_em))).toBe(true);
+    expect(r.leadSt).toBe("ganho");
+    expect(r.comissoes).toHaveLength(1);
+    expect(Number(r.comissoes[0].valor)).toBe(30000);
+    expect(r.comissoes[0].pessoa_id).toBe(r.corretor);
+
+    // Aceitar de novo é recusado
+    await expect(comoUsuario(USER_C, () => db.query(`select public.aceitar_proposta($1)`, [r.pVenda]))).rejects.toThrow();
+
+    // Outra organização não vê leads, propostas nem preferências
+    const visto = await comoUsuario(USER_D, async () => ({
+      leads: (await db.query(`select * from leads`)).rows.length,
+      propostas: (await db.query(`select * from propostas`)).rows.length,
+      prefs: (await db.query(`select * from painel_preferencias`)).rows.length,
+    }));
+    expect(visto).toEqual({ leads: 0, propostas: 0, prefs: 0 });
+  });
+});

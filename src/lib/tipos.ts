@@ -213,6 +213,7 @@ export const ROTULO_PAPEL: Record<string, string> = {
   locatario: "Locatário",
   fiador: "Fiador",
   cliente: "Cliente",
+  corretor: "Corretor",
 };
 
 export const TIPOS_IMOVEL = [
@@ -228,3 +229,76 @@ export const TIPOS_IMOVEL = [
   "sítio/chácara",
   "outro",
 ];
+
+// -----------------------------------------------------------------------------
+// Comercial
+// -----------------------------------------------------------------------------
+export type StatusLead = "novo" | "em_atendimento" | "visita" | "proposta" | "ganho" | "perdido";
+export const ROTULO_STATUS_LEAD: Record<StatusLead, string> = {
+  novo: "Novo",
+  em_atendimento: "Em atendimento",
+  visita: "Visita",
+  proposta: "Proposta",
+  ganho: "Fechado",
+  perdido: "Perdido",
+};
+export const ROTULO_ORIGEM_LEAD: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  site: "Site",
+  portal: "Portal",
+  instagram: "Instagram",
+  indicacao: "Indicação",
+  placa: "Placa",
+  telefone: "Telefone",
+  outro: "Outro",
+};
+export const ROTULO_INTERESSE: Record<string, string> = { locacao: "Alugar", compra: "Comprar" };
+
+export interface Lead {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  email: string | null;
+  origem: string;
+  interesse: "locacao" | "compra";
+  imovel_id: string | null;
+  status: StatusLead;
+  observacoes: string | null;
+  atendido_em: string | null;
+  created_at: string;
+}
+
+export const ROTULO_STATUS_VISITA: Record<string, string> = { agendada: "Agendada", realizada: "Realizada", cancelada: "Cancelada" };
+export const ROTULO_STATUS_PROPOSTA: Record<string, string> = {
+  em_negociacao: "Em negociação",
+  aceita: "Aceita",
+  recusada: "Recusada",
+  cancelada: "Cancelada",
+};
+export const ROTULO_TIPO_PROPOSTA: Record<string, string> = { locacao: "Locação", venda: "Venda" };
+
+export const TIPOS_META = ["locacoes", "vendas", "captacoes", "leads", "faturamento"] as const;
+export type TipoMeta = (typeof TIPOS_META)[number];
+export const ROTULO_META: Record<TipoMeta, string> = {
+  locacoes: "Imóveis alugados",
+  vendas: "Imóveis vendidos",
+  captacoes: "Imóveis captados",
+  leads: "Leads recebidos",
+  faturamento: "Faturamento (R$)",
+};
+
+// -----------------------------------------------------------------------------
+// Despesas (escritório no modo imobiliária; imóveis no modo pessoal)
+// -----------------------------------------------------------------------------
+export const CATEGORIAS_DESPESA_ESCRITORIO = [
+  "Aluguel da sala",
+  "Água, luz e internet",
+  "Salários e pró-labore",
+  "Marketing e portais",
+  "Impostos e taxas",
+  "Comissões",
+  "Sistemas e assinaturas",
+  "Material e manutenção",
+  "Outros",
+];
+export const CATEGORIAS_DESPESA_IMOVEL = ["Condomínio", "IPTU", "Manutenção", "Seguro", "Água e luz", "Taxas", "Reforma", "Outros"];

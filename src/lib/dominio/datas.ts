@@ -89,3 +89,8 @@ export function formatarCompetencia(d: DataISO | null | undefined): string {
   const [a, m] = d.slice(0, 7).split("-");
   return `${m}/${a}`;
 }
+
+/** Instante atual em milissegundos (isolado para manter os componentes puros). */
+export function agoraMs(): number {
+  return Date.now();
+}

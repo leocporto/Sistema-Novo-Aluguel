@@ -761,3 +761,17 @@ select[size]:not([size="1"]) option:checked {
     padding: 0 !important;
   }
 }
+
+/* Barras do comparativo do Painel: crescem escalonadas. */
+@keyframes barra-crescer {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.mv-col {
+  transform-origin: bottom;
+  animation: barra-crescer 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv-col { animation: none; }
+}

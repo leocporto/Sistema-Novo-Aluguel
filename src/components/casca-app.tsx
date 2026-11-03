@@ -28,6 +28,12 @@ import {
   FileText,
   Receipt,
   ArrowLeftRight,
+  CalendarDays,
+  Handshake,
+  ListTodo,
+  Target,
+  TrendingDown,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import { AbasSegmentadas, type ItemAba } from "./abas-segmentadas";
@@ -55,6 +61,16 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     ],
   },
   {
+    titulo: "Comercial",
+    itens: [
+      { href: "/comercial", rotulo: "Leads", icone: UserPlus },
+      { href: "/comercial/visitas", rotulo: "Visitas", icone: CalendarDays },
+      { href: "/comercial/propostas", rotulo: "Propostas", icone: Handshake },
+      { href: "/comercial/tarefas", rotulo: "Tarefas", icone: ListTodo },
+      { href: "/comercial/metas", rotulo: "Metas", icone: Target },
+    ],
+  },
+  {
     titulo: "Locação",
     itens: [
       { href: "/reajustes", rotulo: "Reajustes", icone: TrendingUp },
@@ -64,6 +80,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
   {
     titulo: "Gestão",
     itens: [
+      { href: "/despesas", rotulo: "Despesas", icone: TrendingDown },
       { href: "/financeiro", rotulo: "Financeiro", icone: Wallet },
       { href: "/relatorios", rotulo: "Relatórios e DIMOB", icone: BarChart3 },
       { href: "/indices", rotulo: "Índices econômicos", icone: Percent },
