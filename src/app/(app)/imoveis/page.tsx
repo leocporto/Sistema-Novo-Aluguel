@@ -64,11 +64,12 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
       return a == null ? null : Number(a);
     })(),
   }));
-  const visual = s("ver") === "cartoes" ? "cartoes" : "lista";
+  // Padrão: cartões com foto. A lista só com ?ver=lista.
+  const visual = s("ver") === "lista" ? "lista" : "cartoes";
   const urlVisual = (v: string) => {
     const q = new URLSearchParams();
     for (const k of ["q", "status", "tipo", "finalidade", "empreendimento"]) if (s(k)) q.set(k, s(k));
-    if (v === "cartoes") q.set("ver", "cartoes");
+    if (v === "lista") q.set("ver", "lista");
     const t = q.toString();
     return t ? `/imoveis?${t}` : "/imoveis";
   };
@@ -96,7 +97,7 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
       />
       <div className="mb-4 flex flex-wrap items-start gap-2">
       <FiltroAutomatico className="flex flex-1 flex-wrap gap-2">
-        {visual === "cartoes" && <input type="hidden" name="ver" value="cartoes" />}
+        {visual === "lista" && <input type="hidden" name="ver" value="lista" />}
         <Entrada name="q" placeholder="Código, rua, bairro ou cidade" defaultValue={busca} className="max-w-xs" />
         <Selecao name="status" defaultValue={status} className="max-w-48">
           <option value="">Todas as situações</option>
