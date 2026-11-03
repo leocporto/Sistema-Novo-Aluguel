@@ -14,7 +14,11 @@ O sistema tem **modo imobiliária** e **modo imóveis pessoais**. A tabela compl
 existe em cada um está em **`docs/MODOS.md`** — consulte antes de criar ou mudar qualquer tela.
 - **Recurso novo nasce só no modo imobiliária**, a não ser que o Leo diga o contrário.
 - Só da imobiliária: Repasses, **Comercial** (leads, visitas, propostas, tarefas, metas),
-  comissões, papel Corretor, taxa de administração/intermediação, imposto do proprietário, DIMOB.
+  comissões, papel Corretor, taxa de administração/intermediação, imposto do proprietário, DIMOB,
+  **Empreendimentos**, e no imóvel: proprietários, aba Comercialização (corretor, exclusividade,
+  autorização, similares), anúncios em portais e visitas.
+- Nos dois modos (cadastro do imóvel): fotos/plantas/vídeo/tour, documentos, mapa, áreas, comodidades,
+  encargos, histórico de preços, duplicar, edição em massa, importação Excel/CSV, aviso de repetidos.
 - **Despesas** existe nos dois, mas muda: imobiliária = escritório; pessoal = despesas dos imóveis.
 - Regra no código: `src/lib/modos.ts` (`rotaPermitida`, `quadroPermitido`, `PAPEIS_SO_IMOBILIARIA`).
   Tela só da imobiliária também precisa ser bloqueada no servidor (layout/página com `redirect("/")`).

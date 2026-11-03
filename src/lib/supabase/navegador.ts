@@ -43,3 +43,17 @@ async function enviarArquivoComprovante(organizacaoId: string, pasta: string, id
   if (error) throw new Error(`Não foi possível enviar o comprovante: ${error.message}`);
   return caminho;
 }
+
+export const TIPOS_ARQUIVO_IMOVEL = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf", "video/mp4"];
+export const TAMANHO_MAX_ARQUIVO_IMOVEL = 25 * 1024 * 1024;
+
+/** Envia foto, planta ou documento do imóvel para o bucket privado "imoveis". Devolve o caminho. */
+export async function enviarArquivoImovel(organizacaoId: string, imovelId: string, arquivo: File): Promise<string> {
+  if (!TIPOS_ARQUIVO_IMOVEL.includes(arquivo.type)) throw new Error(`"${arquivo.name}": envie imagem (JPG, PNG, WEBP), PDF ou vídeo MP4.`);
+  if (arquivo.size > TAMANHO_MAX_ARQUIVO_IMOVEL) throw new Error(`"${arquivo.name}" passa de 25 MB.`);
+  const nome = arquivo.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80);
+  const caminho = `${organizacaoId}/${imovelId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${nome}`;
+  const { error } = await clienteNavegador().storage.from("imoveis").upload(caminho, arquivo, { contentType: arquivo.type, upsert: false });
+  if (error) throw new Error(`Não foi possível enviar "${arquivo.name}": ${error.message}`);
+  return caminho;
+}

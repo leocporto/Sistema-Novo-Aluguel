@@ -360,3 +360,56 @@ describe("modos de uso", () => {
     expect(quadroPermitido("faturamento", "pessoal")).toBe(true);
   });
 });
+
+import { acharDuplicados, duplicadosDe, gerarUnidades, interpretarPlanilha, lerCSV, numeroBR, similares } from "@/lib/dominio/imoveis";
+
+describe("cadastro de imóveis", () => {
+  it("acha duplicados por endereço (abreviação e acento), matrícula e código", () => {
+    const lista = [
+      { id: "1", codigo: "AP-1", logradouro: "Rua São João", numero: "10", cidade: "Santos", matricula: "123" },
+      { id: "2", codigo: "AP-2", logradouro: "R. Sao Joao", numero: "10", cidade: "santos" },
+      { id: "3", codigo: "CA-9", logradouro: "Av. Brasil", numero: "5", matricula: "12.3" },
+      { id: "4", codigo: "ap 1" },
+    ];
+    const g = acharDuplicados(lista);
+    expect(g.find((x) => x.motivo === "endereco")?.itens.map((i) => i.id)).toEqual(["1", "2"]);
+    expect(g.find((x) => x.motivo === "matricula")?.itens.map((i) => i.id)).toEqual(["1", "3"]);
+    expect(g.find((x) => x.motivo === "codigo")?.itens.map((i) => i.id)).toEqual(["1", "4"]);
+    expect(duplicadosDe({ logradouro: "rua são joão", numero: "10", cidade: "Santos" }, lista).map((d) => d.item.id)).toEqual(["1", "2"]);
+  });
+
+  it("lê CSV e interpreta a planilha", () => {
+    const csv = 'Código;Tipo;Finalidade;Rua;Número;Aluguel;Quartos\nAP-1;Apartamento;venda e locação;"Rua A; fundos";10;"2.500,00";2\n;casa;;;;abc;\n';
+    const linhas = lerCSV(csv);
+    expect(linhas[1][3]).toBe("Rua A; fundos");
+    const { itens } = interpretarPlanilha(linhas);
+    expect(itens[0].dados).toMatchObject({ codigo: "AP-1", tipo: "apartamento", finalidades: ["venda", "locacao"], valor_aluguel: 2500, quartos: 2 });
+    expect(itens[0].erros).toEqual([]);
+    expect(itens[1].erros.length).toBe(2);
+    expect(numeroBR("R$ 1.234,5")).toBe(1234.5);
+    expect(numeroBR("2.500")).toBe(2500);
+    expect(numeroBR("12.5")).toBe(12.5);
+  });
+
+  it("gera unidades e acha similares", () => {
+    const u = gerarUnidades({ prefixo: "sol", blocos: ["A", "B"], andarInicial: 1, andarFinal: 2, porAndar: 2 });
+    expect(u).toHaveLength(8);
+    expect(u[0]).toEqual({ codigo: "SOL-A-101", bloco: "A", unidade: "101" });
+    expect(gerarUnidades({ prefixo: "T", blocos: [], andarInicial: 3, andarFinal: 3, porAndar: 1 })[0].codigo).toBe("T-301");
+    const base = { id: "b", tipo: "apartamento", cidade: "Santos", bairro: "Gonzaga", quartos: 2, valor_aluguel: 2000, valor_venda: null, finalidades: ["locacao"], status: "disponivel" };
+    const lista = [
+      { ...base, id: "x", valor_aluguel: 2200 },
+      { ...base, id: "y", tipo: "casa", cidade: "Recife", bairro: "Boa Viagem", valor_aluguel: 9000 },
+    ];
+    expect(similares(base, lista).map((s) => s.id)).toEqual(["x"]);
+  });
+});
+
+describe("modos: telas do imóvel", () => {
+  it("bloqueia comercialização e empreendimentos no pessoal", () => {
+    expect(rotaPermitida("/imoveis/abc/comercializacao", "pessoal")).toBe(false);
+    expect(rotaPermitida("/imoveis/abc/midia", "pessoal")).toBe(true);
+    expect(rotaPermitida("/empreendimentos/1", "pessoal")).toBe(false);
+    expect(rotaPermitida("/imoveis/abc/comercializacao", "imobiliaria")).toBe(true);
+  });
+});

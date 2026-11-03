@@ -79,6 +79,27 @@ export interface Imovel {
   matricula: string | null;
   inscricao_iptu: string | null;
   publicar_site: boolean;
+  area_construida: Num | null;
+  area_privativa: Num | null;
+  latitude: Num | null;
+  longitude: Num | null;
+  comodidades: string[];
+  outros_encargos: Num | null;
+  outros_encargos_descricao: string | null;
+  video_url: string | null;
+  tour_url: string | null;
+  exclusivo: boolean;
+  exclusividade_inicio: string | null;
+  exclusividade_fim: string | null;
+  autorizacao_numero: string | null;
+  autorizacao_data: string | null;
+  autorizacao_validade: string | null;
+  corretor_id: string | null;
+  empreendimento_id: string | null;
+  bloco: string | null;
+  unidade: string | null;
+  captado_em: string;
+  vendido_em: string | null;
 }
 
 export interface Contrato {
@@ -302,3 +323,15 @@ export const CATEGORIAS_DESPESA_ESCRITORIO = [
   "Outros",
 ];
 export const CATEGORIAS_DESPESA_IMOVEL = ["Condomínio", "IPTU", "Manutenção", "Seguro", "Água e luz", "Taxas", "Reforma", "Outros"];
+
+// -----------------------------------------------------------------------------
+// Cadastro de imóveis
+// -----------------------------------------------------------------------------
+export const COMODIDADES: { grupo: string; itens: string[] }[] = [
+  { grupo: "Imóvel", itens: ["Mobiliado", "Semimobiliado", "Ar-condicionado", "Varanda", "Varanda gourmet", "Churrasqueira", "Lareira", "Armários embutidos", "Cozinha planejada", "Área de serviço", "Quintal", "Jardim", "Piscina privativa", "Aquecimento solar", "Energia solar"] },
+  { grupo: "Condomínio", itens: ["Portaria 24h", "Elevador", "Piscina", "Academia", "Salão de festas", "Playground", "Quadra", "Espaço gourmet", "Sauna", "Bicicletário", "Coworking", "Lavanderia coletiva"] },
+  { grupo: "Outros", itens: ["Aceita pets", "Vista para o mar", "Próximo ao metrô", "Acessibilidade", "Gerador", "Câmeras de segurança", "Cerca elétrica"] },
+];
+
+export const CATEGORIAS_DOCUMENTO_IMOVEL = ["Matrícula", "Escritura", "IPTU", "Habite-se", "Planta aprovada", "Laudo de vistoria", "Outro"];
+export const PORTAIS_ANUNCIO = ["ZAP Imóveis", "VivaReal", "OLX", "Imovelweb", "Chaves na Mão", "Site próprio", "Instagram", "Facebook", "Outro"];

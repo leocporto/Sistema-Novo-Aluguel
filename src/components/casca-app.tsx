@@ -28,6 +28,7 @@ import {
   FileText,
   Receipt,
   ArrowLeftRight,
+  Building,
   CalendarDays,
   Handshake,
   ListTodo,
@@ -58,6 +59,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     titulo: "Cadastros",
     itens: [
       { href: "/pessoas", rotulo: "Pessoas", icone: Users },
+      { href: "/empreendimentos", rotulo: "Empreendimentos", icone: Building },
       { href: "/chaves", rotulo: "Chaves", icone: KeyRound },
     ],
   },

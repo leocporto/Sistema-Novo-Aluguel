@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Formulario } from "@/components/formulario";
-import { BotaoLink, Cabecalho, Campo, Cartao, Entrada, Selecao, Selo } from "@/components/ui";
+import { BotaoEnviar } from "@/components/formulario";
+import { Campo, Cartao, Entrada, Selecao, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import type { Imovel, Pessoa } from "@/lib/tipos";
-import { adicionarProprietario, removerProprietario } from "../actions";
-import { FormImovel } from "../form-imovel";
+import { adicionarProprietario, excluirImovel, removerProprietario } from "../actions";
+import { FormImovel, type OpcaoEmpreendimento } from "../form-imovel";
 
 export const metadata: Metadata = { title: "Imóvel" };
 
@@ -15,32 +16,26 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
   const { id } = await params;
   const { supabase, organizacao } = await obterContexto();
   const pessoal = organizacao.modo === "pessoal";
-  const { data } = await supabase.from("imoveis").select("*").eq("id", id).maybeSingle();
-  if (!data) notFound();
-  const imovel = data as Imovel;
-
-  const [{ data: props }, { data: pessoas }, { data: contratos }, { data: chaves }] = await Promise.all([
+  const [{ data }, { data: props }, { data: pessoas }, { data: contratos }, { data: chaves }, { data: emps }] = await Promise.all([
+    supabase.from("imoveis").select("*").eq("id", id).maybeSingle(),
     supabase.from("imovel_proprietarios").select("percentual, pessoa:pessoas(id, nome)").eq("imovel_id", id),
     supabase.from("pessoas").select("id, nome").order("nome"),
     supabase.from("contratos").select("id, numero, status, data_inicio, valor_aluguel").eq("imovel_id", id).order("data_inicio", { ascending: false }),
     supabase.from("chaves").select("id, identificacao, local").eq("imovel_id", id),
+    pessoal ? Promise.resolve({ data: [] }) : supabase.from("empreendimentos").select("id, nome").order("nome"),
   ]);
+  if (!data) notFound();
+  const imovel = data as Imovel;
   const proprietarios = (props ?? []) as unknown as { percentual: number; pessoa: { id: string; nome: string } }[];
   const soma = proprietarios.reduce((s, p) => s + Number(p.percentual), 0);
   const falta = Math.round((100 - soma) * 100) / 100;
 
   return (
-    <>
-      <Cabecalho
-        titulo={`Imóvel ${imovel.codigo}`}
-        descricao={[imovel.logradouro, imovel.numero, imovel.bairro, imovel.cidade].filter(Boolean).join(", ")}
-        acoes={<BotaoLink href={`/contratos/novo?imovel=${imovel.id}`}>Novo contrato de locação</BotaoLink>}
-      />
-      <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
-        <FormImovel imovel={imovel} />
-        <div className="space-y-6">
-          {!pessoal && (
-          <Cartao titulo="Proprietários">
+    <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+      <FormImovel imovel={imovel} pessoal={pessoal} empreendimentos={(emps ?? []) as OpcaoEmpreendimento[]} />
+      <div className="space-y-6">
+        {!pessoal && (
+          <Cartao titulo="Proprietários e titularidade">
             <ul className="mb-4 space-y-2 text-sm">
               {proprietarios.map((p) => (
                 <li key={p.pessoa.id} className="flex items-center justify-between gap-2">
@@ -103,34 +98,40 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
               </Campo>
             </Formulario>
           </Cartao>
-          )}
+        )}
 
-          <Cartao titulo="Contratos de locação">
-            <ul className="space-y-2 text-sm">
-              {(contratos ?? []).map((c) => (
-                <li key={c.id} className="flex items-center justify-between">
-                  <Link href={`/contratos/${c.id}`} className="text-acento hover:underline">
-                    #{c.numero} · {formatarReais(c.valor_aluguel)}
-                  </Link>
-                  <Selo cor={c.status === "ativo" ? "verde" : "cinza"}>{c.status}</Selo>
-                </li>
-              ))}
-              {!contratos?.length && <li className="text-mudo">Nenhum contrato.</li>}
-            </ul>
-          </Cartao>
+        <Cartao titulo="Contratos de locação">
+          <ul className="space-y-2 text-sm">
+            {(contratos ?? []).map((c) => (
+              <li key={c.id} className="flex items-center justify-between">
+                <Link href={`/contratos/${c.id}`} className="text-acento hover:underline">
+                  #{c.numero} · {formatarReais(c.valor_aluguel)}
+                </Link>
+                <Selo cor={c.status === "ativo" ? "verde" : "cinza"}>{c.status}</Selo>
+              </li>
+            ))}
+            {!contratos?.length && <li className="text-mudo">Nenhum contrato.</li>}
+          </ul>
+        </Cartao>
 
-          <Cartao titulo="Chaves" acoes={<Link href="/chaves" className="text-xs text-acento">gerenciar</Link>}>
-            <ul className="space-y-1 text-sm">
-              {(chaves ?? []).map((c) => (
-                <li key={c.id}>
-                  {c.identificacao} <span className="text-mudo">— {c.local ?? "sem local"}</span>
-                </li>
-              ))}
-              {!chaves?.length && <li className="text-mudo">Nenhuma chave cadastrada.</li>}
-            </ul>
-          </Cartao>
-        </div>
+        <Cartao titulo="Chaves" acoes={<Link href="/chaves" className="text-xs text-acento">gerenciar</Link>}>
+          <ul className="space-y-1 text-sm">
+            {(chaves ?? []).map((c) => (
+              <li key={c.id}>
+                {c.identificacao} <span className="text-mudo">— {c.local ?? "sem local"}</span>
+              </li>
+            ))}
+            {!chaves?.length && <li className="text-mudo">Nenhuma chave cadastrada.</li>}
+          </ul>
+        </Cartao>
+
+        <Formulario acao={excluirImovel} className="space-y-2">
+          <input type="hidden" name="id" value={id} />
+          <BotaoEnviar variante="fantasma" confirmar="Excluir este imóvel com fotos e documentos? Não dá para desfazer.">
+            Excluir imóvel
+          </BotaoEnviar>
+        </Formulario>
       </div>
-    </>
+    </div>
   );
 }

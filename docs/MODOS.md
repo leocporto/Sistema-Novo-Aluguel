@@ -15,7 +15,16 @@ não ser que o Leo peça para o modo pessoal também.
 | Tela / recurso | Imobiliária | Pessoal | Observação |
 |---|:---:|:---:|---|
 | Painel | ✅ completo | ✅ reduzido | Quadros comerciais somem no pessoal (ver lista abaixo) |
-| Imóveis | ✅ | ✅ | No pessoal não pede proprietário (o dono é a própria conta) |
+| Imóveis — cadastro básico | ✅ | ✅ | No pessoal não pede proprietário (o dono é a própria conta) |
+| Imóveis — áreas (útil, construída, privativa, total), mapa, comodidades, outros encargos | ✅ | ✅ | |
+| Imóveis — fotos, plantas, vídeo e tour virtual (aba Fotos e mídia) | ✅ | ✅ | Bucket privado `imoveis` |
+| Imóveis — documentos (aba Documentos) | ✅ | ✅ | |
+| Imóveis — histórico de preços e contratos (aba Histórico) | ✅ | ✅ | Gatilho `imoveis_precos_trg` grava toda mudança |
+| Imóveis — duplicar, edição em massa, importar Excel/CSV, aviso de repetidos | ✅ | ✅ | Em massa: corretor e empreendimento só na imobiliária |
+| Imóveis — proprietários e % de titularidade | ✅ | ❌ | |
+| Imóveis — aba **Comercialização** (corretor responsável, exclusividade, autorização, similares, relacionados) | ✅ | ❌ | `/imoveis/[id]/comercializacao` bloqueada por `SUBROTAS_SO_IMOBILIARIA` |
+| Imóveis — anúncios em portais e visitas (na aba Histórico) | ✅ | ❌ | |
+| **Empreendimentos**, blocos e unidades (+ gerar unidades em massa) | ✅ | ❌ | `/empreendimentos` — layout redireciona no pessoal; campos de empreendimento/bloco/unidade somem do imóvel |
 | Contratos | ✅ | ✅ | No pessoal: sem taxa de administração/intermediação e sem repasse; no contrato impresso a conta é o LOCADOR |
 | Aluguéis do mês (baixa) | ✅ | ✅ | No pessoal o aluguel inteiro entra como receita no Financeiro |
 | **Repasses** (e extrato) | ✅ | ❌ | `/repasses` redireciona para `/` no pessoal |
@@ -38,7 +47,8 @@ No pessoal, as Notificações também não trazem tarefas, leads nem visitas.
 
 ## Onde a regra mora no código (mude num lugar só)
 - `src/lib/modos.ts` — **fonte da verdade**:
-  - `ROTAS_SO_IMOBILIARIA` + `rotaPermitida(caminho, modo)` → menu (topo e lateral) e bloqueio de rota;
+  - `ROTAS_SO_IMOBILIARIA` (+ `SUBROTAS_SO_IMOBILIARIA` para abas dentro de telas compartilhadas) e
+    `rotaPermitida(caminho, modo)` → menu, abas do imóvel e bloqueio de rota;
   - `QUADROS_SO_IMOBILIARIA` + `quadroPermitido(id, modo)` → Painel;
   - `PAPEIS_SO_IMOBILIARIA` → papéis de Pessoas.
 - `ehPessoal(organizacao)` em `src/lib/tipos.ts` — atalho para condicionais na tela.

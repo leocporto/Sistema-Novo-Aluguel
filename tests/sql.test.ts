@@ -294,3 +294,45 @@ describe("comercial, comissões e preferências do painel", () => {
     expect(visto).toEqual({ leads: 0, propostas: 0, prefs: 0 });
   });
 });
+
+describe("cadastro completo de imóveis", () => {
+  const USER_E = "00000000-0000-0000-0000-00000000000e";
+  const USER_F = "00000000-0000-0000-0000-00000000000f";
+
+  it("registra histórico de preços e isola empreendimentos, mídias e anúncios", async () => {
+    await comoUsuario(USER_E, () => db.query(`select public.criar_organizacao('Imob E')`));
+    await comoUsuario(USER_F, () => db.query(`select public.criar_organizacao('Imob F')`));
+
+    const r = await comoUsuario(USER_E, async () => {
+      const emp = (await db.query<{ id: string }>(`insert into empreendimentos (nome) values ('Residencial Sol') returning id`)).rows[0].id;
+      const im = (
+        await db.query<{ id: string }>(
+          `insert into imoveis (codigo, valor_aluguel, empreendimento_id, bloco, unidade, comodidades) values ('SOL-A-101', 2000, $1, 'A', '101', '{piscina}') returning id`,
+          [emp],
+        )
+      ).rows[0].id;
+      await db.query(`update imoveis set valor_aluguel = 2200, valor_venda = 450000 where id = $1`, [im]);
+      await db.query(`update imoveis set quartos = 2 where id = $1`, [im]); // não mexe em preço
+      await db.query(`update imoveis set valor_aluguel = 2200 where id = $1`, [im]); // mesmo valor
+      await db.query(`insert into imovel_midias (imovel_id, tipo, path) values ($1, 'foto', 'x/y.jpg')`, [im]);
+      await db.query(`insert into imovel_anuncios (imovel_id, portal) values ($1, 'ZAP')`, [im]);
+      return (
+        await db.query<{ campo: string; valor_anterior: string | null; valor_novo: string }>(
+          `select campo, valor_anterior, valor_novo from imovel_precos where imovel_id = $1 order by alterado_em, campo`,
+          [im],
+        )
+      ).rows;
+    });
+    expect(r.map((p) => `${p.campo}:${p.valor_anterior ?? "-"}>${Number(p.valor_novo)}`).sort()).toEqual(
+      ["aluguel:-.>2000", "aluguel:2000.00>2200", "venda:-.>450000"].map((s) => s.replace("-.", "-")).sort(),
+    );
+
+    const visto = await comoUsuario(USER_F, async () => ({
+      emp: (await db.query(`select * from empreendimentos`)).rows.length,
+      midias: (await db.query(`select * from imovel_midias`)).rows.length,
+      anuncios: (await db.query(`select * from imovel_anuncios`)).rows.length,
+      precos: (await db.query(`select * from imovel_precos`)).rows.length,
+    }));
+    expect(visto).toEqual({ emp: 0, midias: 0, anuncios: 0, precos: 0 });
+  });
+});
