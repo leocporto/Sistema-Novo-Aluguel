@@ -47,8 +47,12 @@ export function ListaDespesas({
   const alvoAnexo = useRef<string | null>(null);
 
   const alternar = (d: DespesaLinha) => {
+    if (ocupado) return;
     const pagar = d.status !== "liquidado";
-    if (!pagar && !window.confirm(`Desfazer o pagamento de "${d.descricao}"?`)) return;
+    const confirmar = pagar
+      ? `Marcar "${d.descricao}" (${formatarReais(d.valor)}) como paga hoje?`
+      : `Desfazer o pagamento de "${d.descricao}" (${formatarReais(d.valor)})? Ela volta a ficar em aberto.`;
+    if (!window.confirm(confirmar)) return;
     setOcupado(d.id);
     iniciar(async () => {
       const r = await marcarDespesaPaga(d.id, pagar);
@@ -121,6 +125,7 @@ export function ListaDespesas({
                 aria-checked={pago}
                 aria-label={pago ? `Desfazer pagamento: ${d.descricao}` : `Marcar como paga: ${d.descricao}`}
                 onClick={() => alternar(d)}
+                disabled={ocupado === d.id}
                 className={`grid size-8 shrink-0 place-items-center rounded-[10px] border-2 transition ${pago ? "border-ok bg-ok text-white" : "border-borda-forte text-transparent hover:border-ok hover:text-ok"}`}
               >
                 <Check className="size-4" strokeWidth={3} />

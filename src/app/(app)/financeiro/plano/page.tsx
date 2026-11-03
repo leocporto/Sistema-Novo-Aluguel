@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { ListTree, Plus, Sparkles } from "lucide-react";
 import { BotaoAcao } from "@/components/botao-acao";
 import { BotaoExcluir } from "@/components/botao-excluir";
-import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { Formulario } from "@/components/formulario";
 import { JanelaCadastro } from "@/components/janela-cadastro";
 import { Cabecalho, Campo, Cartao, Entrada, Selecao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { GRUPOS_DRE } from "@/lib/dominio/financeiro";
 import { AbasFinanceiro } from "../abas";
-import { atualizarPlano, criarCentro, criarPlano, excluirCentro, excluirPlano, instalarPlanoPadrao, salvarRegrasFinanceiro } from "../actions";
+import { atualizarCentro, atualizarPlano, criarCentro, criarPlano, excluirCentro, excluirPlano, instalarPlanoPadrao, salvarRegrasFinanceiro } from "../actions";
 import { opcoesFinanceiro } from "../dados";
 
 export const metadata: Metadata = { title: "Plano de contas" };
@@ -64,6 +64,7 @@ export default async function PlanoPage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <Cartao titulo={`Contas (${op.planos.length})`}>
           {op.planos.length === 0 && <p className="text-sm text-mudo">Nenhuma conta. Clique em &quot;Instalar plano padrão&quot; para começar com um plano pronto.</p>}
+          {op.planos.length > 0 && <p className="mb-3 text-xs text-mudo">As alterações são salvas automaticamente.</p>}
           {op.planos.length > 0 && (
             <div className="mb-1 hidden grid-cols-[80px_1fr_120px_220px_44px_36px] gap-2 px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-mudo lg:grid">
               <span>Código</span>
@@ -77,7 +78,7 @@ export default async function PlanoPage() {
           <div className="divide-y divide-borda-suave">
             {op.planos.map((p) => (
               <div key={p.id} className="flex items-center gap-2 py-1.5">
-                <Formulario acao={atualizarPlano} automatico className="grid flex-1 grid-cols-1 items-center gap-2 sm:grid-cols-2 lg:grid-cols-[80px_1fr_120px_220px_44px]">
+                <Formulario acao={atualizarPlano} automatico semAviso className="grid flex-1 grid-cols-1 items-center gap-2 sm:grid-cols-2 lg:grid-cols-[80px_1fr_120px_220px_44px]">
                   <input type="hidden" name="id" value={p.id} />
                   <Entrada name="codigo" defaultValue={p.codigo} aria-label="Código" />
                   <Entrada name="nome" defaultValue={p.nome} aria-label="Nome" />
@@ -103,21 +104,33 @@ export default async function PlanoPage() {
           </div>
         </Cartao>
         <div className="space-y-6">
-          <Cartao titulo="Centros de custo">
-            <p className="mb-3 text-sm text-texto-2">{pessoal ? "Ex.: um centro por imóvel ou por prédio." : "Ex.: Locação, Vendas, Administrativo, filial."}</p>
-            <ul className="mb-4 divide-y divide-borda-suave text-sm">
+          <Cartao
+            titulo="Centros de custo"
+            acoes={
+              <JanelaCadastro rotuloBotao="Cadastrar" titulo="Novo centro de custo" acao={criarCentro} variante="secundario" tamanho="sm">
+                <Campo rotulo="Nome">
+                  <Entrada name="nome" required placeholder={pessoal ? "Ex.: Apto 101" : "Ex.: Locação"} />
+                </Campo>
+              </JanelaCadastro>
+            }
+          >
+            <p className="mb-3 text-sm text-texto-2">{pessoal ? "Ex.: um centro por imóvel ou por prédio." : "Ex.: Locação, Vendas, Administrativo, filial."} Os nomes salvam sozinhos.</p>
+            <div className="divide-y divide-borda-suave">
               {op.centros.map((c) => (
-                <li key={c.id} className="flex items-center justify-between py-1.5">
-                  {c.nome}
-                  <BotaoExcluir acao={excluirCentro} id={c.id} rotulo="Excluir centro" confirmar={`Excluir o centro "${c.nome}"?`} />
-                </li>
+                <div key={c.id} className="flex items-center gap-2 py-1.5">
+                  <Formulario acao={atualizarCentro} automatico semAviso className="flex flex-1 items-center gap-2">
+                    <input type="hidden" name="id" value={c.id} />
+                    <Entrada name="nome" defaultValue={c.nome} aria-label="Nome do centro de custo" />
+                    <label className="flex items-center gap-1.5 text-xs text-texto-2">
+                      <input type="hidden" name="ativo" value="" />
+                      <input type="checkbox" name="ativo" defaultChecked={c.ativo} /> ativo
+                    </label>
+                  </Formulario>
+                  <BotaoExcluir acao={excluirCentro} id={c.id} rotulo="Excluir centro" confirmar={`Excluir o centro "${c.nome}"? Os lançamentos ficam sem centro de custo.`} />
+                </div>
               ))}
-              {!op.centros.length && <li className="py-1.5 text-mudo">Nenhum ainda.</li>}
-            </ul>
-            <Formulario acao={criarCentro} className="flex gap-2">
-              <Entrada name="nome" required placeholder="Nome do centro" />
-              <BotaoEnviar variante="secundario">Adicionar</BotaoEnviar>
-            </Formulario>
+              {!op.centros.length && <p className="py-1.5 text-sm text-mudo">Nenhum ainda.</p>}
+            </div>
           </Cartao>
           <Cartao titulo="Regras">
             {gestor ? (

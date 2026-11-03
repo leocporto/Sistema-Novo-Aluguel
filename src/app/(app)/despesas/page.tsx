@@ -72,6 +72,11 @@ export default async function DespesasPage({ searchParams }: PageProps<"/despesa
     consulta = consulta.eq("imovel_id", imovelFiltro);
     atrasadas = atrasadas.eq("imovel_id", imovelFiltro);
   }
+  // Na imobiliária, dinheiro de terceiros e adiantamento a proprietário não são despesa do escritório.
+  if (organizacao.modo !== "pessoal") {
+    consulta = consulta.eq("terceiros", false).eq("adiantamento", false);
+    atrasadas = atrasadas.eq("terceiros", false).eq("adiantamento", false);
+  }
   const [{ data }, { data: imoveisRaw }, { data: vencidasRaw }] = await Promise.all([
     consulta,
     supabase.from("imoveis").select("id, codigo, logradouro, numero").neq("status", "inativo").order("codigo"),

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { formatarDataBR } from "@/lib/dominio/datas";
+import { formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { ROTULO_SITUACAO, GRUPOS_DRE, paraCSV, situacaoLancamento, valorRealizado } from "@/lib/dominio/financeiro";
 import { criarClienteServidor } from "@/lib/supabase/server";
+import { todas } from "../dados";
 import { linhasRealizadas } from "../dre/dados";
 
 const dataOk = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   const { data: membro } = await supabase.from("membros").select("organizacao:organizacoes(modo)").eq("user_id", auth.user.id).order("created_at").limit(1).maybeSingle();
   const pessoal = (membro?.organizacao as unknown as { modo?: string } | null)?.modo === "pessoal";
   const p = request.nextUrl.searchParams;
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeISO();
   const de = dataOk(p.get("de")) ?? `${hoje.slice(0, 7)}-01`;
   const ate = dataOk(p.get("ate")) ?? hoje;
   let csv: string;
@@ -34,13 +35,15 @@ export async function GET(request: NextRequest) {
     );
     nome = `resultado-${de}-a-${ate}.csv`;
   } else {
-    const { data } = await supabase
-      .from("lancamentos")
-      .select("*, pessoa:pessoas(nome, documento), plano:plano_contas(codigo, nome), conta:contas_financeiras(nome), centro:centros_custo(nome)")
-      .gte("vencimento", de)
-      .lte("vencimento", ate)
-      .order("vencimento")
-      .limit(20000);
+    const data = await todas<unknown>(() =>
+      supabase
+        .from("lancamentos")
+        .select("*, pessoa:pessoas(nome, documento), plano:plano_contas(codigo, nome), conta:contas_financeiras(nome), centro:centros_custo(nome)")
+        .gte("vencimento", de)
+        .lte("vencimento", ate)
+        .order("vencimento")
+        .order("id"),
+    );
     type L = {
       tipo: "receber" | "pagar";
       descricao: string;
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
     };
     csv = paraCSV(
       ["Vencimento", "Tipo", "Descrição", "Pessoa", "CPF/CNPJ", "Plano de contas", "Categoria", "Centro de custo", "Conta", "Valor", "Situação", "Data da baixa", "Valor pago", "Juros", "Desconto", "Forma", "Nº documento", "Terceiros"],
-      ((data ?? []) as unknown as L[]).map((l) => [
+      (data as L[]).map((l) => [
         formatarDataBR(l.vencimento),
         l.tipo === "receber" ? "A receber" : "A pagar",
         l.descricao,

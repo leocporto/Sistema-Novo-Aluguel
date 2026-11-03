@@ -7,15 +7,15 @@ import { JanelaCadastro } from "@/components/janela-cadastro";
 import { LinhaLink } from "@/components/linha-link";
 import { NavegadorMes, lerMes } from "@/components/navegador-mes";
 import { PilulasLink } from "@/components/pilulas-link";
-import { AreaTexto, BotaoLink, Cabecalho, Campo, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
+import { AreaTexto, BotaoLink, Cabecalho, classeBotao, Campo, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { fimDoMes, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { FORMAS_PAGAMENTO, ROTULO_SITUACAO, situacaoLancamento, valorRealizado } from "@/lib/dominio/financeiro";
 import { AbasFinanceiro } from "./abas";
 import { criarLancamento, excluirLancamento } from "./actions";
-import { CamposRepeticao } from "./campos";
-import { opcoesFinanceiro, saldosDasContas, type Lancamento } from "./dados";
+import { CampoJaPago, CamposRepeticao } from "./campos";
+import { opcoesFinanceiro, saldosDasContas, todas, type Lancamento } from "./dados";
 
 export const metadata: Metadata = { title: "Financeiro" };
 
@@ -61,10 +61,12 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
     q = q.or(`descricao.ilike.%${b}%,categoria.ilike.%${b}%,documento_numero.ilike.%${b}%`);
   }
 
-  const [{ data }, op, { data: doMes }, { count: vencidos }, { count: aAprovar }, { data: imoveis }] = await Promise.all([
+  const [{ data }, op, doMes, { count: vencidos }, { count: aAprovar }, { data: imoveis }] = await Promise.all([
     q,
     opcoesFinanceiro(supabase),
-    supabase.from("lancamentos").select("tipo, valor, valor_pago, status").gte("vencimento", de).lte("vencimento", ate).neq("status", "cancelado"),
+    todas<{ tipo: string; valor: number; valor_pago: number | null; status: string }>(() =>
+      supabase.from("lancamentos").select("tipo, valor, valor_pago, status").gte("vencimento", de).lte("vencimento", ate).neq("status", "cancelado").order("id"),
+    ),
     supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("status", "aberto").lt("vencimento", hoje),
     supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("status", "aberto").eq("requer_aprovacao", true).is("aprovado_em", null),
     supabase.from("imoveis").select("id, codigo").order("codigo").limit(2000),
@@ -72,7 +74,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
   const lista = (data ?? []) as unknown as (Lancamento & { pessoa: { nome: string } | null; plano: { codigo: string; nome: string } | null; conta: { nome: string } | null })[];
   const saldos = await saldosDasContas(supabase, op.contas.filter((c) => c.ativa));
   const saldoTotal = paraReais([...saldos.values()].reduce((a, v) => a + paraCentavos(v), 0));
-  const soma = (tipo: string) => paraReais((doMes ?? []).filter((l) => l.tipo === tipo).reduce((a, l) => a + paraCentavos(l.status === "liquidado" ? valorRealizado(l) : l.valor), 0));
+  const soma = (tipo: string) => paraReais(doMes.filter((l) => l.tipo === tipo).reduce((a, l) => a + paraCentavos(l.status === "liquidado" ? valorRealizado(l) : l.valor), 0));
   const extra = { filtro: filtro || undefined, ...f };
   const url = (k: string) => {
     const p = new URLSearchParams(Object.entries({ mes, ...f, filtro: k }).filter(([, v]) => v) as [string, string][]);
@@ -92,9 +94,9 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
         }
         acoes={
           <>
-            <BotaoLink href={exportar} variante="secundario" prefetch={false}>
+            <a href={exportar} className={classeBotao("secundario")}>
               <Download className="size-4" /> Exportar (CSV)
-            </BotaoLink>
+            </a>
             <JanelaCadastro rotuloBotao={<><Plus className="size-4" /> Novo lançamento</>} titulo="Novo lançamento" acao={criarLancamento} larguraMax="max-w-2xl" abertaInicial={s("novo") === "1"}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Campo rotulo="Tipo">
@@ -182,10 +184,8 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
               <Campo rotulo="Observações">
                 <AreaTexto name="observacoes" rows={2} />
               </Campo>
+              <CampoJaPago hoje={hoje} />
               <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-texto-2">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" name="ja_pago" /> Já foi pago/recebido (dá baixa na 1ª)
-                </label>
                 {!pessoal && (
                   <label className="flex items-center gap-2">
                     <input type="checkbox" name="terceiros" /> Dinheiro de terceiros (não entra no resultado)
@@ -288,6 +288,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
         })}
         {lista.length === 0 && <LinhaVazia colunas={7}>Nenhum lançamento aqui.</LinhaVazia>}
       </Tabela>
+      {lista.length >= 1000 && <p className="mt-3 text-sm text-alerta">Mostrando os primeiros 1.000 lançamentos. Use os filtros ou exporte o CSV para ver todos.</p>}
       {lista.length > 0 && (
         <p className="mt-3 text-right text-sm text-texto-2">
           {lista.length} lançamento(s) · saldo da lista: <b className={totalLista >= 0 ? "text-ok" : "text-ruim"}>{formatarReais(paraReais(totalLista))}</b>

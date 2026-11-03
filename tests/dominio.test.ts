@@ -859,3 +859,18 @@ describe("financeiro", () => {
     expect(paraCSV(["a", "b"], [["x;y", 1.5]])).toBe('﻿a;b\r\n"x;y";1,50');
   });
 });
+
+describe("financeiro — extrato e exportação seguros", () => {
+  it("o mesmo movimento ganha o mesmo código em arquivos com períodos diferentes", async () => {
+    const { lerCSVExtrato, lerData, paraCSV } = await import("@/lib/dominio/financeiro");
+    const a = lerCSVExtrato("Data;Histórico;Valor\n01/11/2026;Tarifa;-10,00\n05/11/2026;Luz;-80,00\n05/11/2026;Luz;-80,00");
+    const b = lerCSVExtrato("Data;Histórico;Valor\n05/11/2026;Luz;-80,00\n05/11/2026;Luz;-80,00\n10/11/2026;Água;-50,00");
+    expect(b[0].fitid).toBe(a[1].fitid);
+    expect(b[1].fitid).toBe(a[2].fitid);
+    expect(a[1].fitid).not.toBe(a[2].fitid);
+    expect(lerData("31/02/2026")).toBeNull();
+    expect(lerData("99/99/2026")).toBeNull();
+    expect(lerData("29/02/2028")).toBe("2028-02-29");
+    expect(paraCSV(["d"], [["=HYPERLINK(\"x\")"], ["-5 tarifa"], [-5]])).toBe('﻿d\r\n"\'=HYPERLINK(""x"")"\r\n\'-5 tarifa\r\n-5,00');
+  });
+});

@@ -25,6 +25,7 @@ export function Formulario({
   className = "space-y-5",
   automatico = false,
   salvarQuando,
+  semAviso = false,
 }: {
   acao: Acao;
   children: ReactNode;
@@ -32,8 +33,15 @@ export function Formulario({
   automatico?: boolean;
   /** Só no automático: salva apenas quando ESTE campo muda (ex.: escolher a pessoa a vincular). */
   salvarQuando?: string;
+  /** Só no automático: esconde a frase "salvas automaticamente" (formulário de linha de tabela; ponha a frase uma vez na tela). */
+  semAviso?: boolean;
 }) {
-  if (automatico) return <FormularioAuto acao={acao} className={className} salvarQuando={salvarQuando}>{children}</FormularioAuto>;
+  if (automatico)
+    return (
+      <FormularioAuto acao={acao} className={className} salvarQuando={salvarQuando} semAviso={semAviso}>
+        {children}
+      </FormularioAuto>
+    );
   return <FormularioBotao acao={acao} className={className}>{children}</FormularioBotao>;
 }
 
@@ -63,11 +71,13 @@ function FormularioAuto({
   children,
   className,
   salvarQuando,
+  semAviso,
 }: {
   acao: Acao;
   children: ReactNode;
   className: string;
   salvarQuando?: string;
+  semAviso?: boolean;
 }) {
   const ref = useRef<HTMLFormElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -197,7 +207,7 @@ function FormularioAuto({
       noValidate
     >
       {children}
-      {!salvarQuando && (
+      {!salvarQuando && !semAviso && (
         <p className="flex items-center justify-end gap-1.5 text-xs text-mudo">
           <Check className="size-3.5" /> As alterações são salvas automaticamente.
         </p>

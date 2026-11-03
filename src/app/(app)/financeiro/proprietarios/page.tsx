@@ -10,8 +10,8 @@ import { obterContexto } from "@/lib/contexto";
 import { formatarDataBR, hojeISO, inicioDoMes } from "@/lib/dominio/datas";
 import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { AbasFinanceiro } from "../abas";
-import { compensarAdiantamento, excluirLancamento, registrarAdiantamento } from "../actions";
-import { opcoesFinanceiro } from "../dados";
+import { compensarAdiantamento, descompensarAdiantamento, excluirLancamento, registrarAdiantamento } from "../actions";
+import { opcoesFinanceiro, todas } from "../dados";
 
 export const metadata: Metadata = { title: "Proprietários" };
 
@@ -23,14 +23,14 @@ export default async function ProprietariosFinanceiroPage() {
   const { supabase } = await obterContexto();
   const hoje = hojeISO();
   const mes = inicioDoMes(hoje);
-  const [{ data: reps }, { data: adis }, op, { data: donos }] = await Promise.all([
-    supabase.from("repasses").select("pessoa_id, valor_liquido, status, pago_em, previsto_para, pessoa:pessoas(nome)").or(`status.eq.pendente,pago_em.gte.${mes}`).limit(10000),
-    supabase.from("lancamentos").select("id, pessoa_id, valor, liquidado_em, compensado_em, descricao").eq("adiantamento", true).neq("status", "cancelado").order("liquidado_em", { ascending: false }).limit(2000),
+  const [reps, adis, op, { data: donos }] = await Promise.all([
+    todas<Rep>(() => supabase.from("repasses").select("pessoa_id, valor_liquido, status, pago_em, previsto_para, pessoa:pessoas(nome)").or(`status.eq.pendente,pago_em.gte.${mes}`).order("id")),
+    todas<Adi>(() => supabase.from("lancamentos").select("id, pessoa_id, valor, liquidado_em, compensado_em, descricao").eq("adiantamento", true).neq("status", "cancelado").order("liquidado_em", { ascending: false }).order("id")),
     opcoesFinanceiro(supabase),
     supabase.from("pessoas").select("id, nome").contains("papeis", ["proprietario"]).order("nome"),
   ]);
-  const lista = (reps ?? []) as unknown as Rep[];
-  const adiant = (adis ?? []) as Adi[];
+  const lista = reps;
+  const adiant = adis;
   const nomes = new Map<string, string>([...(donos ?? []).map((d) => [d.id, d.nome] as [string, string]), ...lista.map((r) => [r.pessoa_id, r.pessoa?.nome ?? "—"] as [string, string])]);
   type Linha = { id: string; pendente: number; pagoMes: number; adiantado: number; proximo: string | null };
   const mapa = new Map<string, Linha>();
@@ -128,13 +128,18 @@ export default async function ProprietariosFinanceiroPage() {
                 <span className="flex items-center gap-2">
                   <span className="font-medium tabular-nums">{formatarReais(d.valor)}</span>
                   {d.compensado_em ? (
-                    <span className="text-xs text-mudo">descontado em {formatarDataBR(d.compensado_em)}</span>
+                    <>
+                      <span className="text-xs text-mudo">descontado em {formatarDataBR(d.compensado_em)}</span>
+                      <BotaoAcao acao={descompensarAdiantamento} id={d.id} tamanho="sm" variante="fantasma" confirmar="Desfazer o desconto? O valor volta para o repasse (se ele ainda não foi pago).">
+                        Desfazer desconto
+                      </BotaoAcao>
+                    </>
                   ) : (
                     <BotaoAcao acao={compensarAdiantamento} id={d.id} tamanho="sm" confirmar="Descontar este adiantamento no próximo repasse pendente do proprietário?">
                       Descontar no próximo repasse
                     </BotaoAcao>
                   )}
-                  <BotaoExcluir acao={excluirLancamento} id={d.id} rotulo="Excluir adiantamento" confirmar="Excluir este adiantamento?" />
+                  {!d.compensado_em && <BotaoExcluir acao={excluirLancamento} id={d.id} rotulo="Excluir adiantamento" confirmar="Excluir este adiantamento?" />}
                 </span>
               </li>
             ))}

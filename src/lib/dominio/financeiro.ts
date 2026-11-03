@@ -78,6 +78,22 @@ export const ROTULO_CAMPO_HISTORICO: Record<string, string> = {
   aprovado_em: "Aprovação",
   cancelado_motivo: "Motivo do cancelamento",
   pessoa_id: "Pessoa",
+  tipo: "Tipo",
+  centro_custo_id: "Centro de custo",
+  imovel_id: "Imóvel",
+  forma: "Forma de pagamento",
+  documento_numero: "Nº do documento",
+  observacoes: "Observações",
+  requer_aprovacao: "Exige aprovação",
+  aprovado_por: "Aprovado por",
+  terceiros: "Dinheiro de terceiros",
+  adiantamento: "Adiantamento",
+  compensado_em: "Descontado no repasse em",
+  conciliado_em: "Conciliação",
+  descontar_repasse: "Descontar no repasse",
+  repasse_id: "Repasse",
+  parcela: "Parcela",
+  parcelas: "Parcelas",
 };
 
 // ---------------------------------------------------------------------------
@@ -232,30 +248,43 @@ export function lerNumero(txt: string): number | null {
   return neg ? -Math.abs(n) : n;
 }
 
-/** Data "dd/mm/aaaa", "aaaa-mm-dd" ou "aaaammdd" → ISO. */
+/** Data "dd/mm/aaaa", "aaaa-mm-dd" ou "aaaammdd" → ISO (só datas que existem). */
 export function lerData(txt: string): DataISO | null {
   const s = txt.trim();
-  let m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-  m = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(s);
-  if (m) return `20${m[3]}-${m[2]}-${m[1]}`;
-  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = /^(\d{4})(\d{2})(\d{2})/.exec(s);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  return null;
+  let a: string, m: string, d: string;
+  let r = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+  if (r) [a, m, d] = [r[3], r[2], r[1]];
+  else if ((r = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(s))) [a, m, d] = [`20${r[3]}`, r[2], r[1]];
+  else if ((r = /^(\d{4})-(\d{2})-(\d{2})/.exec(s))) [a, m, d] = [r[1], r[2], r[3]];
+  else if ((r = /^(\d{4})(\d{2})(\d{2})/.exec(s))) [a, m, d] = [r[1], r[2], r[3]];
+  else return null;
+  const dt = new Date(Date.UTC(Number(a), Number(m) - 1, Number(d)));
+  if (Number(a) < 1900 || Number(a) > 2200 || dt.getUTCMonth() !== Number(m) - 1 || dt.getUTCDate() !== Number(d)) return null;
+  return `${a}-${m}-${d}`;
 }
 
-/** Código estável de uma linha sem identificador (para não importar duas vezes). */
-function chaveLinha(data: string, valor: number, descricao: string, n: number): string {
-  let h = 5381;
-  for (const ch of `${data}|${valor.toFixed(2)}|${descricao}|${n}`) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0;
-  return `csv-${h.toString(36)}`;
+/**
+ * Código estável de uma linha sem identificador (para não importar duas vezes).
+ * Não depende da posição no arquivo: a 1ª, 2ª… ocorrência IGUAL (mesma data,
+ * valor e descrição) ganha sempre o mesmo código, mesmo em arquivos com
+ * períodos diferentes.
+ */
+function geradorChaves() {
+  const vistos = new Map<string, number>();
+  return (data: string, valor: number, descricao: string): string => {
+    const base = `${data}|${valor.toFixed(2)}|${descricao}`;
+    const n = (vistos.get(base) ?? 0) + 1;
+    vistos.set(base, n);
+    let h = 5381;
+    for (const ch of `${base}|${n}`) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0;
+    return `csv-${h.toString(36)}-${n}`;
+  };
 }
 
 /** Lê um arquivo OFX (o "extrato para programas" que todo banco exporta). */
 export function lerOFX(texto: string): ItemExtrato[] {
   const itens: ItemExtrato[] = [];
+  const chave = geradorChaves();
   const blocos = texto.split(/<STMTTRN>/i).slice(1);
   const campo = (b: string, nome: string) => {
     const m = new RegExp(`<${nome}>([^<\\r\\n]*)`, "i").exec(b);
@@ -267,7 +296,7 @@ export function lerOFX(texto: string): ItemExtrato[] {
     if (!data || valor === null) continue;
     const descricao = [campo(b, "MEMO"), campo(b, "NAME")].filter(Boolean).join(" — ") || "Movimento";
     const documento = campo(b, "CHECKNUM") || campo(b, "REFNUM") || null;
-    const fitid = campo(b, "FITID") || chaveLinha(data, valor, descricao, itens.length);
+    const fitid = campo(b, "FITID") || chave(data, valor, descricao);
     itens.push({ data, valor, descricao, documento, fitid });
   }
   return itens;
@@ -310,6 +339,7 @@ export function lerCSVExtrato(texto: string): ItemExtrato[] {
   if (iDesc < 0) iDesc = 1;
   if (iValor < 0 && iCred < 0) iValor = 2;
   const itens: ItemExtrato[] = [];
+  const chave = geradorChaves();
   for (const l of linhas.slice(temCab ? 1 : 0)) {
     const c = quebrar(l);
     const data = lerData(c[iData] ?? "");
@@ -326,7 +356,7 @@ export function lerCSVExtrato(texto: string): ItemExtrato[] {
     const descricao = (c[iDesc] ?? "").replace(/\s+/g, " ") || "Movimento";
     if (/saldo/i.test(descricao) && !/pagamento|pix|transf/i.test(descricao)) continue;
     const documento = iDoc >= 0 ? c[iDoc] || null : null;
-    itens.push({ data, valor, descricao, documento, fitid: chaveLinha(data, valor, descricao, itens.length) });
+    itens.push({ data, valor, descricao, documento, fitid: chave(data, valor, descricao) });
   }
   return itens;
 }
@@ -549,7 +579,9 @@ export function planoPadrao(modo: "imobiliaria" | "pessoal"): ContaPlano[] {
 export function paraCSV(cabecalho: string[], linhas: (string | number | null | undefined)[][]): string {
   const cel = (v: string | number | null | undefined) => {
     if (v === null || v === undefined) return "";
-    const s = typeof v === "number" ? v.toFixed(2).replace(".", ",") : String(v);
+    let s = typeof v === "number" ? v.toFixed(2).replace(".", ",") : String(v);
+    // Texto que começa com = + - @ vira fórmula no Excel (pode vir do extrato do banco).
+    if (typeof v !== "number" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
     return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return "﻿" + [cabecalho, ...linhas].map((l) => l.map(cel).join(";")).join("\r\n");

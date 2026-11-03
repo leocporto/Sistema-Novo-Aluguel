@@ -77,7 +77,7 @@ export default async function ContaPage({ params, searchParams }: PageProps<"/fi
             </BotaoAcao>
           )}
           <ImportarExtrato contaId={conta.id} />
-          <BotaoExcluir acao={excluirConta} id={conta.id} variante="botao" rotulo="Excluir conta" confirmar={`Excluir a conta "${conta.nome}"?`} depois="/financeiro/contas" />
+          <BotaoExcluir acao={excluirConta} id={conta.id} variante="botao" rotulo="Excluir conta" confirmar={`Excluir a conta "${conta.nome}"? Os lançamentos continuam, só perdem a conta; o extrato importado dela é apagado e o que estava conciliado com ele volta a ficar a conciliar. Conta com transferências não pode ser excluída (desative-a).`} depois="/financeiro/contas" />
         </div>
       </div>
 
@@ -167,6 +167,12 @@ export default async function ContaPage({ params, searchParams }: PageProps<"/fi
                                   ))}
                               </Selecao>
                             </Campo>
+                            {!pessoal && (
+                              <label className="flex items-center gap-2 text-sm text-texto-2">
+                                <input type="hidden" name="terceiros" value="" />
+                                <input type="checkbox" name="terceiros" defaultChecked={conta.terceiros} /> Dinheiro de terceiros (fica fora do resultado)
+                              </label>
+                            )}
                             <Campo rotulo="Pessoa">
                               <Selecao name="pessoa_id" defaultValue="">
                                 <option value="">—</option>

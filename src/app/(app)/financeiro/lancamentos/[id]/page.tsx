@@ -28,9 +28,13 @@ const COR = { aberto: "azul", vencido: "vermelho", liquidado: "verde", cancelado
 
 function valorHistorico(campo: string, v: unknown, nomes: Map<string, string>): string {
   if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "boolean") return v ? "sim" : "não";
   if (["valor", "valor_pago", "juros", "desconto"].includes(campo)) return formatarReais(Number(v));
-  if (["vencimento", "liquidado_em"].includes(campo)) return formatarDataBR(String(v));
+  if (["vencimento", "liquidado_em", "compensado_em"].includes(campo)) return formatarDataBR(String(v));
   if (campo === "aprovado_em") return "aprovado";
+  if (campo === "conciliado_em") return "conciliado";
+  if (campo === "aprovado_por") return "usuário";
+  if (campo === "repasse_id") return "repasse";
   if (typeof v === "string" && nomes.has(v)) return nomes.get(v)!;
   return String(v);
 }
@@ -99,7 +103,7 @@ export default async function LancamentoPage({ params }: PageProps<"/financeiro/
               <ShieldCheck className="size-4" /> Aprovar pagamento
             </BotaoAcao>
           )}
-          {l.status === "liquidado" && !l.fatura_id && (
+          {l.status === "liquidado" && !l.fatura_id && !(l.adiantamento && l.compensado_em) && (
             <BotaoAcao acao={estornarLancamento} id={l.id} confirmar="Estornar a baixa? O lançamento volta a ficar em aberto.">
               <Undo2 className="size-4" /> Estornar baixa
             </BotaoAcao>
@@ -177,23 +181,25 @@ export default async function LancamentoPage({ params }: PageProps<"/financeiro/
               <Campo rotulo="Centro de custo">
                 <Selecao name="centro_custo_id" defaultValue={l.centro_custo_id ?? ""}>
                   <option value="">—</option>
-                  {op.centros.map((c) => (
+                  {op.centros.filter((c) => c.ativo || c.id === l.centro_custo_id).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.nome}
                     </option>
                   ))}
                 </Selecao>
               </Campo>
-              <Campo rotulo="Conta">
-                <Selecao name="conta_id" defaultValue={l.conta_id ?? ""}>
-                  <option value="">—</option>
-                  {op.contas.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nome}
-                    </option>
-                  ))}
-                </Selecao>
-              </Campo>
+              {!l.fatura_id && (
+                <Campo rotulo="Conta">
+                  <Selecao name="conta_id" defaultValue={l.conta_id ?? ""}>
+                    <option value="">—</option>
+                    {op.contas.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </Selecao>
+                </Campo>
+              )}
               <Campo rotulo="Pessoa">
                 <Selecao name="pessoa_id" defaultValue={l.pessoa_id ?? ""}>
                   <option value="">—</option>
@@ -289,12 +295,12 @@ export default async function LancamentoPage({ params }: PageProps<"/financeiro/
         </div>
 
         <div className="space-y-6">
-          {aberto && (
+          {aberto && !bloqueadoAprovacao && (
             <Cartao titulo={l.tipo === "receber" ? "Registrar recebimento" : "Registrar pagamento"}>
               <Formulario acao={baixarLancamento} className="space-y-3">
                 <input type="hidden" name="id" value={l.id} />
                 <Campo rotulo="Data">
-                  <Entrada type="date" name="liquidado_em" defaultValue={hoje} />
+                  <Entrada type="date" name="liquidado_em" defaultValue={hoje} max={hoje} />
                 </Campo>
                 <div className="grid grid-cols-2 gap-3">
                   <Campo rotulo="Juros / multa (R$)">
@@ -304,7 +310,7 @@ export default async function LancamentoPage({ params }: PageProps<"/financeiro/
                     <Entrada name="desconto" inputMode="decimal" placeholder="0,00" />
                   </Campo>
                 </div>
-                <Campo rotulo="Valor pago (R$)" dica="Se ficar vazio: valor + juros − desconto.">
+                <Campo rotulo="Valor pago (R$)" dica="Se ficar vazio: valor + juros − desconto. Se digitar outro valor sem juros/desconto, a diferença vira juros ou desconto.">
                   <Entrada name="valor_pago" inputMode="decimal" placeholder={String(l.valor).replace(".", ",")} />
                 </Campo>
                 <Campo rotulo="Conta">

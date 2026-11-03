@@ -28,15 +28,16 @@ export default async function NotasPage({ searchParams }: PageProps<"/financeiro
   const mes = lerMes(sp.mes, hoje);
   const status = typeof sp.status === "string" && sp.status in FILTROS ? sp.status : "";
   const { supabase, organizacao } = await obterContexto();
-  let q = supabase.from("notas_fiscais").select("id, numero, competencia, emitida_em, tomador_nome, descricao, valor_servicos, valor_iss, status").eq("competencia", `${mes}-01`).order("created_at");
-  if (status) q = q.eq("status", status);
+  const q = supabase.from("notas_fiscais").select("id, numero, competencia, emitida_em, tomador_nome, descricao, valor_servicos, valor_iss, status").eq("competencia", `${mes}-01`).order("created_at");
   const [{ data }, { data: pessoas }, { data: org }] = await Promise.all([
     q,
     supabase.from("pessoas").select("id, nome").order("nome").limit(2000),
     supabase.from("organizacoes").select("aliquota_iss").eq("id", organizacao.id).single(),
   ]);
-  const lista = (data ?? []) as Nota[];
-  const validas = lista.filter((n) => n.status !== "cancelada");
+  // Indicadores sobre o mês inteiro; a pílula só filtra a lista.
+  const todasDoMes = (data ?? []) as Nota[];
+  const lista = status ? todasDoMes.filter((n) => n.status === status) : todasDoMes;
+  const validas = todasDoMes.filter((n) => n.status !== "cancelada");
   const total = paraReais(validas.reduce((a, n) => a + paraCentavos(n.valor_servicos), 0));
   const iss = paraReais(validas.reduce((a, n) => a + paraCentavos(n.valor_iss), 0));
   const url = (k: string) => `/financeiro/notas?mes=${mes}${k ? `&status=${k}` : ""}`;
@@ -98,7 +99,7 @@ export default async function NotasPage({ searchParams }: PageProps<"/financeiro
         <NavegadorMes caminho="/financeiro/notas" mes={mes} hoje={hoje} extra={{ status: status || undefined }} />
       </div>
       <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Indicador rotulo="A emitir" icone={<FileText />} valor={<Contador valor={lista.filter((n) => n.status === "a_emitir").length} />} tom="alerta" href={url("a_emitir")} />
+        <Indicador rotulo="A emitir" icone={<FileText />} valor={<Contador valor={todasDoMes.filter((n) => n.status === "a_emitir").length} />} tom="alerta" href={url("a_emitir")} />
         <Indicador rotulo="Valor dos serviços" icone={<Receipt />} valor={<Contador valor={total} formato="moeda" />} />
         <Indicador rotulo="ISS do mês" icone={<Receipt />} valor={<Contador valor={iss} formato="moeda" />} />
       </div>

@@ -11,7 +11,7 @@ import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_TIPO_CONTA } from "@/lib/dominio/financeiro";
 import { AbasFinanceiro } from "../abas";
 import { criarConta, criarTransferencia, excluirConta, excluirTransferencia } from "../actions";
-import { movimentosDasContas, opcoesFinanceiro, saldosDasContas } from "../dados";
+import { movimentosDasContas, opcoesFinanceiro, saldosDasContas, todas } from "../dados";
 
 export const metadata: Metadata = { title: "Contas e conciliação" };
 
@@ -19,13 +19,13 @@ export default async function ContasPage() {
   const { supabase, organizacao } = await obterContexto();
   const pessoal = organizacao.modo === "pessoal";
   const op = await opcoesFinanceiro(supabase);
-  const [saldos, { transferencias }, { data: pend }] = await Promise.all([
+  const [saldos, { transferencias }, pend] = await Promise.all([
     saldosDasContas(supabase, op.contas),
     movimentosDasContas(supabase),
-    supabase.from("extrato_itens").select("conta_id").is("lancamento_id", null).is("fatura_id", null).is("repasse_id", null).eq("ignorado", false),
+    todas<{ conta_id: string }>(() => supabase.from("extrato_itens").select("conta_id").is("lancamento_id", null).is("fatura_id", null).is("repasse_id", null).eq("ignorado", false).order("id")),
   ]);
   const pendentes = new Map<string, number>();
-  for (const p of pend ?? []) pendentes.set(p.conta_id, (pendentes.get(p.conta_id) ?? 0) + 1);
+  for (const p of pend) pendentes.set(p.conta_id, (pendentes.get(p.conta_id) ?? 0) + 1);
   const somar = (f: (c: (typeof op.contas)[number]) => boolean) => paraReais(op.contas.filter((c) => c.ativa && f(c)).reduce((a, c) => a + paraCentavos(saldos.get(c.id) ?? 0), 0));
   const nome = new Map(op.contas.map((c) => [c.id, c.nome]));
 
@@ -145,7 +145,7 @@ export default async function ContasPage() {
             <Celula className={`font-semibold tabular-nums ${(saldos.get(c.id) ?? 0) < 0 ? "text-ruim" : "text-texto"}`}>{formatarReais(saldos.get(c.id) ?? 0)}</Celula>
             <Celula>{pendentes.get(c.id) ? <Selo cor="amarelo">{pendentes.get(c.id)} linha(s)</Selo> : "—"}</Celula>
             <Celula>
-              <BotaoExcluir acao={excluirConta} id={c.id} rotulo="Excluir conta" confirmar={`Excluir a conta "${c.nome}"? Os lançamentos continuam, só perdem a conta. O extrato importado dela é apagado.`} />
+              <BotaoExcluir acao={excluirConta} id={c.id} rotulo="Excluir conta" confirmar={`Excluir a conta "${c.nome}"? Os lançamentos continuam, só perdem a conta; o extrato importado dela é apagado e o que estava conciliado com ele volta a ficar a conciliar. Conta com transferências não pode ser excluída (desative-a).`} />
             </Celula>
           </LinhaLink>
         ))}

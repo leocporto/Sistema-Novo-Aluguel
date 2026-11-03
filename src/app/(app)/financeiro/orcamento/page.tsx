@@ -29,9 +29,16 @@ export default async function OrcamentoPage({ searchParams }: PageProps<"/financ
     linhasRealizadas(supabase, pessoal, competencia, fimDoMes(competencia)),
   ]);
   const orcado = new Map((orc ?? []).map((o) => [o.plano_id, Number(o.valor)]));
-  const realizado = new Map<string, number>();
-  for (const l of linhas) if (l.plano_id) realizado.set(l.plano_id, paraReais(paraCentavos(realizado.get(l.plano_id) ?? 0) + paraCentavos(l.valor)));
   const lista = planos ?? [];
+  const tipoDoPlano = new Map(lista.map((p) => [p.id, p.tipo as string]));
+  // Soma com sinal: um recebimento numa conta de despesa (reembolso, estorno) abate a despesa.
+  const realizado = new Map<string, number>();
+  for (const l of linhas) {
+    if (!l.plano_id) continue;
+    const tipo = tipoDoPlano.get(l.plano_id) ?? (l.tipo === "receber" ? "receita" : "despesa");
+    const sinal = (l.tipo === "receber") === (tipo === "receita") ? 1 : -1;
+    realizado.set(l.plano_id, paraReais(paraCentavos(realizado.get(l.plano_id) ?? 0) + sinal * paraCentavos(l.valor)));
+  }
   const total = (tipo: string, m: Map<string, number>) => paraReais(lista.filter((p) => p.tipo === tipo).reduce((a, p) => a + paraCentavos(m.get(p.id) ?? 0), 0));
   const despOrc = total("despesa", orcado);
   const despReal = total("despesa", realizado);
@@ -51,7 +58,7 @@ export default async function OrcamentoPage({ searchParams }: PageProps<"/financ
           </span>
         </Celula>
         <Celula>
-          <Formulario acao={salvarOrcamento} automatico className="w-36">
+          <Formulario acao={salvarOrcamento} automatico semAviso className="w-36">
             <input type="hidden" name="competencia" value={competencia} />
             <input type="hidden" name="plano_id" value={p.id} />
             <Entrada name="valor" aria-label={`Orçado para ${p.nome}`} inputMode="decimal" defaultValue={o ? String(o).replace(".", ",") : ""} placeholder="0,00" />

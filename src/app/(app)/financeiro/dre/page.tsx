@@ -3,11 +3,12 @@ import { Download, Scale, TrendingDown, TrendingUp } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { NOMES_MES } from "@/components/navegador-mes";
-import { BotaoLink, Cabecalho, Cartao, Celula, Entrada, Indicador, LinhaVazia, Tabela } from "@/components/ui";
+import { Cabecalho, classeBotao, Cartao, Celula, Entrada, Indicador, LinhaVazia, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
-import { fimDoMes, hojeISO } from "@/lib/dominio/datas";
-import { formatarReais } from "@/lib/dominio/dinheiro";
-import { montarDRE } from "@/lib/dominio/financeiro";
+import { fimDoMes, hojeISO, somarDias } from "@/lib/dominio/datas";
+import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
+import { montarDRE, saldoConta, valorRealizado } from "@/lib/dominio/financeiro";
+import { movimentosDasContas, opcoesFinanceiro } from "../dados";
 import { AbasFinanceiro } from "../abas";
 import { linhasRealizadas } from "./dados";
 
@@ -31,8 +32,33 @@ export default async function DrePage({ searchParams }: PageProps<"/financeiro/d
     const entradas = linhas.filter((l) => l.data.startsWith(m) && l.tipo === "receber" && l.grupo_dre !== "nao_dre").reduce((a, l) => a + l.valor, 0);
     return { m, receita: d.receitaBruta, entradas, resultado: d.resultado };
   });
-  const despesas = dre.linhas.filter((l) => l.sinal < 0).reduce((a, l) => a + l.total, 0);
-  const receitas = dre.linhas.filter((l) => l.sinal > 0).reduce((a, l) => a + l.total, 0);
+  // Indicadores pelo tipo de cada lançamento (não pelo sinal do grupo): despesa em "Outros" continua despesa.
+  const noResultado = linhas.filter((l) => (l.grupo_dre ?? "") !== "nao_dre");
+  const receitas = paraReais(noResultado.filter((l) => l.tipo === "receber").reduce((a, l) => a + paraCentavos(l.valor), 0));
+  const despesas = paraReais(noResultado.filter((l) => l.tipo === "pagar").reduce((a, l) => a + paraCentavos(l.valor), 0));
+  // Balancete das contas: saldo antes do período, entradas, saídas e saldo no fim.
+  const [op, { movs, transferencias }] = await Promise.all([opcoesFinanceiro(supabase), movimentosDasContas(supabase)]);
+  const balancete = op.contas
+    .filter((c) => c.ativa || movs.some((m) => m.conta_id === c.id))
+    .map((c) => {
+      const conta = { ...c, saldo_inicial: Number(c.saldo_inicial) };
+      const inicio = saldoConta(conta, movs, transferencias, somarDias(de, -1));
+      const fim = saldoConta(conta, movs, transferencias, ate);
+      const dentro = (d: string | null) => !!d && d >= de && d <= ate && d >= c.saldo_inicial_em;
+      let ent = 0;
+      let sai = 0;
+      for (const m of movs) {
+        if (m.conta_id !== c.id || !dentro(m.liquidado_em)) continue;
+        if (m.tipo === "receber") ent += paraCentavos(valorRealizado(m));
+        else sai += paraCentavos(valorRealizado(m));
+      }
+      for (const t of transferencias) {
+        if (!dentro(t.data)) continue;
+        if (t.destino_id === c.id) ent += paraCentavos(t.valor);
+        if (t.origem_id === c.id) sai += paraCentavos(t.valor);
+      }
+      return { id: c.id, nome: c.nome, terceiros: c.terceiros, inicio, entradas: paraReais(ent), saidas: paraReais(sai), fim };
+    });
 
   return (
     <>
@@ -45,9 +71,9 @@ export default async function DrePage({ searchParams }: PageProps<"/financeiro/d
             : "Demonstração do resultado da imobiliária no período, pelo regime de caixa (o que foi recebido e pago). Valores de terceiros ficam de fora."
         }
         acoes={
-          <BotaoLink href={`/financeiro/exportar?tipo=dre&de=${de}&ate=${ate}`} variante="secundario" prefetch={false}>
+          <a href={`/financeiro/exportar?tipo=dre&de=${de}&ate=${ate}`} className={classeBotao("secundario")}>
             <Download className="size-4" /> Exportar (CSV)
-          </BotaoLink>
+          </a>
         }
       />
       <AbasFinanceiro pessoal={pessoal} />
@@ -116,6 +142,25 @@ export default async function DrePage({ searchParams }: PageProps<"/financeiro/d
             {porMes.length === 0 && <LinhaVazia colunas={3}>Sem movimento.</LinhaVazia>}
           </Tabela>
         </div>
+      </div>
+      <div className="mt-6">
+        <h3 className="mb-2 text-[15px] font-semibold text-texto">Balancete das contas no período</h3>
+        <Tabela colunas={["Conta", "Saldo antes", "Entradas", "Saídas", "Saldo no fim"]}>
+          {balancete.map((b) => (
+            <tr key={b.id}>
+              <Celula className="font-medium">
+                {b.nome}
+                {b.terceiros && <span className="ml-2 text-xs text-alerta">terceiros</span>}
+              </Celula>
+              <Celula className="tabular-nums">{formatarReais(b.inicio)}</Celula>
+              <Celula className="tabular-nums text-ok">{formatarReais(b.entradas)}</Celula>
+              <Celula className="tabular-nums">{formatarReais(b.saidas)}</Celula>
+              <Celula className={`font-semibold tabular-nums ${b.fim < 0 ? "text-ruim" : ""}`}>{formatarReais(b.fim)}</Celula>
+            </tr>
+          ))}
+          {balancete.length === 0 && <LinhaVazia colunas={5}>Cadastre suas contas em “Contas e conciliação” para ver o balancete.</LinhaVazia>}
+        </Tabela>
+        <p className="mt-2 text-xs text-mudo">Entram só os movimentos ligados a uma conta (baixas com conta, aluguéis e repasses conciliados, transferências).</p>
       </div>
     </>
   );
