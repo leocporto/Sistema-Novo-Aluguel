@@ -15,6 +15,7 @@ import {
   Bell,
   KeyRound,
   ClipboardCheck,
+  Wrench,
   LogOut,
   Menu,
   Percent,
@@ -93,6 +94,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/reajustes", rotulo: "Reajustes", icone: TrendingUp },
       { href: "/cobrancas", rotulo: "Cobranças", icone: Bell },
+      { href: "/manutencao", rotulo: "Manutenção", icone: Wrench },
     ],
   },
   {

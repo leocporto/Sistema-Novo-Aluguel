@@ -63,6 +63,11 @@ export default async function PessoaLayout({ children, params }: LayoutProps<"/p
                 Extrato de repasses
               </BotaoLink>
             )}
+            {p.papeis.includes("prestador") && (
+              <BotaoLink variante="secundario" href="/manutencao/prestadores">
+                Serviços e avaliação
+              </BotaoLink>
+            )}
           </>
         }
       />

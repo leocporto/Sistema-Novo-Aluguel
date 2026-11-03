@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, ClipboardCheck, FileText } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, FileText, Wrench } from "lucide-react";
 import { BotaoAcao } from "@/components/botao-acao";
 import { SubAbas } from "@/components/sub-abas";
 import { Aviso, BotaoLink, Cabecalho, Selo } from "@/components/ui";
@@ -55,6 +55,9 @@ export default async function ContratoLayout({ children, params }: LayoutProps<"
               </BotaoLink>
               <BotaoLink href={`/vistorias?contrato=${id}`} variante="secundario">
                 <ClipboardCheck className="size-4" /> Vistorias
+              </BotaoLink>
+              <BotaoLink href={`/manutencao?novo=1&contrato=${id}`} variante="secundario">
+                <Wrench className="size-4" /> Abrir chamado
               </BotaoLink>
             </>
           }

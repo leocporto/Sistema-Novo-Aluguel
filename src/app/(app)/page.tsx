@@ -42,6 +42,7 @@ import { ROTULO_META, ROTULO_STATUS_IMOVEL, TIPOS_META, type TipoMeta } from "@/
 import { quadroPermitido } from "@/lib/modos";
 import { pendencias } from "@/lib/dominio/pessoas";
 import { ROTULO_TIPO_COMPROMISSO } from "@/lib/dominio/agenda";
+import { STATUS_EM_ANDAMENTO, situacaoPrazo } from "@/lib/dominio/manutencao";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -103,7 +104,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -157,6 +158,8 @@ export default async function PainelPage() {
       supabase.from("vistoria_contestacoes").select("id", { count: "exact", head: true }).eq("status", "aberta"),
       supabase.from("vistoria_pendencias").select("id", { count: "exact", head: true }).in("status", ["aberta", "em_reparo"]),
       supabase.from("vistoria_pendencias").select("id", { count: "exact", head: true }).in("status", ["aberta", "em_reparo"]).lt("prazo", hoje),
+      supabase.from("chamados").select("id, numero, titulo, status, origem, prazo_atendimento").in("status", STATUS_EM_ANDAMENTO),
+      supabase.from("chamados").select("id", { count: "exact", head: true }).in("status", ["concluido", "avaliado"]).gte("garantia_ate", hoje).lte("garantia_ate", somarDias(hoje, 30)),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -267,6 +270,14 @@ export default async function PainelPage() {
   type ChAtr = { id: string; retirada_por: string; previsao_devolucao: string; chave: { id: string; codigo: string | null } | null };
   for (const m of (chavesAtrasR.data ?? []) as unknown as ChAtr[])
     avisos.push({ texto: `Chave ${m.chave?.codigo ?? ""} não devolvida por ${m.retirada_por}`, href: m.chave ? `/chaves/${m.chave.id}` : "/chaves", data: diaLocal(m.previsao_devolucao), tom: "ruim", icone: <KeyRound /> });
+  const chamados = (chamadosR.data ?? []) as { id: string; numero: number; titulo: string; status: string; origem: string; prazo_atendimento: string | null }[];
+  const agoraIso = new Date(agora).toISOString();
+  const chamadosAtrasados = chamados.filter((c) => situacaoPrazo(c, agoraIso).situacao === "atrasado");
+  const chamadosAprovacao = chamados.filter((c) => c.status === "aguardando_aprovacao");
+  for (const c of chamados.filter((x) => x.origem === "link" && x.status === "aberto"))
+    avisos.push({ texto: `Chamado novo do locatário: ${c.titulo}`, href: `/manutencao/${c.id}`, tom: "alerta", icone: <Wrench /> });
+  if (garantiasManutR.count)
+    avisos.push({ texto: `${garantiasManutR.count} garantia(s) de conserto acabando em 30 dias`, href: "/manutencao/garantias?filtro=vencendo", tom: "info", icone: <Wrench /> });
   const desocupacoes = desocR.data ?? [];
   if (desocupacoes.length)
     avisos.push({ texto: `${desocupacoes.length} desocupação(ões) em andamento`, href: "/contratos?status=desocupacao", tom: "alerta", icone: <DoorOpen /> });
@@ -620,6 +631,26 @@ export default async function PainelPage() {
           detalhe={reparosVencR.count ? `${reparosVencR.count} com prazo vencido` : "nenhum prazo vencido"}
           tom={reparosVencR.count ? "alerta" : "neutro"}
           href="/vistorias/pendencias"
+        />
+      ),
+    },
+    {
+      id: "manutencao",
+      titulo: "Manutenção",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Chamados em andamento"
+          icone={<Wrench />}
+          valor={<Contador valor={chamados.length} />}
+          detalhe={[
+            chamadosAtrasados.length ? `${chamadosAtrasados.length} atrasado(s) no atendimento` : "nenhum atrasado",
+            !pessoal && chamadosAprovacao.length ? `${chamadosAprovacao.length} aguardando o proprietário` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          tom={chamadosAtrasados.length ? "perigo" : chamados.length ? "alerta" : "sucesso"}
+          href="/manutencao"
         />
       ),
     },
