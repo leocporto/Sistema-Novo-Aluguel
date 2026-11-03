@@ -20,6 +20,11 @@ export type LinhaImovel = {
   status: string;
   capa: string | null;
   exclusivo: boolean;
+  bairro: string | null;
+  cidade: string | null;
+  quartos: number | null;
+  vagas: number | null;
+  area: number | null;
 };
 
 const COR = {
@@ -36,11 +41,14 @@ const sel = "min-h-[34px] rounded-[9px] border border-borda-forte bg-input px-2 
 export function ListaImoveis({
   itens,
   pessoal,
+  visual = "lista",
   corretores,
   empreendimentos,
 }: {
   itens: LinhaImovel[];
   pessoal: boolean;
+  /** "lista" (tabela) ou "cartoes" (fotos grandes, estilo feed). */
+  visual?: "lista" | "cartoes";
   corretores: { id: string; nome: string }[];
   empreendimentos: { id: string; nome: string }[];
 }) {
@@ -193,6 +201,93 @@ export function ListaImoveis({
         <div className={`mb-3 rounded-[14px] border px-4 py-2.5 text-sm ${msg.ok ? "border-ok-bd bg-ok-bg text-ok" : "border-ruim-bd bg-ruim-bg text-ruim"}`}>{msg.texto}</div>
       )}
 
+      {visual === "cartoes" ? (
+        itens.length === 0 ? (
+          <div className="rounded-card border border-borda bg-card px-5 py-10 text-center text-sm text-mudo">Nenhum imóvel encontrado.</div>
+        ) : (
+          <ul className="entrar-cascata grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {itens.map((i) => {
+              const marcado = marcados.has(i.id);
+              const detalhes = [
+                i.quartos ? `${i.quartos} ${i.quartos === 1 ? "quarto" : "quartos"}` : null,
+                i.vagas ? `${i.vagas} ${i.vagas === 1 ? "vaga" : "vagas"}` : null,
+                i.area ? `${Number(i.area).toLocaleString("pt-BR")} m²` : null,
+              ].filter(Boolean);
+              return (
+                <li key={i.id}>
+                  <div
+                    role="link"
+                    tabIndex={0}
+                    onMouseEnter={() => router.prefetch(`/imoveis/${i.id}`)}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("button, input, label")) return;
+                      router.push(`/imoveis/${i.id}`);
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && router.push(`/imoveis/${i.id}`)}
+                    className="group block cursor-pointer"
+                  >
+                    <div
+                      className={`relative aspect-square overflow-hidden rounded-[18px] bg-elev ${marcado ? "ring-4 ring-acento" : ""}`}
+                    >
+                      {i.capa ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={i.capa} alt={i.codigo} loading="lazy" className="size-full object-cover transition duration-300 group-hover:scale-[1.04]" />
+                      ) : (
+                        <div className="grid size-full place-items-center text-mudo">
+                          <div className="flex flex-col items-center gap-2 text-xs">
+                            <ImageIcon className="size-8" />
+                            sem foto
+                          </div>
+                        </div>
+                      )}
+                      <span
+                        className={`absolute left-3 top-3 rounded-full border px-2.5 py-1 text-[11.5px] font-semibold shadow-sm backdrop-blur ${COR[i.status as keyof typeof COR] ?? COR.inativo}`}
+                      >
+                        {ROTULO_STATUS_IMOVEL[i.status] ?? i.status}
+                      </span>
+                      {!pessoal && i.exclusivo && (
+                        <span className="absolute bottom-3 left-3 rounded-full bg-card/90 px-2.5 py-1 text-[11px] font-semibold text-acento-hot shadow-sm">exclusivo</span>
+                      )}
+                      <label
+                        className="absolute right-3 top-3 grid size-8 cursor-pointer place-items-center rounded-full bg-card/90 shadow-sm"
+                        title="Selecionar"
+                      >
+                        <input type="checkbox" aria-label={`Selecionar ${i.codigo}`} checked={marcado} onChange={() => alternar(i.id)} />
+                      </label>
+                    </div>
+                    <div className="mt-2.5 px-0.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-[15px] font-semibold capitalize text-texto">
+                          {i.tipo}
+                          {i.bairro ? ` · ${i.bairro}` : i.cidade ? ` · ${i.cidade}` : ""}
+                        </span>
+                        <span className="shrink-0 text-xs font-medium text-mudo">{i.codigo}</span>
+                      </div>
+                      <div className="truncate text-[13.5px] text-texto-2">{i.endereco || "Sem endereço"}</div>
+                      {detalhes.length > 0 && <div className="text-[13px] text-mudo">{detalhes.join(" · ")}</div>}
+                      <div className="mt-1 text-[14px] text-texto">
+                        {i.valor_aluguel ? (
+                          <>
+                            <strong className="font-semibold">{formatarReais(i.valor_aluguel)}</strong>
+                            <span className="text-mudo"> /mês</span>
+                          </>
+                        ) : null}
+                        {i.valor_venda ? (
+                          <span className={i.valor_aluguel ? "ml-2 text-[13px] text-mudo" : ""}>
+                            {i.valor_aluguel ? "venda " : ""}
+                            <strong className={i.valor_aluguel ? "font-medium" : "font-semibold"}>{formatarReais(i.valor_venda)}</strong>
+                          </span>
+                        ) : null}
+                        {!i.valor_aluguel && !i.valor_venda && <span className="text-mudo">Sem valor</span>}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      ) : (
       <div className="entrar overflow-x-auto rounded-card border border-borda bg-card">
         <table className="w-full min-w-[820px] text-sm">
           <thead>
@@ -266,6 +361,7 @@ export function ListaImoveis({
           </tbody>
         </table>
       </div>
+      )}
     </>
   );
 }

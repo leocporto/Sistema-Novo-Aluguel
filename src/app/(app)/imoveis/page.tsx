@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Copy, FileSpreadsheet, Plus } from "lucide-react";
+import { Copy, FileSpreadsheet, LayoutGrid, List, Plus } from "lucide-react";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { BotaoLink, Cabecalho, Entrada, Selecao, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -55,7 +55,23 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
     status: i.status,
     capa: url.get(caminhoCapa.get(i.id) ?? "") ?? null,
     exclusivo: Boolean(i.exclusivo),
+    bairro: i.bairro,
+    cidade: i.cidade,
+    quartos: i.quartos,
+    vagas: i.vagas,
+    area: (() => {
+      const a = i.area_privativa ?? i.area_util ?? i.area_construida ?? i.area_total;
+      return a == null ? null : Number(a);
+    })(),
   }));
+  const visual = s("ver") === "cartoes" ? "cartoes" : "lista";
+  const urlVisual = (v: string) => {
+    const q = new URLSearchParams();
+    for (const k of ["q", "status", "tipo", "finalidade", "empreendimento"]) if (s(k)) q.set(k, s(k));
+    if (v === "cartoes") q.set("ver", "cartoes");
+    const t = q.toString();
+    return t ? `/imoveis?${t}` : "/imoveis";
+  };
 
   return (
     <>
@@ -78,7 +94,9 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
           </>
         }
       />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-start gap-2">
+      <FiltroAutomatico className="flex flex-1 flex-wrap gap-2">
+        {visual === "cartoes" && <input type="hidden" name="ver" value="cartoes" />}
         <Entrada name="q" placeholder="Código, rua, bairro ou cidade" defaultValue={busca} className="max-w-xs" />
         <Selecao name="status" defaultValue={status} className="max-w-48">
           <option value="">Todas as situações</option>
@@ -113,7 +131,26 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
           </Selecao>
         )}
       </FiltroAutomatico>
-      <ListaImoveis itens={itens} pessoal={pessoal} corretores={corretores ?? []} empreendimentos={emps ?? []} />
+        <div className="flex rounded-btn border border-borda bg-card p-1" role="group" aria-label="Forma de ver">
+          <Link
+            href={urlVisual("lista")}
+            aria-label="Ver em lista"
+            title="Ver em lista"
+            className={`grid h-8 w-9 place-items-center rounded-[8px] transition ${visual === "lista" ? "bg-acento text-white" : "text-texto-2 hover:bg-card-hover"}`}
+          >
+            <List className="size-4" />
+          </Link>
+          <Link
+            href={urlVisual("cartoes")}
+            aria-label="Ver em cartões com foto"
+            title="Ver em cartões com foto"
+            className={`grid h-8 w-9 place-items-center rounded-[8px] transition ${visual === "cartoes" ? "bg-acento text-white" : "text-texto-2 hover:bg-card-hover"}`}
+          >
+            <LayoutGrid className="size-4" />
+          </Link>
+        </div>
+      </div>
+      <ListaImoveis itens={itens} pessoal={pessoal} visual={visual} corretores={corretores ?? []} empreendimentos={emps ?? []} />
     </>
   );
 }
