@@ -4,6 +4,7 @@ import type { Pessoa } from "@/lib/tipos";
 import { ROTULO_PAPEL } from "@/lib/tipos";
 import { PAPEIS_SO_IMOBILIARIA } from "@/lib/modos";
 import { salvarPessoa } from "./actions";
+import { MarcarImoveis } from "./marcar-imoveis";
 
 export interface ImovelOpcao {
   id: string;
@@ -97,23 +98,7 @@ export function FormPessoa({
               Marque os imóveis dos quais esta pessoa é proprietária. Ao marcar, ela é vinculada com a participação que falta para
               100% (ajuste as porcentagens na página do imóvel, se houver mais de um dono).
             </p>
-            <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto md:grid-cols-2">
-              {imoveis.map((i) => (
-                <label
-                  key={i.id}
-                  className="flex items-start gap-2 rounded-lg border border-borda px-3 py-2 text-sm hover:bg-card-hover"
-                >
-                  <input type="checkbox" name="imoveis" value={i.id} defaultChecked={imoveisVinculados.includes(i.id)} className="mt-0.5" />
-                  <span>
-                    <span className="font-medium">{[i.logradouro, i.numero].filter(Boolean).join(", ") || "Sem endereço"}</span>
-                    <span className="block text-xs text-mudo">
-                      {i.codigo}
-                      {i.bairro || i.cidade ? ` · ${[i.bairro, i.cidade].filter(Boolean).join(", ")}` : ""}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
+            <MarcarImoveis imoveis={imoveis} vinculados={imoveisVinculados} />
           </>
         )}
       </Cartao>
