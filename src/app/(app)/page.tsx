@@ -24,6 +24,7 @@ import {
   Scale,
   Target,
   TrendingUp,
+  UserCheck,
   UserPlus,
   Users,
   Wallet,
@@ -43,6 +44,7 @@ import { quadroPermitido } from "@/lib/modos";
 import { pendencias } from "@/lib/dominio/pessoas";
 import { ROTULO_TIPO_COMPROMISSO } from "@/lib/dominio/agenda";
 import { STATUS_EM_ANDAMENTO, situacaoPrazo } from "@/lib/dominio/manutencao";
+import { numerosAnalisePainel } from "./analise/painel";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -104,7 +106,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -160,6 +162,7 @@ export default async function PainelPage() {
       supabase.from("vistoria_pendencias").select("id", { count: "exact", head: true }).in("status", ["aberta", "em_reparo"]).lt("prazo", hoje),
       supabase.from("chamados").select("id, numero, titulo, status, origem, prazo_atendimento").in("status", STATUS_EM_ANDAMENTO),
       supabase.from("chamados").select("id", { count: "exact", head: true }).in("status", ["concluido", "avaliado"]).gte("garantia_ate", hoje).lte("garantia_ate", somarDias(hoje, 30)),
+      numerosAnalisePainel(supabase, hoje),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -651,6 +654,36 @@ export default async function PainelPage() {
             .join(" · ")}
           tom={chamadosAtrasados.length ? "perigo" : chamados.length ? "alerta" : "sucesso"}
           href="/manutencao"
+        />
+      ),
+    },
+    {
+      id: "analises_pendentes",
+      titulo: "Análise cadastral",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Candidatos em análise"
+          icone={<UserCheck />}
+          valor={<Contador valor={analiseN.emAnalise} />}
+          detalhe={analiseN.aguardandoGarantidora ? `${analiseN.aguardandoGarantidora} esperando a garantidora` : "nenhuma garantidora pendente"}
+          tom={analiseN.emAnalise ? "alerta" : "neutro"}
+          href="/analise"
+        />
+      ),
+    },
+    {
+      id: "garantias_vencendo",
+      titulo: "Garantias locatícias",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Garantias vencendo em 30 dias"
+          icone={<ShieldAlert />}
+          valor={<Contador valor={analiseN.garantiasVencendo} />}
+          detalhe={analiseN.garantiasVencidas ? `${analiseN.garantiasVencidas} já vencida(s)` : "nenhuma vencida"}
+          tom={analiseN.garantiasVencidas ? "perigo" : analiseN.garantiasVencendo ? "alerta" : "sucesso"}
+          href={analiseN.garantiasVencidas ? "/analise/garantias?filtro=vencida" : "/analise/garantias?filtro=30"}
         />
       ),
     },

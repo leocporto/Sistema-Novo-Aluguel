@@ -117,9 +117,10 @@ export default async function PartesContrato({ params }: PageProps<"/contratos/[
   if (!dados) notFound();
   const { partes } = dados;
   const hoje = hojeISO();
-  const [{ data: pessoas }, { data: gs }] = await Promise.all([
+  const [{ data: pessoas }, { data: gs }, { data: analise }] = await Promise.all([
     supabase.from("pessoas").select("id, nome").order("nome"),
     supabase.from("contrato_garantias").select("*, pessoa:pessoas(id, nome, telefone)").eq("contrato_id", id).order("created_at"),
+    supabase.from("analises").select("id, numero").eq("contrato_id", id).limit(1).maybeSingle(),
   ]);
   const garantias = (gs ?? []) as unknown as G[];
   const props = partes.filter((p) => p.papel === "proprietario");
@@ -201,10 +202,20 @@ export default async function PartesContrato({ params }: PageProps<"/contratos/[
       <Cartao
         titulo={`Garantias locatícias (${garantias.length})`}
         acoes={
+          <>
+          {analise && (
+            <Link href={`/analise/${analise.id}`} className="text-xs text-acento hover:underline">
+              Análise cadastral #{analise.numero}
+            </Link>
+          )}
+          <Link href="/analise/garantias" className="text-xs text-acento hover:underline">
+            Vencimentos e renovações
+          </Link>
           <JanelaCadastro rotuloBotao={<><ShieldPlus className="size-3.5" /> Incluir</>} tamanho="sm" titulo="Nova garantia" acao={adicionarGarantia} rotuloSalvar="Incluir" larguraMax="max-w-2xl">
             <input type="hidden" name="contrato_id" value={id} />
             <CamposGarantia pessoas={pessoas ?? []} />
           </JanelaCadastro>
+          </>
         }
       >
         <ul className="space-y-3">

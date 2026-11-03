@@ -146,6 +146,12 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
         if (pes && !pes.papeis.includes(papel))
           await supabase.from("pessoas").update({ papeis: [...pes.papeis, papel] }).eq("id", pid);
       }
+      // Veio da análise cadastral aprovada: liga a análise e leva garantias e fiadores aprovados.
+      const analiseId = texto(fd, "analise_id");
+      if (analiseId) {
+        const r3 = await supabase.rpc("levar_garantias_contrato", { p_analise: analiseId, p_contrato: id });
+        if (r3.error) throw r3.error;
+      }
     } catch (e) {
       await supabase.from("contratos").delete().eq("id", id);
       throw e;
@@ -154,6 +160,7 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
     return { erro: mensagemErro(e) };
   }
   revalidatePath("/contratos");
+  revalidatePath("/analise");
   revalidatePath("/");
   redirect(`/contratos/${id}`);
 }

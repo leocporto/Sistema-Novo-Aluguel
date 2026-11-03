@@ -13,7 +13,12 @@ export const metadata: Metadata = { title: "Novo contrato" };
 
 export default async function NovoContratoPage({ searchParams }: PageProps<"/contratos/novo">) {
   const sp = await searchParams;
-  const imovelSel = typeof sp.imovel === "string" ? sp.imovel : "";
+  const s = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
+  const imovelSel = s("imovel");
+  // Vindo da análise cadastral aprovada: candidato, aluguel e a própria análise.
+  const locatarioSel = s("locatario");
+  const aluguelSel = s("aluguel");
+  const analiseSel = s("analise");
   const { supabase, organizacao: org } = await obterContexto();
   const [{ data: imoveis }, { data: pessoas }] = await Promise.all([
     supabase.from("imoveis").select("*").contains("finalidades", ["locacao"]).neq("status", "inativo").order("codigo"),
@@ -48,12 +53,16 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
               ))}
             </Selecao>
           </Campo>
+          {locatarioSel && <input type="hidden" name="locatario" value={locatarioSel} />}
+          {aluguelSel && <input type="hidden" name="aluguel" value={aluguelSel} />}
+          {analiseSel && <input type="hidden" name="analise" value={analiseSel} />}
           <button className="rounded-lg border border-borda-forte bg-card px-3 py-2 text-sm">Continuar</button>
         </form>
       )}
       {imovel && (
         <Formulario acao={criarContrato}>
           <input type="hidden" name="imovel_id" value={imovel.id} />
+          {analiseSel && <input type="hidden" name="analise_id" value={analiseSel} />}
           <Cartao titulo={`Imóvel ${imovel.codigo} — ${[imovel.logradouro, imovel.numero].filter(Boolean).join(", ")}`}>
             <Grade colunas={4}>
               <Campo rotulo="Locatário">
@@ -63,6 +72,7 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
                   papel="locatario"
                   rotuloNovo="Novo locatário"
                   obrigatorio
+                  inicial={locatarioSel}
                 />
               </Campo>
               <Campo rotulo="Código interno (opcional)">
@@ -87,7 +97,7 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
                 <Entrada type="number" min={1} name="prazo_meses" defaultValue={30} />
               </Campo>
               <Campo rotulo="Aluguel (R$)">
-                <Entrada name="valor_aluguel" required inputMode="decimal" defaultValue={imovel.valor_aluguel ?? ""} />
+                <Entrada name="valor_aluguel" required inputMode="decimal" defaultValue={aluguelSel || (imovel.valor_aluguel ?? "")} />
               </Campo>
               <Campo rotulo="Dia do vencimento">
                 <Entrada type="number" min={1} max={31} name="dia_vencimento" defaultValue={10} />
@@ -197,6 +207,11 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
           </Cartao>
 
           <Cartao titulo="Garantia e seguro">
+            {analiseSel && (
+              <div className="mb-3">
+                <Aviso tipo="info">As garantias e os fiadores aprovados na análise cadastral entram no contrato sozinhos. Aqui, preencha só o que não veio da análise (por exemplo, o seguro incêndio).</Aviso>
+              </div>
+            )}
             <Grade colunas={4}>
               <Campo rotulo="Tipo de garantia">
                 <Selecao name="garantia_tipo" defaultValue="sem_garantia">

@@ -21,6 +21,7 @@ export function SeletorPessoa({
   rotuloNovo,
   obrigatorio = false,
   vazio = "Selecione…",
+  inicial = "",
 }: {
   name: string;
   pessoas: Opcao[];
@@ -28,9 +29,11 @@ export function SeletorPessoa({
   rotuloNovo: string;
   obrigatorio?: boolean;
   vazio?: string;
+  /** Pessoa já escolhida ao abrir (ex.: candidato aprovado na análise). */
+  inicial?: string;
 }) {
   const [opcoes, setOpcoes] = useState<Opcao[]>(pessoas);
-  const [valor, setValor] = useState("");
+  const [valor, setValor] = useState(pessoas.some((p) => p.id === inicial) ? inicial : "");
   const [aberto, setAberto] = useState(false);
   const [nome, setNome] = useState("");
   const [documento, setDocumento] = useState("");

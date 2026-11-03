@@ -16,6 +16,7 @@ import {
   KeyRound,
   ClipboardCheck,
   Wrench,
+  UserCheck,
   LogOut,
   Menu,
   Percent,
@@ -94,6 +95,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/reajustes", rotulo: "Reajustes", icone: TrendingUp },
       { href: "/cobrancas", rotulo: "Cobranças", icone: Bell },
+      { href: "/analise", rotulo: "Análise cadastral", icone: UserCheck },
       { href: "/manutencao", rotulo: "Manutenção", icone: Wrench },
     ],
   },
