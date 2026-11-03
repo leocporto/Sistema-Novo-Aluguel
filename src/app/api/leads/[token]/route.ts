@@ -1,0 +1,32 @@
+import { clienteAnonimo } from "@/lib/supabase/anonimo";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
+/**
+ * Entrada de leads por integração (site próprio, portais, Zapier/Make…).
+ * POST JSON: { nome, telefone?, email?, mensagem?, origem?, funil?, imovel? }
+ */
+export async function POST(req: Request, ctx: RouteContext<"/api/leads/[token]">) {
+  const { token } = await ctx.params;
+  let corpo: Record<string, unknown>;
+  try {
+    const tipo = req.headers.get("content-type") ?? "";
+    corpo = tipo.includes("application/json") ? await req.json() : Object.fromEntries((await req.formData()).entries());
+  } catch {
+    return Response.json({ ok: false, erro: "Corpo inválido." }, { status: 400, headers: CORS });
+  }
+  const p = Object.fromEntries(
+    ["nome", "telefone", "email", "mensagem", "origem", "funil", "imovel"].map((k) => [k, corpo[k] == null ? undefined : String(corpo[k]).slice(0, 2000)]),
+  );
+  const { data, error } = await clienteAnonimo().rpc("receber_lead", { p_token: token, p });
+  if (error) return Response.json({ ok: false, erro: error.message }, { status: 400, headers: CORS });
+  return Response.json({ ok: true, ...(data as object) }, { headers: CORS });
+}

@@ -285,11 +285,19 @@ export const ROTULO_STATUS_LEAD: Record<StatusLead, string> = {
 export const ROTULO_ORIGEM_LEAD: Record<string, string> = {
   whatsapp: "WhatsApp",
   site: "Site",
-  portal: "Portal",
   instagram: "Instagram",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  portal: "Portal (outro)",
+  zap: "ZAP Imóveis",
+  vivareal: "VivaReal",
+  olx: "OLX",
+  imovelweb: "Imovelweb",
   indicacao: "Indicação",
   placa: "Placa",
   telefone: "Telefone",
+  email: "E-mail",
+  visita: "Visita à imobiliária",
   outro: "Outro",
 };
 export const ROTULO_INTERESSE: Record<string, string> = { locacao: "Alugar", compra: "Comprar" };
@@ -306,6 +314,21 @@ export interface Lead {
   observacoes: string | null;
   atendido_em: string | null;
   created_at: string;
+  funil: string;
+  corretor_id: string | null;
+  atribuido_em: string | null;
+  prioridade: string;
+  etiquetas: string[];
+  orcamento_min: Num | null;
+  orcamento_max: Num | null;
+  regioes: string | null;
+  tipos: string[];
+  quartos_min: number | null;
+  motivo_perda: string | null;
+  perdido_em: string | null;
+  proximo_contato: string | null;
+  ultimo_contato: string | null;
+  etapa_max: number;
 }
 
 export const ROTULO_STATUS_VISITA: Record<string, string> = { agendada: "Agendada", realizada: "Realizada", cancelada: "Cancelada" };

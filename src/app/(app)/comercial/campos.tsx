@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AreaTexto, Campo, Entrada, Selecao } from "@/components/ui";
 import { SubAbas } from "@/components/sub-abas";
-import { ROTULO_INTERESSE, ROTULO_ORIGEM_LEAD } from "@/lib/tipos";
+import { ROTULO_ORIGEM_LEAD, TIPOS_IMOVEL } from "@/lib/tipos";
 
 export type OpcaoImovel = { id: string; codigo: string; logradouro: string | null; numero: string | null };
 export type OpcaoNome = { id: string; nome: string };
@@ -19,6 +19,9 @@ export function AbasComercial() {
         { href: "/comercial/propostas", rotulo: "Propostas" },
         { href: "/comercial/tarefas", rotulo: "Tarefas" },
         { href: "/comercial/metas", rotulo: "Metas" },
+        { href: "/comercial/reativar", rotulo: "Reativar" },
+        { href: "/comercial/conversao", rotulo: "Conversão" },
+        { href: "/comercial/captacao", rotulo: "Captação de leads" },
       ]}
     />
   );
@@ -62,15 +65,67 @@ export function SemCorretor() {
   );
 }
 
+export type LeadEditavel = {
+  nome: string;
+  telefone: string | null;
+  email: string | null;
+  origem: string;
+  funil: string;
+  prioridade: string;
+  orcamento_min: number | string | null;
+  orcamento_max: number | string | null;
+  regioes: string | null;
+  tipos: string[];
+  quartos_min: number | null;
+  etiquetas: string[];
+  observacoes: string | null;
+  proximo_contato: string | null;
+};
+
+const chipLead =
+  "flex cursor-pointer items-center rounded-full border border-borda px-3 py-1.5 text-[13px] capitalize text-texto-2 transition hover:border-borda-forte has-[:checked]:border-acento has-[:checked]:bg-acento-bg has-[:checked]:text-acento-hot";
+
+/** Campos do lead. Sem `lead` = cadastro novo (com corretor, imóvel e "criar mesmo assim"). */
 export function CamposLead({
   imoveis,
+  corretores = [],
   lead,
+  funilPadrao = "locacao",
 }: {
   imoveis: OpcaoImovel[];
-  lead?: { nome: string; telefone: string | null; email: string | null; origem: string; interesse: string; imovel_id: string | null; observacoes: string | null };
+  corretores?: OpcaoNome[];
+  lead?: LeadEditavel;
+  funilPadrao?: string;
 }) {
+  const v = (n: unknown) => (n === null || n === undefined ? "" : String(n));
+  const novo = !lead;
   return (
     <>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Campo rotulo="Funil">
+          <Selecao name="funil" defaultValue={lead?.funil ?? funilPadrao}>
+            <option value="locacao">Locação (quer alugar)</option>
+            <option value="venda">Venda (quer comprar)</option>
+            <option value="captacao">Captação (quer anunciar imóvel)</option>
+          </Selecao>
+        </Campo>
+        <Campo rotulo="Origem">
+          <Selecao name="origem" defaultValue={lead?.origem ?? "whatsapp"}>
+            {Object.entries(ROTULO_ORIGEM_LEAD).map(([k, r]) => (
+              <option key={k} value={k}>
+                {r}
+              </option>
+            ))}
+          </Selecao>
+        </Campo>
+        <Campo rotulo="Prioridade">
+          <Selecao name="prioridade" defaultValue={lead?.prioridade ?? "morno"}>
+            <option value="quente">🔥 Quente</option>
+            <option value="morno">Morno</option>
+            <option value="frio">Frio</option>
+          </Selecao>
+        </Campo>
+      </div>
       <Campo rotulo="Nome">
         <Entrada name="nome" required defaultValue={lead?.nome} />
       </Campo>
@@ -81,31 +136,67 @@ export function CamposLead({
         <Campo rotulo="E-mail">
           <Entrada name="email" type="email" defaultValue={lead?.email ?? ""} />
         </Campo>
-        <Campo rotulo="Origem">
-          <Selecao name="origem" defaultValue={lead?.origem ?? "whatsapp"}>
-            {Object.entries(ROTULO_ORIGEM_LEAD).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Selecao>
+      </div>
+      {novo && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Campo rotulo="Corretor responsável">
+            <Selecao name="corretor_id" defaultValue={corretores.length ? "auto" : ""}>
+              <option value="">— sem corretor —</option>
+              {corretores.length > 0 && <option value="auto">Distribuir automaticamente (rodízio)</option>}
+              {corretores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </Selecao>
+          </Campo>
+          <Campo rotulo="Imóvel de interesse">
+            <SelImovel imoveis={imoveis} />
+          </Campo>
+        </div>
+      )}
+      <fieldset className="rounded-[14px] border border-borda-suave p-3">
+        <legend className="px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-mudo">O que procura</legend>
+        <input type="hidden" name="_tipos" value="1" />
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {TIPOS_IMOVEL.map((t) => (
+            <label key={t} className={chipLead}>
+              <input type="checkbox" name="tipos" value={t} defaultChecked={lead?.tipos?.includes(t)} className="sr-only" />
+              {t}
+            </label>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Campo rotulo="Orçamento mín. (R$)">
+            <Entrada name="orcamento_min" inputMode="decimal" defaultValue={v(lead?.orcamento_min)} />
+          </Campo>
+          <Campo rotulo="Orçamento máx. (R$)">
+            <Entrada name="orcamento_max" inputMode="decimal" defaultValue={v(lead?.orcamento_max)} />
+          </Campo>
+          <Campo rotulo="Quartos (mín.)">
+            <Entrada name="quartos_min" type="number" min={0} defaultValue={v(lead?.quartos_min)} />
+          </Campo>
+          <Campo rotulo="Bairros / cidades">
+            <Entrada name="regioes" defaultValue={lead?.regioes ?? ""} placeholder="Gonzaga, Santos" />
+          </Campo>
+        </div>
+      </fieldset>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Campo rotulo="Etiquetas" dica="Separe por vírgula: investidor, pet, urgente…">
+          <Entrada name="etiquetas" defaultValue={lead?.etiquetas?.join(", ") ?? ""} />
         </Campo>
-        <Campo rotulo="Quer">
-          <Selecao name="interesse" defaultValue={lead?.interesse ?? "locacao"}>
-            {Object.entries(ROTULO_INTERESSE).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Selecao>
+        <Campo rotulo="Próximo contato (follow-up)">
+          <Entrada type="date" name="proximo_contato" defaultValue={lead?.proximo_contato ?? ""} />
         </Campo>
       </div>
-      <Campo rotulo="Imóvel de interesse">
-        <SelImovel imoveis={imoveis} padrao={lead?.imovel_id} />
-      </Campo>
       <Campo rotulo="Observações">
         <AreaTexto name="observacoes" rows={3} defaultValue={lead?.observacoes ?? ""} />
       </Campo>
+      {novo && (
+        <label className="flex items-center gap-2 text-sm text-texto-2">
+          <input type="checkbox" name="criar_mesmo_assim" /> Criar mesmo assim se já existir lead com esse telefone/e-mail
+        </label>
+      )}
     </>
   );
 }

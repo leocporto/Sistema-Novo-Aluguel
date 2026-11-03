@@ -1,31 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarCheck, Handshake, Inbox, MessageCircle, Phone, UserPlus, Users } from "lucide-react";
+import { AlarmClock, Inbox, Timer, TrendingUp, UserPlus } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
-import { BotaoExcluir } from "@/components/botao-excluir";
-import { Formulario } from "@/components/formulario";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { JanelaCadastro } from "@/components/janela-cadastro";
-import { Cabecalho, Indicador, Selecao } from "@/components/ui";
+import { Cabecalho, Entrada, Indicador, Selecao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
+import { FUNIS, ROTULO_FUNIL, horasAtePrimeiroAtendimento, textoHoras, type Funil } from "@/lib/dominio/crm";
 import { agoraMs, hojeISO } from "@/lib/dominio/datas";
-import { ROTULO_INTERESSE, ROTULO_ORIGEM_LEAD, ROTULO_STATUS_LEAD, type Lead, type StatusLead } from "@/lib/tipos";
-import { linkWhatsapp } from "@/lib/whatsapp";
-import { criarLead, excluirLead, mudarStatusLead } from "./actions";
+import { normalizar } from "@/lib/dominio/imoveis";
+import { ROTULO_ORIGEM_LEAD, TIPOS_IMOVEL, type Lead } from "@/lib/tipos";
+import { criarLead } from "./actions";
 import { AbasComercial, CamposLead } from "./campos";
 import { carregarOpcoes } from "./dados";
+import { QuadroLeads, type CartaoLead } from "./quadro-leads";
 
 export const metadata: Metadata = { title: "Leads" };
-
-const ETAPAS: StatusLead[] = ["novo", "em_atendimento", "visita", "proposta", "ganho", "perdido"];
-const COR_ETAPA: Record<StatusLead, string> = {
-  novo: "bg-acento",
-  em_atendimento: "bg-alerta",
-  visita: "bg-violeta",
-  proposta: "bg-acento-hot",
-  ganho: "bg-ok",
-  perdido: "bg-fraco",
-};
 
 function haQuanto(iso: string, agora: number) {
   const dias = Math.floor((agora - new Date(iso).getTime()) / 86_400_000);
@@ -36,43 +26,92 @@ function haQuanto(iso: string, agora: number) {
 
 export default async function LeadsPage({ searchParams }: PageProps<"/comercial">) {
   const sp = await searchParams;
-  const origem = typeof sp.origem === "string" ? sp.origem : "";
-  const interesse = typeof sp.interesse === "string" ? sp.interesse : "";
+  const s = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
+  const funil: Funil = FUNIS.includes(s("funil") as Funil) ? (s("funil") as Funil) : "locacao";
+  const f = { corretor: s("corretor"), origem: s("origem"), prioridade: s("prioridade"), etiqueta: s("etiqueta"), ate: s("ate"), regiao: s("regiao"), tipo: s("tipo") };
   const { supabase } = await obterContexto();
   const hoje = hojeISO();
-  const mes = hoje.slice(0, 7);
+  const agora = agoraMs();
 
-  let consulta = supabase.from("leads").select("*, imovel:imoveis(codigo)").order("created_at", { ascending: false });
-  if (origem) consulta = consulta.eq("origem", origem);
-  if (interesse) consulta = consulta.eq("interesse", interesse);
-  const [{ data }, opcoes, { count: fechadosMes }] = await Promise.all([
+  let consulta = supabase
+    .from("leads")
+    .select("*, corretor:pessoas!leads_corretor_id_fkey(nome), lead_imoveis(imovel_id)")
+    .eq("funil", funil)
+    .order("created_at", { ascending: false })
+    .limit(800);
+  if (f.corretor === "sem") consulta = consulta.is("corretor_id", null);
+  else if (f.corretor) consulta = consulta.eq("corretor_id", f.corretor);
+  if (f.origem) consulta = consulta.eq("origem", f.origem);
+  if (f.prioridade) consulta = consulta.eq("prioridade", f.prioridade);
+  if (f.etiqueta) consulta = consulta.contains("etiquetas", [f.etiqueta.toLowerCase()]);
+  if (f.tipo) consulta = consulta.contains("tipos", [f.tipo]);
+  const ate = Number(f.ate.replace(/\./g, "").replace(",", "."));
+  if (f.ate && Number.isFinite(ate) && ate > 0) consulta = consulta.lte("orcamento_max", ate);
+
+  const [{ data }, opcoes, { data: todasEtiquetas }] = await Promise.all([
     consulta,
     carregarOpcoes(supabase),
-    supabase.from("propostas").select("id", { count: "exact", head: true }).eq("status", "aceita").gte("fechada_em", `${mes}-01`),
+    supabase.from("leads").select("etiquetas").eq("funil", funil),
   ]);
-  type L = Lead & { imovel: { codigo: string } | null };
-  const leads = (data ?? []) as L[];
-  const agora = agoraMs();
-  const doMes = leads.filter((l) => l.created_at.slice(0, 7) === mes).length;
+  type L = Lead & { corretor: { nome: string } | null; lead_imoveis: { imovel_id: string }[] };
+  let leads = (data ?? []) as unknown as L[];
+  if (f.regiao) {
+    const r = normalizar(f.regiao);
+    leads = leads.filter((l) => normalizar(l.regioes).includes(r));
+  }
+  const etiquetas = [...new Set((todasEtiquetas ?? []).flatMap((x) => x.etiquetas as string[]))].sort();
+
   const novos = leads.filter((l) => l.status === "novo");
-  const emNegociacao = leads.filter((l) => l.status === "proposta").length;
+  const followUps = leads.filter((l) => l.proximo_contato && l.proximo_contato <= hoje && l.status !== "ganho" && l.status !== "perdido");
+  const ultimos30 = leads.filter((l) => agora - new Date(l.created_at).getTime() < 30 * 86_400_000);
+  const horas = ultimos30.map((l) => horasAtePrimeiroAtendimento(l.created_at, l.atendido_em)).filter((h): h is number => h !== null);
+  const media = horas.length ? horas.reduce((a, b) => a + b, 0) / horas.length : null;
+  const ganhos = leads.filter((l) => l.status === "ganho").length;
+  const perdidos = leads.filter((l) => l.status === "perdido").length;
+
+  const cartoes: CartaoLead[] = leads.map((l) => ({
+    id: l.id,
+    nome: l.nome,
+    telefone: l.telefone,
+    status: l.status,
+    origem: l.origem,
+    prioridade: l.prioridade,
+    etiquetas: l.etiquetas ?? [],
+    orcamento_max: l.orcamento_max == null ? null : Number(l.orcamento_max),
+    corretor: l.corretor?.nome.split(" ")[0] ?? null,
+    imoveis: l.lead_imoveis.length,
+    proximo_contato: l.proximo_contato,
+    horasEsperando: l.status === "novo" && !l.atendido_em ? (agora - new Date(l.created_at).getTime()) / 3_600_000 : null,
+    chegou: haQuanto(l.created_at, agora),
+  }));
 
   return (
     <>
       <Cabecalho
         titulo="Leads"
         trilha="Comercial"
-        descricao="Quem procurou a imobiliária: do primeiro contato ao negócio fechado."
+        descricao="Do primeiro contato ao negócio fechado. Arraste os cartões entre as etapas."
         acoes={
-          <JanelaCadastro rotuloBotao={<><UserPlus className="size-4" /> Novo lead</>} titulo="Novo lead" acao={criarLead} icone={<UserPlus />}>
-            <CamposLead imoveis={opcoes.imoveis} />
+          <JanelaCadastro rotuloBotao={<><UserPlus className="size-4" /> Novo lead</>} titulo="Novo lead" acao={criarLead} icone={<UserPlus />} larguraMax="max-w-2xl">
+            <CamposLead imoveis={opcoes.imoveis} corretores={opcoes.corretores} funilPadrao={funil} />
           </JanelaCadastro>
         }
       />
       <AbasComercial />
 
+      <div className="mb-5 flex flex-wrap gap-2">
+        {FUNIS.map((x) => (
+          <Link
+            key={x}
+            href={x === "locacao" ? "/comercial" : `/comercial?funil=${x}`}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${x === funil ? "bg-acento text-white" : "border border-borda bg-card text-texto-2 hover:border-borda-forte"}`}
+          >
+            Funil de {ROTULO_FUNIL[x].toLowerCase()}
+          </Link>
+        ))}
+      </div>
+
       <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Indicador rotulo="Leads no mês" icone={<Users />} valor={<Contador valor={doMes} />} detalhe={`${leads.length} no total`} />
         <Indicador
           rotulo="Aguardando atendimento"
           icone={<Inbox />}
@@ -80,12 +119,41 @@ export default async function LeadsPage({ searchParams }: PageProps<"/comercial"
           tom={novos.length ? "alerta" : "sucesso"}
           detalhe={novos.length ? `o mais antigo chegou ${haQuanto(novos[novos.length - 1].created_at, agora)}` : "ninguém esperando"}
         />
-        <Indicador rotulo="Com proposta" icone={<Handshake />} valor={<Contador valor={emNegociacao} />} href="/comercial/propostas" />
-        <Indicador rotulo="Negócios fechados no mês" icone={<CalendarCheck />} valor={<Contador valor={fechadosMes ?? 0} />} tom="sucesso" />
+        <Indicador
+          rotulo="Tempo até o 1º atendimento"
+          icone={<Timer />}
+          valor={textoHoras(media)}
+          detalhe="média dos últimos 30 dias"
+          tom={media !== null && media > 24 ? "perigo" : media !== null && media > 2 ? "alerta" : "sucesso"}
+        />
+        <Indicador
+          rotulo="Retornos para hoje"
+          icone={<AlarmClock />}
+          valor={<Contador valor={followUps.length} />}
+          detalhe="follow-ups vencidos ou de hoje"
+          tom={followUps.length ? "alerta" : "neutro"}
+        />
+        <Indicador
+          rotulo="Conversão do funil"
+          icone={<TrendingUp />}
+          valor={ganhos + perdidos ? `${Math.round((ganhos / (ganhos + perdidos)) * 100)}%` : "—"}
+          detalhe={`${ganhos} fechado(s) · ${perdidos} perdido(s)`}
+          href="/comercial/conversao"
+        />
       </div>
 
       <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        <Selecao name="origem" defaultValue={origem} className="w-48">
+        {funil !== "locacao" && <input type="hidden" name="funil" value={funil} />}
+        <Selecao name="corretor" defaultValue={f.corretor} className="w-48">
+          <option value="">Todos os corretores</option>
+          <option value="sem">Sem corretor</option>
+          {opcoes.corretores.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nome}
+            </option>
+          ))}
+        </Selecao>
+        <Selecao name="origem" defaultValue={f.origem} className="w-44">
           <option value="">Todas as origens</option>
           {Object.entries(ROTULO_ORIGEM_LEAD).map(([k, v]) => (
             <option key={k} value={k}>
@@ -93,81 +161,35 @@ export default async function LeadsPage({ searchParams }: PageProps<"/comercial"
             </option>
           ))}
         </Selecao>
-        <Selecao name="interesse" defaultValue={interesse} className="w-48">
-          <option value="">Alugar e comprar</option>
-          {Object.entries(ROTULO_INTERESSE).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
+        <Selecao name="prioridade" defaultValue={f.prioridade} className="w-40">
+          <option value="">Toda prioridade</option>
+          <option value="quente">🔥 Quente</option>
+          <option value="morno">Morno</option>
+          <option value="frio">Frio</option>
+        </Selecao>
+        <Selecao name="tipo" defaultValue={f.tipo} className="w-44 capitalize">
+          <option value="">Todo tipo de imóvel</option>
+          {TIPOS_IMOVEL.map((t) => (
+            <option key={t} value={t}>
+              {t}
             </option>
           ))}
         </Selecao>
+        {etiquetas.length > 0 && (
+          <Selecao name="etiqueta" defaultValue={f.etiqueta} className="w-40">
+            <option value="">Toda etiqueta</option>
+            {etiquetas.map((t) => (
+              <option key={t} value={t}>
+                #{t}
+              </option>
+            ))}
+          </Selecao>
+        )}
+        <Entrada name="regiao" defaultValue={f.regiao} placeholder="Bairro/cidade" className="w-40" />
+        <Entrada name="ate" defaultValue={f.ate} placeholder="Orçamento até R$" inputMode="decimal" className="w-44" />
       </FiltroAutomatico>
 
-      <div className="entrar-cascata grid auto-cols-[minmax(250px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-3">
-        {ETAPAS.map((etapa) => {
-          const daEtapa = leads.filter((l) => l.status === etapa);
-          return (
-            <section key={etapa} className="flex min-h-40 flex-col rounded-card border border-borda bg-app p-2.5">
-              <header className="mb-2 flex items-center gap-2 px-1.5 pt-1">
-                <span className={`size-2.5 rounded-full ${COR_ETAPA[etapa]}`} />
-                <h3 className="text-[14px] font-semibold text-texto">{ROTULO_STATUS_LEAD[etapa]}</h3>
-                <span className="ml-auto rounded-full bg-card px-2 py-0.5 text-xs font-semibold text-texto-2">{daEtapa.length}</span>
-              </header>
-              <div className="flex flex-col gap-2">
-                {daEtapa.map((l) => (
-                  <article key={l.id} className="rounded-[14px] border border-borda bg-card p-3 transition hover:border-borda-forte">
-                    <Link href={`/comercial/leads/${l.id}`} className="block">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-semibold text-texto">{l.nome}</span>
-                        <span className="whitespace-nowrap text-[11px] text-mudo">{haQuanto(l.created_at, agora)}</span>
-                      </div>
-                      <div className="mt-1 text-xs text-texto-2">
-                        {ROTULO_INTERESSE[l.interesse]} · {ROTULO_ORIGEM_LEAD[l.origem] ?? l.origem}
-                        {l.imovel ? ` · ${l.imovel.codigo}` : ""}
-                      </div>
-                    </Link>
-                    <div className="mt-2.5 flex items-center gap-1.5">
-                      <Formulario acao={mudarStatusLead} automatico salvarQuando="status" className="min-w-0 flex-1">
-                        <input type="hidden" name="id" value={l.id} />
-                        <select
-                          name="status"
-                          defaultValue={l.status}
-                          aria-label={`Etapa de ${l.nome}`}
-                          className="h-8 w-full rounded-[9px] border border-borda bg-input px-2 text-xs font-medium text-texto"
-                        >
-                          {ETAPAS.map((e) => (
-                            <option key={e} value={e}>
-                              {ROTULO_STATUS_LEAD[e]}
-                            </option>
-                          ))}
-                        </select>
-                      </Formulario>
-                      <BotaoExcluir acao={excluirLead} id={l.id} rotulo={`Excluir ${l.nome}`} confirmar={`Excluir o lead "${l.nome}"?`} />
-                      {l.telefone && (
-                        <>
-                          <a
-                            href={linkWhatsapp(l.telefone, `Olá ${l.nome.split(" ")[0]}! Tudo bem?`)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="WhatsApp"
-                            className="grid size-8 place-items-center rounded-[9px] border border-ok-bd bg-ok-bg text-ok"
-                          >
-                            <MessageCircle className="size-4" />
-                          </a>
-                          <a href={`tel:${l.telefone}`} title="Ligar" className="grid size-8 place-items-center rounded-[9px] border border-borda text-texto-2">
-                            <Phone className="size-4" />
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </article>
-                ))}
-                {daEtapa.length === 0 && <p className="px-1.5 py-3 text-xs text-fraco">Nenhum.</p>}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <QuadroLeads funil={funil} leads={cartoes} hoje={hoje} />
     </>
   );
 }

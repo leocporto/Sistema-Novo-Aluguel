@@ -396,3 +396,40 @@ describe("juntar cadastros de pessoas", () => {
     expect(visto).toBe(0);
   });
 });
+
+describe("CRM: entrada pública de leads", () => {
+  const USER_J = "00000000-0000-0000-0000-000000000013";
+  it("cria lead pelo token, distribui no rodízio e não repete o mesmo contato", async () => {
+    const org = await comoUsuario(USER_J, async () => (await db.query<{ id: string }>(`select public.criar_organizacao('Imob J') as id`)).rows[0].id);
+    const { token, c1, c2 } = await comoUsuario(USER_J, async () => {
+      await db.query(`update organizacoes set distribuicao_leads = 'rodizio' where id = $1`, [org]);
+      const c1 = (await db.query<{ id: string }>(`insert into pessoas (nome, papeis) values ('Ana Corretora','{corretor}') returning id`)).rows[0].id;
+      const c2 = (await db.query<{ id: string }>(`insert into pessoas (nome, papeis) values ('Beto Corretor','{corretor}') returning id`)).rows[0].id;
+      await db.query(`insert into imoveis (codigo) values ('AP-77')`);
+      const token = (await db.query<{ leads_token: string }>(`select leads_token from organizacoes where id = $1`, [org])).rows[0].leads_token;
+      return { token, c1, c2 };
+    });
+    // Visitante sem login (anon)
+    await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
+    const r1 = (await db.query<{ r: { id: string; duplicado: boolean } }>(`select public.receber_lead($1, $2) as r`, [token, JSON.stringify({ nome: "Carla", telefone: "(11) 98888-7777", imovel: "ap-77", origem: "instagram" })])).rows[0].r;
+    const r2 = (await db.query<{ r: { id: string; duplicado: boolean } }>(`select public.receber_lead($1, $2) as r`, [token, JSON.stringify({ nome: "Carla S", telefone: "11988887777", mensagem: "oi de novo" })])).rows[0].r;
+    const r3 = (await db.query<{ r: { id: string; duplicado: boolean } }>(`select public.receber_lead($1, $2) as r`, [token, JSON.stringify({ nome: "Davi", email: "d@x.com", funil: "venda" })])).rows[0].r;
+    await expect(db.query(`select public.receber_lead(gen_random_uuid(), '{"nome":"x","email":"a@a"}')`)).rejects.toThrow();
+    await expect(db.query(`select * from leads`)).rejects.toThrow(); // anon não lê a tabela
+    await db.exec(`reset role;`);
+    expect(r1.duplicado).toBe(false);
+    expect(r2).toEqual({ id: r1.id, duplicado: true });
+    const v = await comoUsuario(USER_J, async () => ({
+      leads: (await db.query<{ nome: string; corretor_id: string; funil: string; origem: string }>(`select nome, corretor_id, funil, origem from leads order by created_at`)).rows,
+      eventos: (await db.query(`select * from lead_eventos where lead_id = $1`, [r1.id])).rows.length,
+      imoveis: (await db.query(`select * from lead_imoveis where lead_id = $1`, [r1.id])).rows.length,
+    }));
+    expect(v.leads).toHaveLength(2);
+    expect(v.leads.map((l) => l.corretor_id).sort()).toEqual([c1, c2].sort());
+    expect(v.leads[1]).toMatchObject({ funil: "venda" });
+    expect(v.leads[0].origem).toBe("instagram");
+    expect(v.eventos).toBe(2);
+    expect(v.imoveis).toBe(1);
+    expect(r3.duplicado).toBe(false);
+  });
+});

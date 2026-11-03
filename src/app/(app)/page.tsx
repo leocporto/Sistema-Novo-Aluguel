@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
+  AlarmClock,
   AlertTriangle,
   ArrowLeftRight,
   BadgeDollarSign,
@@ -111,7 +112,7 @@ export default async function PainelPage() {
       supabase.from("lancamentos").select("valor, liquidado_em").eq("tipo", "receber").eq("status", "liquidado").gte("liquidado_em", desde),
       supabase.from("lancamentos").select("tipo, valor, vencimento, categoria").eq("status", "aberto"),
       supabase.from("repasses").select("valor_liquido, previsto_para").eq("status", "pendente"),
-      supabase.from("leads").select("status, created_at"),
+      supabase.from("leads").select("status, created_at, proximo_contato"),
       supabase
         .from("visitas")
         .select("id, data_hora, lead:leads(id, nome), imovel:imoveis(codigo)")
@@ -220,6 +221,9 @@ export default async function PainelPage() {
     avisos.push({ texto: `${comPendencia} cadastro(s) com documentação pendente`, href: "/pessoas?pendencia=1", tom: "alerta", icone: <FileClock /> });
   if (despesasVencidas.length)
     avisos.push({ texto: `${despesasVencidas.length} despesa(s) vencida(s) sem pagamento`, href: "/despesas", tom: "ruim", icone: <Wallet /> });
+  const retornos = leads.filter((l) => l.proximo_contato && l.proximo_contato <= hoje && l.status !== "ganho" && l.status !== "perdido").length;
+  if (!pessoal && retornos)
+    avisos.push({ texto: `${retornos} lead(s) para retornar hoje (follow-up)`, href: "/comercial", tom: "alerta", icone: <AlarmClock /> });
   if (!pessoal && novosAntigos.length)
     avisos.push({ texto: `${novosAntigos.length} lead(s) esperando atendimento há mais de 1 dia`, href: "/comercial", tom: "alerta", icone: <Inbox /> });
   for (const v of pessoal ? [] : visitasHoje)

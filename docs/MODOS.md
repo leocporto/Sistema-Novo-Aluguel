@@ -29,6 +29,7 @@ não ser que o Leo peça para o modo pessoal também.
 | Aluguéis do mês (baixa) | ✅ | ✅ | No pessoal o aluguel inteiro entra como receita no Financeiro |
 | **Repasses** (e extrato) | ✅ | ❌ | `/repasses` redireciona para `/` no pessoal |
 | **Comercial**: Leads, Visitas, Propostas, Tarefas, Metas | ✅ | ❌ | `/comercial/*` — o `comercial/layout.tsx` redireciona para `/` no pessoal |
+| **CRM**: funis de locação/venda/captação (Kanban arrastável), corretor e rodízio, prioridade, etiquetas, perfil de busca, vários imóveis por lead, sugestões, histórico de contatos, follow-up, motivo de perda, transferência, Reativar, Conversão, Captação de leads | ✅ | ❌ | Tudo dentro de `/comercial`. Entrada pública: `/l/[token]` (formulário) e `POST /api/leads/[token]` (API) — RPC `receber_lead` recusa organização no modo pessoal |
 | Comissões de corretor | ✅ | ❌ | Nascem ao aceitar proposta |
 | Papel **Corretor** em Pessoas | ✅ | ❌ | Escondido no cadastro e no filtro (a não ser que a pessoa já tenha) |
 | **Despesas** | ✅ escritório | ✅ imóveis | Mesma tela `/despesas`, conteúdo muda: imobiliária = despesas do **escritório**; pessoal = despesas **dos imóveis** (imóvel obrigatório, filtro por imóvel) |

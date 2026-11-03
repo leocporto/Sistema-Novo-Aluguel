@@ -31,6 +31,10 @@ existe em cada um está em **`docs/MODOS.md`** — consulte antes de criar ou mu
 - RLS por organização via `privado.org_ids()`; tabelas novas: `organizacao_id default privado.org_atual()`.
 - `tests/sql.test.ts` roda todas as migrações num Postgres embutido (PGlite).
 
+## Rotas públicas (sem login)
+- `/login`, `/l/[token]` (formulário de captação de leads) e `/api/leads/[token]` (API de leads) — lista em `ROTAS_PUBLICAS` de `src/proxy.ts`.
+- Escrita pública só por RPC `SECURITY DEFINER` validando o token (`receber_lead`), usando `clienteAnonimo()`.
+
 ## Telas e edição
 - Edição salva sozinha (`<Formulario automatico>`); criação usa botão "Cadastrar" (`JanelaCadastro`).
 - Linhas de lista clicáveis (`LinhaLink`); janelas sempre em portal com fundo desfocado.

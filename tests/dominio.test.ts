@@ -515,3 +515,49 @@ describe("taxa de administração zero", () => {
     expect(r.receitaImobiliaria).toBe(0);
   });
 });
+
+import { conversaoPorEtapa, horasAtePrimeiroAtendimento, paraReativar, resumoPor, rotuloEtapa, textoHoras } from "@/lib/dominio/crm";
+
+describe("CRM de leads", () => {
+  const l = (status: string, etapa_max: number, extra: Record<string, unknown> = {}) => ({
+    id: Math.random().toString(),
+    status,
+    etapa_max,
+    corretor_id: "a",
+    origem: "site",
+    funil: "locacao",
+    created_at: "2026-11-01T10:00:00Z",
+    atendido_em: null as string | null,
+    motivo_perda: null,
+    ...extra,
+  });
+  it("calcula conversão por etapa", () => {
+    const c = conversaoPorEtapa([l("novo", 0), l("visita", 2), l("perdido", 3), l("ganho", 4)]);
+    expect(c.map((x) => x.chegaram)).toEqual([4, 3, 3, 2, 1]);
+    expect(c[4].pctTotal).toBe(25);
+    expect(c[3].pctAnterior).toBeCloseTo(66.7);
+  });
+  it("resume por corretor com tempo médio de atendimento", () => {
+    const r = resumoPor(
+      [l("ganho", 4, { atendido_em: "2026-11-01T12:00:00Z" }), l("perdido", 1, { atendido_em: "2026-11-01T14:00:00Z" }), l("novo", 0, { corretor_id: "b" })],
+      (x) => x.corretor_id,
+    );
+    expect(r[0]).toMatchObject({ chave: "a", total: 2, ganhos: 1, perdidos: 1, conversao: 50, tempoMedioHoras: 3 });
+    expect(horasAtePrimeiroAtendimento("2026-11-01T10:00:00Z", null)).toBeNull();
+    expect(textoHoras(0.25)).toBe("15 min");
+    expect(textoHoras(30)).toBe("30 h");
+  });
+  it("acha leads para reativar e nomeia etapas por funil", () => {
+    const agora = new Date("2026-11-03T00:00:00Z").getTime();
+    const lista = [
+      { status: "perdido", perdido_em: "2026-09-01T00:00:00Z", ultimo_contato: null, created_at: "2026-08-01T00:00:00Z" },
+      { status: "perdido", perdido_em: "2026-10-30T00:00:00Z", ultimo_contato: null, created_at: "2026-08-01T00:00:00Z" },
+      { status: "em_atendimento", perdido_em: null, ultimo_contato: "2026-08-01T00:00:00Z", created_at: "2026-07-01T00:00:00Z" },
+      { status: "ganho", perdido_em: null, ultimo_contato: null, created_at: "2025-01-01T00:00:00Z" },
+    ];
+    expect(paraReativar(lista, agora)).toHaveLength(2);
+    expect(rotuloEtapa("captacao", "ganho")).toBe("Captado");
+    expect(rotuloEtapa("venda", "ganho")).toBe("Vendido");
+    expect(rotuloEtapa("locacao", "visita")).toBe("Visita");
+  });
+});
