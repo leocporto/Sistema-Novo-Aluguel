@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BotaoLink, Cabecalho, Celula, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
+import { BotaoLink, Cabecalho, Celula, LinhaVazia, Selo, Tabela } from "@/components/ui";
+import { PilulasLink } from "@/components/pilulas-link";
 import { obterContexto } from "@/lib/contexto";
-import { formatarDataBR } from "@/lib/dominio/datas";
+import { formatarDataBR, hojeISO, somarDias } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_GARANTIA } from "@/lib/tipos";
-import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { LinhaLink } from "@/components/linha-link";
 
 export const metadata: Metadata = { title: "Contratos" };
+
+const FILTROS: Record<string, string> = {
+  ativo: "Ativos",
+  vencendo: "Vencendo (90 dias)",
+  desocupacao: "Em desocupação",
+  encerrados: "Encerrados",
+  rascunho: "Rascunhos",
+  todos: "Todos",
+};
 
 type Linha = {
   id: string;
@@ -25,8 +34,11 @@ type Linha = {
 
 export default async function ContratosPage({ searchParams }: PageProps<"/contratos">) {
   const sp = await searchParams;
-  const status = typeof sp.status === "string" ? sp.status : "ativo";
+  const status = typeof sp.status === "string" && sp.status in FILTROS ? sp.status : "ativo";
   const { supabase } = await obterContexto();
+  const hoje = hojeISO();
+  const { data: desoc } = await supabase.from("contrato_desocupacoes").select("contrato_id").neq("status", "concluida");
+  const emDesocupacao = new Set((desoc ?? []).map((d) => d.contrato_id as string));
   let q = supabase
     .from("contratos")
     .select(
@@ -34,7 +46,10 @@ export default async function ContratosPage({ searchParams }: PageProps<"/contra
     )
     .order("numero", { ascending: false })
     .limit(300);
-  if (status) q = q.eq("status", status);
+  if (status === "vencendo") q = q.eq("status", "ativo").lte("data_fim", somarDias(hoje, 90));
+  else if (status === "desocupacao") q = q.in("id", [...emDesocupacao, "00000000-0000-0000-0000-000000000000"]);
+  else if (status === "encerrados") q = q.in("status", ["encerrado", "rescindido"]);
+  else if (status !== "todos") q = q.eq("status", status);
   const { data } = await q;
   const contratos = (data ?? []) as unknown as Linha[];
 
@@ -44,14 +59,12 @@ export default async function ContratosPage({ searchParams }: PageProps<"/contra
         titulo="Contratos de locação"
         acoes={<BotaoLink href="/contratos/novo">Novo contrato</BotaoLink>}
       />
-      <FiltroAutomatico className="mb-4 flex gap-2">
-        <Selecao name="status" defaultValue={status} className="max-w-48">
-          <option value="">Todos</option>
-          <option value="ativo">Ativos</option>
-          <option value="rescindido">Rescindidos</option>
-          <option value="encerrado">Encerrados</option>
-        </Selecao>
-      </FiltroAutomatico>
+      <PilulasLink
+        className="mb-4"
+        rotulo="Situação"
+        ativo={status === "ativo" ? "/contratos" : `/contratos?status=${status}`}
+        itens={Object.entries(FILTROS).map(([k, r]) => ({ href: k === "ativo" ? "/contratos" : `/contratos?status=${k}`, rotulo: r }))}
+      />
       <Tabela colunas={["Nº", "Imóvel", "Locatário", "Proprietário(s)", "Vigência", "Aluguel", "Garantia", "Situação"]}>
         {contratos.length === 0 && <LinhaVazia colunas={8}>Nenhum contrato.</LinhaVazia>}
         {contratos.map((c) => (
@@ -76,7 +89,10 @@ export default async function ContratosPage({ searchParams }: PageProps<"/contra
             <Celula>{formatarReais(c.valor_aluguel)}</Celula>
             <Celula>{ROTULO_GARANTIA[c.garantia_tipo]}</Celula>
             <Celula>
-              <Selo cor={c.status === "ativo" ? "verde" : "cinza"}>{c.status}</Selo>
+              <Selo cor={c.status === "ativo" ? (c.data_fim < hoje ? "amarelo" : "verde") : c.status === "rascunho" ? "amarelo" : "cinza"}>
+                {c.status === "ativo" && c.data_fim < hoje ? "prazo vencido" : c.status}
+              </Selo>
+              {emDesocupacao.has(c.id) && <div className="mt-1 text-xs text-alerta">em desocupação</div>}
             </Celula>
           </LinhaLink>
         ))}

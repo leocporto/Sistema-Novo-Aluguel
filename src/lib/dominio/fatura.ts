@@ -59,6 +59,26 @@ export interface ContratoParaFatura {
   encargos: EncargoRecorrente[];
   /** Desconto por pontualidade em % do aluguel (informativo na fatura). */
   descontoPontualidadePct?: number;
+  /** Carência: nos primeiros N meses o aluguel tem desconto (100% = isento). */
+  carenciaMeses?: number;
+  carenciaDescontoPct?: number;
+  /** Descontos temporários por competência (valor em centavos ou % do aluguel). */
+  descontos?: DescontoTemporario[];
+}
+
+export interface DescontoTemporario {
+  inicio: DataISO;
+  fim: DataISO | null;
+  tipo: "valor" | "pct";
+  /** Centavos (tipo valor) ou percentual (tipo pct). */
+  valor: number;
+  motivo: string | null;
+}
+
+/** Desconto por pagar até o vencimento (centavos), sobre o aluguel. */
+export function descontoPontualidade(aluguel: Centavos, pct: number, pagoEm: DataISO, vencimento: DataISO): Centavos {
+  if (!pct || pct <= 0 || pagoEm > vencimento) return 0;
+  return percentual(aluguel, Math.min(100, pct));
 }
 
 export interface FaturaGerada {
@@ -115,6 +135,26 @@ export function gerarFatura(contrato: ContratoParaFatura, competencia: DataISO):
     valor: aluguel,
     destino: "proprietario",
   });
+
+  // Carência: desconto no aluguel nos primeiros meses do contrato.
+  let descontado = 0;
+  if (contrato.carenciaMeses && contrato.carenciaMeses > 0 && comp < somarMeses(inicioDoMes(contrato.dataInicio), contrato.carenciaMeses)) {
+    const pct = Math.min(100, Math.max(0, contrato.carenciaDescontoPct ?? 100));
+    const d = percentual(aluguel, pct);
+    if (d > 0) {
+      descontado += d;
+      itens.push({ descricao: pct >= 100 ? "Carência (aluguel isento)" : `Carência (${pct}% de desconto)`, tipo: "desconto", valor: -d, destino: "proprietario" });
+    }
+  }
+  // Descontos temporários combinados (nunca passam do aluguel).
+  for (const d of contrato.descontos ?? []) {
+    if (inicioDoMes(d.inicio) > comp || (d.fim && inicioDoMes(d.fim) < comp)) continue;
+    const bruto = d.tipo === "pct" ? percentual(aluguel, d.valor) : Math.round(d.valor);
+    const v = Math.min(bruto, aluguel - descontado);
+    if (v <= 0) continue;
+    descontado += v;
+    itens.push({ descricao: `Desconto${d.motivo ? ` — ${d.motivo}` : ""}`, tipo: "desconto", valor: -v, destino: "proprietario" });
+  }
 
   for (const e of contrato.encargos) {
     if (e.inicio && inicioDoMes(e.inicio) > comp) continue;

@@ -91,3 +91,28 @@ export function calcularRescisao(p: ParametrosRescisao): ResultadoRescisao {
     totalDevido: saldo + multa + debitos - caucao,
   };
 }
+
+export interface LinhaAcerto {
+  descricao: string;
+  /** Centavos: positivo = locatário deve; negativo = a devolver/abater. */
+  valor: Centavos;
+}
+
+/**
+ * Acerto de saída: saldo de aluguel + multa + reparos da vistoria + outros
+ * débitos − caução a devolver. Faturas em aberto de períodos já cobertos
+ * continuam como faturas (não entram aqui, para não cobrar duas vezes).
+ */
+export function acertoDeSaida(
+  p: Omit<ParametrosRescisao, "debitosPendentes" | "caucao">,
+  extras: { reparos: Centavos; outros: Centavos; caucao: Centavos },
+): { linhas: LinhaAcerto[]; total: Centavos; rescisao: ResultadoRescisao } {
+  const r = calcularRescisao({ ...p, debitosPendentes: 0, caucao: 0 });
+  const linhas: LinhaAcerto[] = [];
+  if (r.saldoAluguel) linhas.push({ descricao: `Saldo de aluguel (${r.diasSaldo} dias)`, valor: r.saldoAluguel });
+  if (r.multa) linhas.push({ descricao: `Multa rescisória — ${r.multaFundamento}`, valor: r.multa });
+  if (extras.reparos) linhas.push({ descricao: "Reparos apontados na vistoria de saída", valor: extras.reparos });
+  if (extras.outros) linhas.push({ descricao: "Outros débitos (contas, condomínio, IPTU do período…)", valor: extras.outros });
+  if (extras.caucao) linhas.push({ descricao: "(−) Caução a devolver/abater", valor: -extras.caucao });
+  return { linhas, total: linhas.reduce((s, l) => s + l.valor, 0), rescisao: r };
+}

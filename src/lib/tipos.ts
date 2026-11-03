@@ -150,6 +150,12 @@ export interface Contrato {
   seguro_incendio_vencimento: string | null;
   data_rescisao: string | null;
   observacoes: string | null;
+  carencia_meses?: number;
+  carencia_desconto_pct?: Num;
+  desconto_pontualidade_pct?: Num;
+  renovacao_automatica?: boolean;
+  aviso_fim_dias?: number;
+  ativado_em?: string | null;
 }
 
 export interface ContratoParte {

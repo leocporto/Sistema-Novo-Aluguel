@@ -49,6 +49,11 @@ export default async function FaturaPage({ params, searchParams }: PageProps<"/f
             <Selo cor={atrasada ? "vermelho" : fatura.status === "paga" ? "verde" : fatura.status === "aberta" ? "amarelo" : "cinza"}>
               {atrasada ? "em atraso" : fatura.status}
             </Selo>
+            {fatura.status === "paga" && (
+              <Link href={`/faturas/${fatura.id}/recibo`} className={classeBotao("secundario")}>
+                Recibo
+              </Link>
+            )}
             <BotaoImprimir />
           </>
         }

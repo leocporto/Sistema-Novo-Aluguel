@@ -1,512 +1,262 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AlarmClock, MessageCircle, ShieldAlert, TrendingUp } from "lucide-react";
+import type { ReactNode } from "react";
 import { BotaoExcluir } from "@/components/botao-excluir";
-import { BotaoEnviar, Formulario } from "@/components/formulario";
-import {
-  AreaTexto,
-  Aviso,
-  Cabecalho,
-  Campo,
-  Cartao,
-  Celula,
-  Definicao,
-  Entrada,
-  Grade,
-  LinhaVazia,
-  Selecao,
-  Selo,
-  Tabela,
-  classeBotao,
-} from "@/components/ui";
+import { Formulario } from "@/components/formulario";
+import { AreaTexto, Campo, Cartao, Definicao, Entrada, Grade, Selecao, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
-import { formatarCompetencia, formatarDataBR, hojeISO, inicioDoMes } from "@/lib/dominio/datas";
-import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
-import { formatarDocumento } from "@/lib/dominio/documentos";
+import { diasEntre, formatarDataBR, hojeISO, somarDias } from "@/lib/dominio/datas";
+import { formatarReais } from "@/lib/dominio/dinheiro";
+import { ROTULO_TIPO_GARANTIA, situacaoGarantia } from "@/lib/dominio/garantias";
 import { INDICES, NOME_INDICE, proximoReajuste } from "@/lib/dominio/reajuste";
-import { calcularRescisao } from "@/lib/dominio/rescisao";
-import { calcularReajusteDoContrato, carregarContrato } from "@/lib/servicos/locacao";
-import { ROTULO_GARANTIA, ROTULO_PAPEL, ROTULO_REPASSE, type Fatura, type Pessoa, type Repasse } from "@/lib/tipos";
-import { LinhaLink } from "@/components/linha-link";
-import {
-  adicionarEncargo,
-  adicionarParte,
-  aplicarReajuste,
-  atualizarContrato,
-  encerrarContrato,
-  excluirContrato,
-  gerarFaturaManual,
-  removerEncargo,
-  removerParte,
-} from "../actions";
+import { carregarContrato } from "@/lib/servicos/locacao";
+import { ROTULO_REPASSE } from "@/lib/tipos";
+import { linkWhatsapp } from "@/lib/whatsapp";
+import { atualizarContrato, excluirContrato } from "../actions";
 
 export const metadata: Metadata = { title: "Contrato" };
 
-const corFatura = { aberta: "amarelo", paga: "verde", cancelada: "cinza" } as const;
-
-export default async function ContratoPage({ params, searchParams }: PageProps<"/contratos/[id]">) {
+export default async function ContratoResumo({ params }: PageProps<"/contratos/[id]">) {
   const { id } = await params;
-  const sp = await searchParams;
   const { supabase, organizacao } = await obterContexto();
   const pessoal = organizacao.modo === "pessoal";
   const dados = await carregarContrato(supabase, id);
   if (!dados) notFound();
-  const { contrato: c, imovel, partes, encargos } = dados;
-
-  const [{ data: faturasRaw }, { data: repassesRaw }, { data: reajustes }, { data: pessoas }] = await Promise.all([
-    supabase.from("faturas").select("*").eq("contrato_id", id).order("competencia", { ascending: false }),
-    supabase.from("repasses").select("*, pessoa:pessoas(nome)").eq("contrato_id", id).order("competencia", { ascending: false }),
-    supabase.from("contrato_reajustes").select("*").eq("contrato_id", id).order("data_reajuste", { ascending: false }),
-    supabase.from("pessoas").select("id, nome").order("nome"),
-  ]);
-  const faturas = (faturasRaw ?? []) as Fatura[];
-  const repasses = (repassesRaw ?? []) as (Repasse & { pessoa: { nome: string } })[];
+  const { contrato: c, partes } = dados;
   const hoje = hojeISO();
-  const abertas = faturas.filter((f) => f.status === "aberta");
-  const emAtraso = abertas.filter((f) => f.vencimento < hoje);
+  const { data: garantias } = await supabase.from("contrato_garantias").select("tipo, valor, fim, status, pessoa:pessoas(nome)").eq("contrato_id", id);
 
-  // Reajuste: próxima data e prévia com índices cadastrados
+  const locatarios = partes.filter((p) => p.papel === "locatario");
+  const loc = locatarios[0]?.pessoa;
   const dataReajuste = proximoReajuste(c.data_base_reajuste, c.periodicidade_reajuste_meses);
-  const previa = await calcularReajusteDoContrato(supabase, c, dataReajuste);
+  const fim = c.data_rescisao ?? c.data_fim;
+  const diasParaFim = diasEntre(hoje, fim);
+  const avisoFim = c.aviso_fim_dias ?? 60;
+  const ativo = c.status === "ativo";
+  type G = { tipo: string; valor: number | null; fim: string | null; status: string; pessoa: { nome: string } | null };
+  const gs = (garantias ?? []) as unknown as G[];
+  const ativas = gs.filter((g) => g.status === "ativa");
 
-  // Rescisão: simulação via parâmetros da URL
-  const entrega = typeof sp.entrega === "string" ? sp.entrega : "";
-  const ultimaPaga = faturas.find((f) => f.status === "paga");
-  const pagoAtePadrao = ultimaPaga?.periodo_fim ?? c.data_inicio;
-  const rescisao = entrega
-    ? calcularRescisao({
-        valorAluguel: paraCentavos(c.valor_aluguel),
-        dataInicio: c.data_inicio,
-        prazoMeses: c.prazo_meses,
-        dataEntrega: entrega,
-        pagoAte: typeof sp.pagoAte === "string" && sp.pagoAte ? sp.pagoAte : pagoAtePadrao,
-        multaAlugueis: Number(c.multa_rescisoria_alugueis),
-        isentarMulta: sp.isentar === "on",
-        avisoPrevioCumprido: sp.aviso !== "nao",
-        debitosPendentes: abertas.reduce((s, f) => s + paraCentavos(f.valor_total), 0),
-        caucao: c.garantia_tipo === "caucao" ? paraCentavos(c.garantia_valor) : 0,
-      })
-    : null;
+  const avisos: { icone: ReactNode; texto: string; acao?: ReactNode; tom: "ruim" | "alerta" | "info" }[] = [];
+  if (ativo && diasParaFim <= avisoFim)
+    avisos.push({
+      icone: <AlarmClock />,
+      texto: diasParaFim < 0 ? `O prazo do contrato venceu em ${formatarDataBR(fim)} (segue por prazo indeterminado).` : `O contrato vence em ${diasParaFim} dia(s), em ${formatarDataBR(fim)}.`,
+      tom: diasParaFim < 0 ? "ruim" : "alerta",
+      acao: (
+        <span className="flex flex-wrap gap-2">
+          {loc?.telefone && (
+            <a
+              href={linkWhatsapp(loc.telefone, `Olá ${loc.nome.split(" ")[0]}! O contrato de locação do imóvel vence em ${formatarDataBR(fim)}. Vamos conversar sobre a renovação?`)}
+              target="_blank"
+              rel="noreferrer"
+              className={classeBotao("secundario", "sm")}
+            >
+              <MessageCircle className="size-3.5" /> Avisar locatário
+            </a>
+          )}
+          <Link href={`/contratos/${id}/reajustes`} className={classeBotao("secundario", "sm")}>
+            Renovar
+          </Link>
+        </span>
+      ),
+    });
+  if (ativo && dataReajuste <= somarDias(hoje, 30))
+    avisos.push({ icone: <TrendingUp />, texto: `Reajuste previsto para ${formatarDataBR(dataReajuste)}.`, tom: "info", acao: <Link href={`/contratos/${id}/reajustes`} className={classeBotao("secundario", "sm")}>Ver reajuste</Link> });
+  for (const g of ativas) {
+    const s = situacaoGarantia(g, hoje);
+    if (s === "vencida" || s === "vencendo")
+      avisos.push({
+        icone: <ShieldAlert />,
+        texto: `${ROTULO_TIPO_GARANTIA[g.tipo]} ${s === "vencida" ? "venceu" : "vence"} em ${formatarDataBR(g.fim)}.`,
+        tom: s === "vencida" ? "ruim" : "alerta",
+        acao: <Link href={`/contratos/${id}/partes`} className={classeBotao("secundario", "sm")}>Ver garantias</Link>,
+      });
+  }
+  if (ativo && c.seguro_incendio_vencimento && c.seguro_incendio_vencimento <= somarDias(hoje, 30))
+    avisos.push({ icone: <ShieldAlert />, texto: `Seguro incêndio ${c.seguro_incendio_vencimento < hoje ? "vencido" : "vencendo"} em ${formatarDataBR(c.seguro_incendio_vencimento)}.`, tom: "alerta" });
+  const corTom = { ruim: "border-ruim-bd bg-ruim-bg text-ruim", alerta: "border-alerta-bd bg-alerta-bg text-alerta", info: "border-acento-bd bg-acento-bg text-acento-hot" };
+  const v = (n: unknown) => (n === null || n === undefined ? "" : String(n));
 
   return (
-    <>
-      <Cabecalho
-        titulo={`Contrato #${c.numero}${c.codigo ? ` · ${c.codigo}` : ""}`}
-        descricao={
-          <>
-            <Link href={`/imoveis/${imovel.id}`} className="text-acento hover:underline">
-              {imovel.codigo}
-            </Link>{" "}
-            — {[imovel.logradouro, imovel.numero, imovel.complemento, imovel.bairro, imovel.cidade].filter(Boolean).join(", ")}
-          </>
-        }
-        acoes={
-          <>
-            <Selo cor={c.status === "ativo" ? "verde" : "cinza"}>{c.status}</Selo>
-            <Link href={`/contratos/${id}/documento`} className={classeBotao("secundario")}>
-              Gerar contrato (documento)
-            </Link>
-          </>
-        }
-      />
-
-      {emAtraso.length > 0 && (
-        <div className="mb-6">
-          <Aviso tipo="erro">
-            {emAtraso.length} fatura(s) em atraso, total {formatarReais(emAtraso.reduce((s, f) => s + Number(f.valor_total), 0))}.
-          </Aviso>
-        </div>
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
-          <Cartao titulo="Resumo">
-            <Definicao
-              itens={[
-                ["Aluguel atual", formatarReais(c.valor_aluguel)],
-                ["Vigência", `${formatarDataBR(c.data_inicio)} a ${formatarDataBR(c.data_fim)} (${c.prazo_meses} meses)`],
-                ["Vencimento", `Dia ${c.dia_vencimento} · mês ${c.modalidade}`],
-                ["Reajuste", `${NOME_INDICE[c.indice_reajuste as keyof typeof NOME_INDICE] ?? c.indice_reajuste} a cada ${c.periodicidade_reajuste_meses} meses`],
-                ["Próximo reajuste", formatarDataBR(dataReajuste)],
-                ...(pessoal
-                  ? []
-                  : ([
-                      ["Taxa de administração", `${Number(c.taxa_administracao_pct)}%`],
-                      ["Intermediação", `${Number(c.taxa_intermediacao_pct)}% do 1º aluguel`],
-                      ["Repasse", `${ROTULO_REPASSE[c.tipo_repasse]} · ${c.dias_repasse} dia(s)`],
-                    ] as [string, string][])),
-                ["Atraso", `Multa ${Number(c.multa_atraso_pct)}% + juros ${Number(c.juros_mes_pct)}% a.m.`],
-                ["Garantia", `${ROTULO_GARANTIA[c.garantia_tipo]}${c.garantia_valor ? ` · ${formatarReais(c.garantia_valor)}` : ""}`],
-                ["Seguro incêndio", c.seguro_incendio_apolice ? `${c.seguro_incendio_apolice} (vence ${formatarDataBR(c.seguro_incendio_vencimento)})` : "—"],
-                ["Rescisão/entrega", formatarDataBR(c.data_rescisao)],
-              ]}
-            />
-          </Cartao>
-
-          <Cartao
-            titulo="Cobranças (faturas)"
-            acoes={
-              <Formulario acao={gerarFaturaManual} className="flex items-center gap-2">
-                <input type="hidden" name="contrato_id" value={id} />
-                <Entrada type="month" name="competencia" defaultValue={inicioDoMes(hoje).slice(0, 7)} className="w-40" />
-                <BotaoEnviar variante="secundario">Gerar fatura</BotaoEnviar>
-              </Formulario>
-            }
-          >
-            <Tabela colunas={["Nº", "Competência", "Vencimento", "Valor", "Situação", "Pago em"]}>
-              {faturas.length === 0 && <LinhaVazia colunas={6}>Nenhuma fatura gerada.</LinhaVazia>}
-              {faturas.map((f) => (
-                <LinhaLink href={`/faturas/${f.id}`} key={f.id}>
-                  <Celula>
-                    <Link href={`/faturas/${f.id}`} className="text-acento hover:underline">
-                      #{f.numero}
-                    </Link>
-                  </Celula>
-                  <Celula>{formatarCompetencia(f.competencia)}</Celula>
-                  <Celula>{formatarDataBR(f.vencimento)}</Celula>
-                  <Celula>{formatarReais(f.valor_pago ?? f.valor_total)}</Celula>
-                  <Celula>
-                    <Selo cor={f.status === "aberta" && f.vencimento < hoje ? "vermelho" : corFatura[f.status]}>
-                      {f.status === "aberta" && f.vencimento < hoje ? "em atraso" : f.status}
-                    </Selo>
-                  </Celula>
-                  <Celula>{formatarDataBR(f.pago_em)}</Celula>
-                </LinhaLink>
-              ))}
-            </Tabela>
-          </Cartao>
-
-          {!pessoal && (
-          <Cartao titulo="Repasses ao proprietário">
-            <Tabela colunas={["Competência", "Proprietário", "Bruto", "Taxas", "Impostos", "Líquido", "Previsto", "Situação"]}>
-              {repasses.length === 0 && <LinhaVazia colunas={8}>Nenhum repasse.</LinhaVazia>}
-              {repasses.map((r) => (
-                <tr key={r.id}>
-                  <Celula>{formatarCompetencia(r.competencia)}</Celula>
-                  <Celula>{r.pessoa.nome}</Celula>
-                  <Celula>{formatarReais(r.valor_bruto)}</Celula>
-                  <Celula>{formatarReais(Number(r.taxa_administracao) + Number(r.taxa_intermediacao))}</Celula>
-                  <Celula>{formatarReais(Number(r.irrf) + Number(r.imposto ?? 0))}</Celula>
-                  <Celula className="font-medium">{formatarReais(r.valor_liquido)}</Celula>
-                  <Celula>{formatarDataBR(r.previsto_para)}</Celula>
-                  <Celula>
-                    <Selo cor={r.status === "pago" ? "verde" : r.status === "pendente" ? "amarelo" : "cinza"}>{r.status}</Selo>
-                  </Celula>
-                </tr>
-              ))}
-            </Tabela>
-          </Cartao>
-          )}
-
-          <Cartao titulo="Editar condições">
-            <Formulario acao={atualizarContrato} automatico>
-              <input type="hidden" name="id" value={id} />
-              <Grade colunas={4}>
-                <Campo rotulo="Código interno">
-                  <Entrada name="codigo" defaultValue={c.codigo ?? ""} />
-                </Campo>
-                <Campo rotulo="Dia do vencimento">
-                  <Entrada type="number" min={1} max={31} name="dia_vencimento" defaultValue={c.dia_vencimento} />
-                </Campo>
-                <Campo rotulo="Modalidade">
-                  <Selecao name="modalidade" defaultValue={c.modalidade}>
-                    <option value="vencido">Mês vencido</option>
-                    <option value="antecipado">Mês antecipado</option>
-                  </Selecao>
-                </Campo>
-                <Campo rotulo="Índice">
-                  <Selecao name="indice_reajuste" defaultValue={c.indice_reajuste}>
-                    {INDICES.map((i) => (
-                      <option key={i} value={i}>
-                        {NOME_INDICE[i]}
-                      </option>
-                    ))}
-                  </Selecao>
-                </Campo>
-                {pessoal ? (
-                  <>
-                    <input type="hidden" name="taxa_administracao_pct" value={String(c.taxa_administracao_pct)} />
-                    <input type="hidden" name="tipo_repasse" value={c.tipo_repasse} />
-                    <input type="hidden" name="dias_repasse" value={String(c.dias_repasse)} />
-                  </>
-                ) : (
-                  <>
-                <Campo rotulo="Taxa adm. (%)" dica="Pode ser 0%.">
-                  <Entrada name="taxa_administracao_pct" defaultValue={String(c.taxa_administracao_pct)} />
-                </Campo>
-                <Campo rotulo="Tipo de repasse">
-                  <Selecao name="tipo_repasse" defaultValue={c.tipo_repasse}>
-                    {Object.entries(ROTULO_REPASSE).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </Selecao>
-                </Campo>
-                <Campo rotulo="Dias para repasse">
-                  <Entrada type="number" min={0} name="dias_repasse" defaultValue={c.dias_repasse} />
-                </Campo>
-                  </>
-                )}
-                <Campo rotulo="Carência (dias)">
-                  <Entrada type="number" min={0} name="carencia_dias" defaultValue={c.carencia_dias} />
-                </Campo>
-                <Campo rotulo="Multa atraso (%)">
-                  <Entrada name="multa_atraso_pct" defaultValue={String(c.multa_atraso_pct)} />
-                </Campo>
-                <Campo rotulo="Juros (% a.m.)">
-                  <Entrada name="juros_mes_pct" defaultValue={String(c.juros_mes_pct)} />
-                </Campo>
-                <Campo rotulo="Garantia">
-                  <Selecao name="garantia_tipo" defaultValue={c.garantia_tipo}>
-                    {Object.entries(ROTULO_GARANTIA).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </Selecao>
-                </Campo>
-                <Campo rotulo="Valor garantia (R$)">
-                  <Entrada name="garantia_valor" defaultValue={c.garantia_valor ? String(c.garantia_valor) : ""} />
-                </Campo>
-                <Campo rotulo="Detalhes da garantia" className="md:col-span-2">
-                  <Entrada name="garantia_detalhes" defaultValue={c.garantia_detalhes ?? ""} />
-                </Campo>
-                <Campo rotulo="Apólice seguro incêndio">
-                  <Entrada name="seguro_incendio_apolice" defaultValue={c.seguro_incendio_apolice ?? ""} />
-                </Campo>
-                <Campo rotulo="Vencimento seguro">
-                  <Entrada type="date" name="seguro_incendio_vencimento" defaultValue={c.seguro_incendio_vencimento ?? ""} />
-                </Campo>
-              </Grade>
-              {pessoal ? (
-                c.repassar_multa_juros && <input type="hidden" name="repassar_multa_juros" value="on" />
-              ) : (
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="repassar_multa_juros" defaultChecked={c.repassar_multa_juros} />
-                  Repassar multa e juros ao proprietário
-                </label>
-              )}
-              <Campo rotulo="Observações">
-                <AreaTexto name="observacoes" defaultValue={c.observacoes ?? ""} />
-              </Campo>
-            </Formulario>
-          </Cartao>
-        </div>
-
-        <div className="space-y-6">
-          <Cartao titulo="Partes">
-            <ul className="mb-4 space-y-2 text-sm">
-              {partes.map((p) => (
-                <li key={`${p.pessoa_id}-${p.papel}`} className="flex items-start justify-between gap-2">
-                  <div>
-                    <Link href={`/pessoas/${p.pessoa_id}`} className="font-medium text-acento hover:underline">
-                      {p.pessoa.nome}
-                    </Link>
-                    <div className="text-xs text-mudo">
-                      {ROTULO_PAPEL[p.papel]}
-                      {p.papel === "proprietario" && ` · ${Number(p.percentual)}%`} · {formatarDocumento(p.pessoa.documento)}
-                    </div>
-                  </div>
-                  <form action={removerParte}>
-                    <input type="hidden" name="contrato_id" value={id} />
-                    <input type="hidden" name="pessoa_id" value={p.pessoa_id} />
-                    <input type="hidden" name="papel" value={p.papel} />
-                    <button className="text-xs text-ruim hover:underline">remover</button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-            <Formulario
-              key={partes.map((p) => `${p.pessoa_id}-${p.papel}`).join(",")}
-              acao={adicionarParte}
-              automatico
-              salvarQuando="pessoa_id"
-              className="space-y-3 border-t border-borda-suave pt-4"
-            >
-              <input type="hidden" name="contrato_id" value={id} />
-              <p className="text-xs text-mudo">Adicionar: escolha o papel e depois a pessoa — entra na hora.</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Campo rotulo="Papel">
-                  <Selecao name="papel" defaultValue="fiador">
-                    <option value="locatario">Locatário</option>
-                    <option value="fiador">Fiador</option>
-                    <option value="proprietario">Proprietário</option>
-                  </Selecao>
-                </Campo>
-                <Campo rotulo="% (proprietário)">
-                  <Entrada name="percentual" inputMode="decimal" placeholder="100" />
-                </Campo>
+    <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+      <div className="space-y-6">
+        {avisos.length > 0 && (
+          <div className="entrar-cascata space-y-2">
+            {avisos.map((a, i) => (
+              <div key={i} className={`flex flex-wrap items-center gap-3 rounded-[14px] border px-4 py-3 text-sm ${corTom[a.tom]}`}>
+                <span className="[&>svg]:size-4">{a.icone}</span>
+                <span className="min-w-0 flex-1 font-medium">{a.texto}</span>
+                {a.acao}
               </div>
-              <Campo rotulo="Pessoa">
-                <Selecao name="pessoa_id" required defaultValue="">
-                  <option value="" disabled>
-                    Selecione…
-                  </option>
-                  {((pessoas ?? []) as Pick<Pessoa, "id" | "nome">[]).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome}
+            ))}
+          </div>
+        )}
+        <Cartao titulo="Resumo">
+          <Definicao
+            itens={[
+              ["Locatário(s)", locatarios.map((p) => p.pessoa.nome).join(", ") || "—"],
+              ["Aluguel atual", formatarReais(c.valor_aluguel)],
+              ["Vigência", `${formatarDataBR(c.data_inicio)} a ${formatarDataBR(c.data_fim)} (${c.prazo_meses} meses)${c.renovacao_automatica ? " · renova sozinho" : ""}`],
+              ["Vencimento", `Dia ${c.dia_vencimento} · mês ${c.modalidade}`],
+              ["Reajuste", `${NOME_INDICE[c.indice_reajuste as keyof typeof NOME_INDICE] ?? c.indice_reajuste} a cada ${c.periodicidade_reajuste_meses} meses · próximo ${formatarDataBR(dataReajuste)}`],
+              ...(Number(c.carencia_meses ?? 0) > 0
+                ? ([["Carência", `${c.carencia_meses} mês(es) com ${Number(c.carencia_desconto_pct ?? 100)}% de desconto no aluguel`]] as [string, string][])
+                : []),
+              ...(Number(c.desconto_pontualidade_pct ?? 0) > 0 ? ([["Pontualidade", `${Number(c.desconto_pontualidade_pct)}% de desconto pagando até o vencimento`]] as [string, string][]) : []),
+              ...(pessoal
+                ? []
+                : ([
+                    ["Taxa de administração", `${Number(c.taxa_administracao_pct)}%`],
+                    ["Intermediação", `${Number(c.taxa_intermediacao_pct)}% do 1º aluguel`],
+                    ["Repasse", `${ROTULO_REPASSE[c.tipo_repasse]} · ${c.dias_repasse} dia(s)`],
+                  ] as [string, string][])),
+              ["Atraso", `Multa ${Number(c.multa_atraso_pct)}% + juros ${Number(c.juros_mes_pct)}% a.m.${c.carencia_dias ? ` · tolerância ${c.carencia_dias} dia(s)` : ""}`],
+              ["Garantias", ativas.length ? ativas.map((g) => `${ROTULO_TIPO_GARANTIA[g.tipo]}${g.pessoa ? ` (${g.pessoa.nome})` : ""}${g.valor ? ` ${formatarReais(g.valor)}` : ""}`).join(" · ") : "—"],
+              ["Seguro incêndio", c.seguro_incendio_apolice ? `${c.seguro_incendio_apolice} (vence ${formatarDataBR(c.seguro_incendio_vencimento)})` : "—"],
+              ["Rescisão/entrega", formatarDataBR(c.data_rescisao)],
+            ]}
+          />
+        </Cartao>
+
+        <Cartao titulo="Condições do contrato">
+          <Formulario acao={atualizarContrato} automatico>
+            <input type="hidden" name="id" value={id} />
+            <input type="hidden" name="_repassar" value="1" />
+            <input type="hidden" name="_renovacao" value="1" />
+            <Grade colunas={4}>
+              <Campo rotulo="Código interno">
+                <Entrada name="codigo" defaultValue={c.codigo ?? ""} />
+              </Campo>
+              <Campo rotulo="Dia do vencimento">
+                <Entrada type="number" min={1} max={31} name="dia_vencimento" defaultValue={c.dia_vencimento} />
+              </Campo>
+              <Campo rotulo="Modalidade">
+                <Selecao name="modalidade" defaultValue={c.modalidade}>
+                  <option value="vencido">Mês vencido</option>
+                  <option value="antecipado">Mês antecipado</option>
+                </Selecao>
+              </Campo>
+              <Campo rotulo="Índice">
+                <Selecao name="indice_reajuste" defaultValue={c.indice_reajuste}>
+                  {INDICES.map((i) => (
+                    <option key={i} value={i}>
+                      {NOME_INDICE[i]}
                     </option>
                   ))}
                 </Selecao>
               </Campo>
-            </Formulario>
-          </Cartao>
-
-          <Cartao titulo="Encargos mensais">
-            <ul className="mb-4 space-y-2 text-sm">
-              {encargos.map((e) => (
-                <li key={e.id} className="flex items-start justify-between gap-2">
-                  <div>
-                    {e.descricao} · <strong>{formatarReais(e.valor)}</strong>
-                    <div className="text-xs text-mudo">
-                      destino: {e.destino}
-                      {e.inicio && ` · de ${formatarCompetencia(e.inicio)}`}
-                      {e.fim && ` até ${formatarCompetencia(e.fim)}`}
-                    </div>
-                  </div>
-                  <form action={removerEncargo}>
-                    <input type="hidden" name="contrato_id" value={id} />
-                    <input type="hidden" name="id" value={e.id} />
-                    <button className="text-xs text-ruim hover:underline">remover</button>
-                  </form>
-                </li>
-              ))}
-              {encargos.length === 0 && <li className="text-mudo">Nenhum encargo.</li>}
-            </ul>
-            <Formulario acao={adicionarEncargo} className="space-y-3">
-              <input type="hidden" name="contrato_id" value={id} />
-              <Campo rotulo="Descrição">
-                <Entrada name="descricao" required placeholder="IPTU 2027, taxa de lixo…" />
+              {!pessoal && (
+                <>
+                  <Campo rotulo="Taxa adm. (%)" dica="Pode ser 0%.">
+                    <Entrada name="taxa_administracao_pct" defaultValue={v(c.taxa_administracao_pct)} />
+                  </Campo>
+                  <Campo rotulo="Tipo de repasse">
+                    <Selecao name="tipo_repasse" defaultValue={c.tipo_repasse}>
+                      {Object.entries(ROTULO_REPASSE).map(([k, r]) => (
+                        <option key={k} value={k}>
+                          {r}
+                        </option>
+                      ))}
+                    </Selecao>
+                  </Campo>
+                  <Campo rotulo="Dias para repasse">
+                    <Entrada type="number" min={0} name="dias_repasse" defaultValue={c.dias_repasse} />
+                  </Campo>
+                </>
+              )}
+              <Campo rotulo="Tolerância de atraso (dias)">
+                <Entrada type="number" min={0} name="carencia_dias" defaultValue={c.carencia_dias} />
               </Campo>
-              <div className="grid grid-cols-2 gap-2">
-                <Campo rotulo="Valor (R$)">
-                  <Entrada name="valor" required inputMode="decimal" />
-                </Campo>
-                <Campo rotulo="Destino">
-                  <Selecao name="destino" defaultValue="proprietario">
-                    <option value="proprietario">Proprietário</option>
-                    <option value="terceiro">Terceiro</option>
-                    <option value="imobiliaria">Imobiliária</option>
-                  </Selecao>
-                </Campo>
-                <Campo rotulo="A partir de">
-                  <Entrada type="month" name="inicio" />
-                </Campo>
-                <Campo rotulo="Até">
-                  <Entrada type="month" name="fim" />
-                </Campo>
-              </div>
-              <input type="hidden" name="tipo" value="outro" />
-              <BotaoEnviar variante="secundario">Adicionar encargo</BotaoEnviar>
-            </Formulario>
-          </Cartao>
-
-          <Cartao titulo="Reajuste">
-            <p className="text-sm text-texto-2">
-              Próximo aniversário: <strong>{formatarDataBR(dataReajuste)}</strong>
-            </p>
-            {previa.mesesFaltantes.length > 0 ? (
-              <p className="mt-2 text-xs text-alerta">
-                Faltam índices de {previa.mesesFaltantes.length} mês(es) do {c.indice_reajuste}.{" "}
-                <Link href="/indices" className="underline">
-                  Cadastrar índices
-                </Link>
-              </p>
-            ) : (
-              <p className="mt-2 text-sm">
-                Acumulado: <strong>{previa.percentualAcumulado.toFixed(4)}%</strong> → novo aluguel{" "}
-                <strong>{formatarReais(paraReais(previa.valorNovo))}</strong>
-              </p>
-            )}
-            <Formulario acao={aplicarReajuste} className="mt-3 space-y-3">
-              <input type="hidden" name="contrato_id" value={id} />
-              <Campo rotulo="Data do reajuste">
-                <Entrada type="date" name="data_reajuste" defaultValue={dataReajuste} />
+              <Campo rotulo="Multa atraso (%)">
+                <Entrada name="multa_atraso_pct" defaultValue={v(c.multa_atraso_pct)} />
               </Campo>
-              <Campo rotulo="Percentual manual (opcional)" dica="Use para acordos ou índice negociado.">
-                <Entrada name="percentual_manual" inputMode="decimal" />
+              <Campo rotulo="Juros (% a.m.)">
+                <Entrada name="juros_mes_pct" defaultValue={v(c.juros_mes_pct)} />
               </Campo>
-              <BotaoEnviar variante="secundario" confirmar="Aplicar o reajuste ao contrato?">
-                Aplicar reajuste
-              </BotaoEnviar>
-            </Formulario>
-            {(reajustes ?? []).length > 0 && (
-              <ul className="mt-4 space-y-1 border-t border-borda-suave pt-3 text-xs text-texto-2">
-                {(reajustes ?? []).map((r) => (
-                  <li key={r.id}>
-                    {formatarDataBR(r.data_reajuste)} · {r.indice} {Number(r.percentual).toFixed(2)}% ·{" "}
-                    {formatarReais(r.valor_anterior)} → {formatarReais(r.valor_novo)}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Cartao>
-
-          <Cartao titulo="Rescisão / entrega das chaves">
-            <form className="space-y-3">
-              <Campo rotulo="Data de entrega das chaves">
-                <Entrada type="date" name="entrega" defaultValue={entrega} required />
+              <Campo rotulo="Multa rescisória (aluguéis)">
+                <Entrada name="multa_rescisoria_alugueis" inputMode="decimal" defaultValue={v(c.multa_rescisoria_alugueis)} />
               </Campo>
-              <Campo rotulo="Aluguel pago até" dica="Padrão: fim do período da última fatura paga.">
-                <Entrada type="date" name="pagoAte" defaultValue={typeof sp.pagoAte === "string" ? sp.pagoAte : pagoAtePadrao} />
+              <Campo rotulo="Desconto pontualidade (%)" dica="Pagando até o vencimento">
+                <Entrada name="desconto_pontualidade_pct" inputMode="decimal" defaultValue={v(c.desconto_pontualidade_pct ?? 0)} />
               </Campo>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="isentar" defaultChecked={sp.isentar === "on"} /> Isentar multa
+              <Campo rotulo="Carência (meses)" dica="Meses iniciais com desconto">
+                <Entrada type="number" min={0} max={60} name="carencia_meses" defaultValue={c.carencia_meses ?? 0} />
+              </Campo>
+              <Campo rotulo="Desconto na carência (%)" dica="100 = aluguel isento">
+                <Entrada name="carencia_desconto_pct" inputMode="decimal" defaultValue={v(c.carencia_desconto_pct ?? 100)} />
+              </Campo>
+              <Campo rotulo="Avisar o fim com (dias)">
+                <Entrada type="number" min={0} max={365} name="aviso_fim_dias" defaultValue={c.aviso_fim_dias ?? 60} />
+              </Campo>
+              <Campo rotulo="Apólice seguro incêndio">
+                <Entrada name="seguro_incendio_apolice" defaultValue={c.seguro_incendio_apolice ?? ""} />
+              </Campo>
+              <Campo rotulo="Vencimento do seguro">
+                <Entrada type="date" name="seguro_incendio_vencimento" defaultValue={c.seguro_incendio_vencimento ?? ""} />
+              </Campo>
+            </Grade>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              {!pessoal && (
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" name="repassar_multa_juros" defaultChecked={c.repassar_multa_juros} />
+                  Repassar multa e juros ao proprietário
+                </label>
+              )}
+              {pessoal && c.repassar_multa_juros && <input type="hidden" name="repassar_multa_juros" value="on" />}
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="renovacao_automatica" defaultChecked={c.renovacao_automatica ?? false} />
+                Renovação automática (segue por prazo indeterminado ao vencer)
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="aviso" value="nao" defaultChecked={sp.aviso === "nao"} /> Sem aviso prévio (prazo indeterminado)
-              </label>
-              <button className={classeBotao("secundario")}>Calcular</button>
-            </form>
-            {rescisao && (
-              <div className="mt-4 space-y-1 border-t border-borda-suave pt-3 text-sm">
-                <div className="flex justify-between">
-                  <span>Saldo de aluguel ({rescisao.diasSaldo} dias)</span>
-                  <span>{formatarReais(paraReais(rescisao.saldoAluguel))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Multa</span>
-                  <span>{formatarReais(paraReais(rescisao.multa))}</span>
-                </div>
-                <div className="text-xs text-mudo">{rescisao.multaFundamento}</div>
-                <div className="flex justify-between">
-                  <span>Faturas em aberto</span>
-                  <span>{formatarReais(paraReais(rescisao.debitosPendentes))}</span>
-                </div>
-                {rescisao.caucao > 0 && (
-                  <div className="flex justify-between">
-                    <span>(−) Caução</span>
-                    <span>{formatarReais(paraReais(rescisao.caucao))}</span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-borda-suave pt-1 font-semibold">
-                  <span>{rescisao.totalDevido >= 0 ? "Total a cobrar" : "A devolver ao locatário"}</span>
-                  <span>{formatarReais(Math.abs(paraReais(rescisao.totalDevido)))}</span>
-                </div>
-                {c.status === "ativo" && (
-                  <Formulario acao={encerrarContrato} className="pt-3">
-                    <input type="hidden" name="contrato_id" value={id} />
-                    <input type="hidden" name="data_entrega" value={entrega} />
-                    <input type="hidden" name="tipo" value="rescindido" />
-                    <BotaoEnviar variante="perigo" confirmar="Encerrar o contrato nesta data?">
-                      Encerrar contrato em {formatarDataBR(entrega)}
-                    </BotaoEnviar>
-                  </Formulario>
-                )}
-              </div>
-            )}
-          </Cartao>
-          <BotaoExcluir
-            acao={excluirContrato}
-            id={id}
-            variante="botao"
-            rotulo="Excluir contrato"
-            confirmar="Excluir este contrato lançado por engano? Faturas em aberto, partes e encargos saem junto. (Se já houve pagamento, o sistema não deixa — encerre o contrato.)"
-            depois="/contratos"
-          />
-        </div>
+            </div>
+            <Campo rotulo="Observações">
+              <AreaTexto name="observacoes" defaultValue={c.observacoes ?? ""} />
+            </Campo>
+          </Formulario>
+        </Cartao>
       </div>
-    </>
+
+      <div className="space-y-6">
+        <Cartao titulo="Atalhos">
+          <ul className="space-y-2 text-sm">
+            <li>
+              <Link href={`/contratos/${id}/cobrancas`} className="text-acento hover:underline">
+                Gerar fatura, descontos e itens avulsos
+              </Link>
+            </li>
+            <li>
+              <Link href={`/contratos/${id}/partes`} className="text-acento hover:underline">
+                Locatários, fiadores e garantias
+              </Link>
+            </li>
+            <li>
+              <Link href={`/contratos/${id}/reajustes`} className="text-acento hover:underline">
+                Reajustar, renovar ou fazer aditivo
+              </Link>
+            </li>
+            <li>
+              <Link href={`/contratos/${id}/encerramento`} className="text-acento hover:underline">
+                Desocupação, multa e acerto de saída
+              </Link>
+            </li>
+            <li>
+              <Link href={`/contratos/${id}/demonstrativos`} className="text-acento hover:underline">
+                Recibos e demonstrativos
+              </Link>
+            </li>
+          </ul>
+        </Cartao>
+        <BotaoExcluir
+          acao={excluirContrato}
+          id={id}
+          variante="botao"
+          rotulo="Excluir contrato"
+          confirmar="Excluir este contrato lançado por engano? Faturas em aberto, partes e encargos saem junto. (Se já houve pagamento, o sistema não deixa — faça a desocupação.)"
+          depois="/contratos"
+        />
+      </div>
+    </div>
   );
 }

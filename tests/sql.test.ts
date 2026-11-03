@@ -556,3 +556,58 @@ describe("vendas: reserva acompanha o processo", () => {
     expect(r).toEqual(["disponivel", "reservado", "disponivel"]);
   });
 });
+
+describe("locação completa: aditivo, renovação e desocupação", () => {
+  const USER_O = "00000000-0000-0000-0000-000000000018";
+  it("aditivo muda valor e prazo; desocupação acerta, cancela faturas futuras, devolve caução e libera o imóvel", async () => {
+    await comoUsuario(USER_O, () => db.query(`select public.criar_organizacao('Imob O')`));
+    const r = await comoUsuario(USER_O, async () => {
+      const um = async (sql: string, p: unknown[] = []) => (await db.query<{ id: string }>(sql, p)).rows[0].id;
+      const loc = await um(`insert into pessoas (nome, papeis) values ('Lia Locatária','{locatario}') returning id`);
+      const im = await um(`insert into imoveis (codigo, status) values ('LC-1','alugado') returning id`);
+      const c = await um(
+        `insert into contratos (imovel_id, data_inicio, prazo_meses, data_fim, valor_aluguel, dia_vencimento, data_base_reajuste, garantia_tipo, garantia_valor)
+         values ($1, '2026-01-01', 30, '2028-06-30', 2000, 10, '2026-01-01', 'caucao', 6000) returning id`,
+        [im],
+      );
+      await db.query(`insert into contrato_partes (contrato_id, pessoa_id, papel) values ($1, $2, 'locatario')`, [c, loc]);
+      // migração já criou a garantia (rodou antes do contrato existir) — cria aqui como a tela faria
+      await db.query(`insert into contrato_garantias (contrato_id, tipo, valor) values ($1, 'caucao', 6000)`, [c]);
+      const ad = await um(`insert into contrato_aditivos (contrato_id, tipo, descricao, valor_novo, data_fim_nova) values ($1, 'renovacao', 'Renovação', 2200, '2029-12-31') returning id`, [c]);
+      await db.query(`select public.aplicar_aditivo($1)`, [ad]);
+      let duas = "";
+      try {
+        await db.query(`select public.aplicar_aditivo($1)`, [ad]);
+      } catch (e) {
+        duas = String(e);
+      }
+      const ct = (await db.query<{ valor_aluguel: string; data_fim: string; prazo_meses: number }>(`select valor_aluguel, data_fim::text, prazo_meses from contratos where id = $1`, [c])).rows[0];
+      const reaj = (await db.query<{ indice: string; percentual: string }>(`select indice, percentual from contrato_reajustes where contrato_id = $1`, [c])).rows;
+      // faturas: março paga (até 31/03), abril e maio abertas
+      for (const [comp, ini, fim, st] of [
+        ["2026-03-01", "2026-03-01", "2026-03-31", "paga"],
+        ["2026-04-01", "2026-04-01", "2026-04-30", "aberta"],
+        ["2026-05-01", "2026-05-01", "2026-05-31", "aberta"],
+      ])
+        await db.query(`insert into faturas (contrato_id, competencia, periodo_inicio, periodo_fim, vencimento, valor_total, status) values ($1,$2,$3,$4,$4,2200,$5)`, [c, comp, ini, fim, st]);
+      const d = await um(`insert into contrato_desocupacoes (contrato_id, caucao_devolver) values ($1, 6000) returning id`, [c]);
+      await db.query(`select public.concluir_desocupacao($1, $2)`, [d, JSON.stringify({ total: -1500, entrega: "2026-04-20", pago_ate: "2026-03-31", encerrar_como: "rescindido" })]);
+      const fat = (await db.query<{ competencia: string; status: string }>(`select competencia::text, status from faturas where contrato_id = $1 order by competencia`, [c])).rows.map((f) => f.status);
+      const lanc = (await db.query<{ tipo: string; valor: string; categoria: string }>(`select tipo, valor, categoria from lancamentos where contrato_id = $1`, [c])).rows;
+      const gar = (await db.query<{ status: string; valor_devolvido: string }>(`select status, valor_devolvido from contrato_garantias where contrato_id = $1`, [c])).rows[0];
+      const est = (await db.query<{ s: string; c: string }>(`select i.status as s, ct.status as c from imoveis i, contratos ct where i.id = $1 and ct.id = $2`, [im, c])).rows[0];
+      return { duas, ct, reaj, fat, lanc, gar, est };
+    });
+    expect(r.duas).toContain("já foi aplicado");
+    expect(Number(r.ct.valor_aluguel)).toBe(2200);
+    expect(r.ct.data_fim).toBe("2029-12-31");
+    expect(r.ct.prazo_meses).toBe(48);
+    expect(r.reaj[0].indice).toBe("ADITIVO");
+    expect(Number(r.reaj[0].percentual)).toBe(10);
+    expect(r.fat).toEqual(["paga", "cancelada", "cancelada"]);
+    expect(r.lanc.map((l) => [l.tipo, Number(l.valor), l.categoria])).toEqual([["pagar", 1500, "Devolução de caução"]]);
+    expect(r.gar).toMatchObject({ status: "devolvida" });
+    expect(Number(r.gar.valor_devolvido)).toBe(6000);
+    expect(r.est).toEqual({ s: "disponivel", c: "rescindido" });
+  });
+});

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { inicioDoMes, somarDias } from "@/lib/dominio/datas";
 import { calcularAtraso } from "@/lib/dominio/encargos";
-import { type ContratoParaFatura, type ItemFatura, gerarFatura } from "@/lib/dominio/fatura";
+import { type ContratoParaFatura, type ItemFatura, descontoPontualidade, gerarFatura } from "@/lib/dominio/fatura";
 import { aplicarIrrfIndividual, calcularRepasse, impostoEfetivo, type RepasseCalculado } from "@/lib/dominio/repasse";
 import { calcularReajuste, type ResultadoReajuste } from "@/lib/dominio/reajuste";
 import { ErroValidacao, verificar } from "@/lib/form";
@@ -14,6 +14,7 @@ export interface ContratoCompleto {
   imovel: Imovel;
   partes: (ContratoParte & { pessoa: Pessoa })[];
   encargos: ContratoEncargo[];
+  descontos: { inicio: string; fim: string | null; tipo: "valor" | "pct"; valor: number | string; motivo: string | null }[];
   /** % padrão de imposto do proprietário na imobiliária (quando o cadastro da pessoa está em branco). */
   impostoPadrao: { pf: number; pj: number };
   /** Conta no modo "imóveis pessoais": sem proprietário de terceiros, taxa nem repasse. */
@@ -22,7 +23,7 @@ export interface ContratoCompleto {
 
 export async function carregarContrato(sb: SupabaseClient, id: string): Promise<ContratoCompleto | null> {
   // As três consultas vão juntas (antes eram em fila: 3 idas ao banco seguidas).
-  const [rContrato, rPartes, rEncargos] = await Promise.all([
+  const [rContrato, rPartes, rEncargos, rDescontos] = await Promise.all([
     sb
       .from("contratos")
       .select("*, imovel:imoveis(*), organizacao:organizacoes(imposto_pf_pct, imposto_pj_pct, modo)")
@@ -30,6 +31,7 @@ export async function carregarContrato(sb: SupabaseClient, id: string): Promise<
       .maybeSingle(),
     sb.from("contrato_partes").select("*, pessoa:pessoas(*)").eq("contrato_id", id),
     sb.from("contrato_encargos").select("*").eq("contrato_id", id).order("descricao"),
+    sb.from("contrato_descontos").select("inicio, fim, tipo, valor, motivo").eq("contrato_id", id),
   ]);
   const contrato = rContrato.data;
   if (!contrato) return null;
@@ -46,6 +48,7 @@ export async function carregarContrato(sb: SupabaseClient, id: string): Promise<
     pessoal: organizacao?.modo === "pessoal",
     partes: partes as (ContratoParte & { pessoa: Pessoa })[],
     encargos: encargos as ContratoEncargo[],
+    descontos: (rDescontos.data ?? []) as ContratoCompleto["descontos"],
   };
 }
 
@@ -75,6 +78,15 @@ export function paraContratoDeFatura(c: ContratoCompleto): ContratoParaFatura {
     taxaAdministracaoPct: Number(c.contrato.taxa_administracao_pct),
     locatarioTipoPessoa: loc?.tipo_pessoa ?? "PF",
     proprietarios: proprietariosDo(c),
+    carenciaMeses: Number(c.contrato.carencia_meses ?? 0),
+    carenciaDescontoPct: Number(c.contrato.carencia_desconto_pct ?? 100),
+    descontos: c.descontos.map((d) => ({
+      inicio: d.inicio,
+      fim: d.fim,
+      tipo: d.tipo,
+      valor: d.tipo === "pct" ? Number(d.valor) : paraCentavos(d.valor),
+      motivo: d.motivo,
+    })),
     encargos: c.encargos.map((e) => ({
       descricao: e.descricao,
       valor: paraCentavos(e.valor),
@@ -235,6 +247,12 @@ export function simularLiquidacao(
     return { diasAtraso: atraso.diasAtraso, multa: valor, juros: 0, total: base + valor, itensExtras: itens, sugestao };
   }
   const itensExtras: ItemFatura[] = [];
+  // Desconto de pontualidade: pagou até o vencimento.
+  const pont = descontoPontualidade(paraCentavos(contrato.valor_aluguel), Number(contrato.desconto_pontualidade_pct ?? 0), pagoEm, fatura.vencimento);
+  if (pont > 0) {
+    itensExtras.push({ descricao: `Desconto de pontualidade (${Number(contrato.desconto_pontualidade_pct)}%)`, tipo: "desconto", valor: -pont, destino: "proprietario" });
+    return { diasAtraso: 0, multa: 0, juros: 0, total: base - pont, itensExtras, sugestao };
+  }
   if (atraso.multa > 0)
     itensExtras.push({ descricao: `Multa por atraso (${contrato.multa_atraso_pct}%)`, tipo: "multa", valor: atraso.multa, destino });
   if (atraso.juros > 0)

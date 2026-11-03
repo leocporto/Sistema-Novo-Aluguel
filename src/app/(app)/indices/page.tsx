@@ -51,10 +51,12 @@ async function importarIndices(_: EstadoAcao, fd: FormData): Promise<EstadoAcao>
   }
 }
 
-async function excluirIndice(id: string): Promise<{ ok: boolean; erro?: string }> {
+/** Chave do mês = "INDICE|AAAA-MM-01" (a tabela não tem id próprio). */
+async function excluirIndice(chave: string): Promise<{ ok: boolean; erro?: string }> {
   "use server";
+  const [indice, competencia] = chave.split("|");
   const { supabase } = await obterContexto();
-  const { error } = await supabase.from("indices_economicos").delete().eq("id", id);
+  const { error } = await supabase.from("indices_economicos").delete().eq("indice", indice).eq("competencia", competencia);
   if (error) return { ok: false, erro: mensagemErro(error) };
   revalidatePath("/indices");
   return { ok: true };
@@ -66,11 +68,11 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
   const { supabase } = await obterContexto();
   const { data } = await supabase
     .from("indices_economicos")
-    .select("id, competencia, variacao_pct")
+    .select("competencia, variacao_pct")
     .eq("indice", indice)
     .order("competencia", { ascending: false })
     .limit(36);
-  const linhas = (data ?? []) as { id: string; competencia: string; variacao_pct: number }[];
+  const linhas = (data ?? []) as { competencia: string; variacao_pct: number }[];
 
   return (
     <>
@@ -99,7 +101,7 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
                   <Celula>{Number(l.variacao_pct).toFixed(4)}%</Celula>
                   <Celula>{janela.length === 12 ? `${acumular(janela.map((j) => Number(j.variacao_pct))).toFixed(4)}%` : "—"}</Celula>
                   <Celula>
-                    <BotaoExcluir acao={excluirIndice} id={l.id} rotulo="Excluir mês" confirmar={`Excluir ${indice} de ${formatarCompetencia(l.competencia)}?`} />
+                    <BotaoExcluir acao={excluirIndice} id={`${indice}|${l.competencia}`} rotulo="Excluir mês" confirmar={`Excluir ${indice} de ${formatarCompetencia(l.competencia)}?`} />
                   </Celula>
                 </tr>
               );

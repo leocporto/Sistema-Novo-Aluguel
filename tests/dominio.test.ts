@@ -689,3 +689,47 @@ describe("vendas", () => {
     expect(c.map((p) => `${p.id}${p.nivel}`)).toEqual(["a0", "b1", "c2", "x0"]);
   });
 });
+
+import { descontoPontualidade } from "@/lib/dominio/fatura";
+import { acertoDeSaida } from "@/lib/dominio/rescisao";
+import { situacaoGarantia } from "@/lib/dominio/garantias";
+
+describe("locação: carência, descontos, acerto e garantias", () => {
+  const base: ContratoParaFatura = {
+    dataInicio: "2026-03-01",
+    dataFim: null,
+    valorAluguel: 200000,
+    diaVencimento: 10,
+    modalidade: "antecipado",
+    taxaAdministracaoPct: 10,
+    locatarioTipoPessoa: "PF",
+    proprietarios: [],
+    encargos: [],
+  };
+  it("aplica carência nos primeiros meses e descontos temporários sem passar do aluguel", () => {
+    const c = { ...base, carenciaMeses: 2, carenciaDescontoPct: 50, descontos: [{ inicio: "2026-04-01", fim: "2026-05-01", tipo: "valor" as const, valor: 150000, motivo: "obra" }] };
+    expect(gerarFatura(c, "2026-03-01")!.total).toBe(100000);
+    expect(gerarFatura(c, "2026-04-01")!.total).toBe(0); // 50% carência + desconto limitado ao resto
+    expect(gerarFatura(c, "2026-05-01")!.total).toBe(50000);
+    expect(gerarFatura(c, "2026-06-01")!.total).toBe(200000);
+  });
+  it("desconto de pontualidade só até o vencimento", () => {
+    expect(descontoPontualidade(200000, 5, "2026-03-10", "2026-03-10")).toBe(10000);
+    expect(descontoPontualidade(200000, 5, "2026-03-11", "2026-03-10")).toBe(0);
+  });
+  it("acerto de saída soma saldo, multa e reparos e abate a caução", () => {
+    const a = acertoDeSaida(
+      { valorAluguel: 300000, dataInicio: "2026-01-01", prazoMeses: 30, dataEntrega: "2026-04-15", pagoAte: "2026-03-31", multaAlugueis: 3 },
+      { reparos: 50000, outros: 0, caucao: 900000 },
+    );
+    expect(a.rescisao.saldoAluguel).toBe(150000);
+    expect(a.rescisao.multa).toBe(810000); // 3 × 3000 × 27/30
+    expect(a.total).toBe(150000 + 810000 + 50000 - 900000);
+    expect(a.linhas).toHaveLength(4);
+  });
+  it("garantia vencendo e vencida", () => {
+    expect(situacaoGarantia({ tipo: "seguro_fianca", fim: "2026-11-20", status: "ativa" }, "2026-11-04")).toBe("vencendo");
+    expect(situacaoGarantia({ tipo: "seguro_fianca", fim: "2026-11-01", status: "ativa" }, "2026-11-04")).toBe("vencida");
+    expect(situacaoGarantia({ tipo: "caucao", fim: null, status: "devolvida" }, "2026-11-04")).toBe("inativa");
+  });
+});

@@ -173,11 +173,25 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
               <Campo rotulo="Juros (% ao mês)">
                 <Entrada name="juros_mes_pct" inputMode="decimal" defaultValue={String(org.juros_mes_pct)} />
               </Campo>
-              <Campo rotulo="Carência (dias)">
+              <Campo rotulo="Tolerância de atraso (dias)">
                 <Entrada type="number" min={0} name="carencia_dias" defaultValue={org.carencia_dias} />
               </Campo>
               <Campo rotulo="Multa rescisória (nº de aluguéis)">
                 <Entrada name="multa_rescisoria_alugueis" inputMode="decimal" defaultValue="3" />
+              </Campo>
+            </Grade>
+          </Cartao>
+
+          <Cartao titulo="Carência e descontos">
+            <Grade colunas={3}>
+              <Campo rotulo="Carência (meses)" dica="Meses iniciais com desconto no aluguel (ex.: reforma)">
+                <Entrada type="number" min={0} max={60} name="carencia_meses" defaultValue={0} />
+              </Campo>
+              <Campo rotulo="Desconto na carência (%)" dica="100 = aluguel isento">
+                <Entrada name="carencia_desconto_pct" inputMode="decimal" defaultValue="100" />
+              </Campo>
+              <Campo rotulo="Desconto de pontualidade (%)" dica="Pagando até o vencimento">
+                <Entrada name="desconto_pontualidade_pct" inputMode="decimal" defaultValue="0" />
               </Campo>
             </Grade>
           </Cartao>
@@ -221,7 +235,10 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
             <AreaTexto name="observacoes" />
           </Cartao>
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-4">
+            <label className="flex items-center gap-2 text-sm text-texto-2">
+              <input type="checkbox" name="rascunho" /> Salvar como rascunho (ativo só depois das assinaturas)
+            </label>
             <BotaoEnviar>Criar contrato</BotaoEnviar>
           </div>
         </Formulario>

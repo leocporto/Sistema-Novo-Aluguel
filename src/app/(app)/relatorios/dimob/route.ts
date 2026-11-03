@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
   const supabase = await criarClienteServidor();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ erro: "não autenticado" }, { status: 401 });
+  // DIMOB é obrigação da imobiliária: no modo imóveis pessoais não existe.
+  const { data: membro } = await supabase.from("membros").select("organizacao:organizacoes(modo)").eq("user_id", auth.user.id).order("created_at").limit(1).maybeSingle();
+  if ((membro?.organizacao as unknown as { modo?: string } | null)?.modo === "pessoal")
+    return NextResponse.json({ erro: "A DIMOB só existe no modo imobiliária." }, { status: 403 });
 
   const ano = Number(request.nextUrl.searchParams.get("ano")) || new Date().getFullYear();
   const { data, error } = await supabase

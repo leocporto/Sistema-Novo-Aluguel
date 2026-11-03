@@ -17,6 +17,8 @@ import {
   Inbox,
   KeyRound,
   MessageSquareWarning,
+  DoorOpen,
+  ShieldAlert,
   ListTodo,
   Scale,
   Target,
@@ -99,7 +101,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -144,6 +146,8 @@ export default async function PainelPage() {
         .is("feedback_interesse", null)
         .lt("data_hora", `${hoje}T00:00:00-03:00`)
         .gte("data_hora", `${somarDias(hoje, -30)}T00:00:00-03:00`),
+      supabase.from("contrato_desocupacoes").select("id, contrato_id, entrega_prevista").neq("status", "concluida"),
+      supabase.from("contrato_garantias").select("id, contrato_id, tipo, fim").eq("status", "ativa").not("fim", "is", null).lte("fim", somarDias(hoje, 30)),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -252,6 +256,17 @@ export default async function PainelPage() {
   type ChAtr = { id: string; retirada_por: string; previsao_devolucao: string; chave: { id: string; codigo: string | null } | null };
   for (const m of (chavesAtrasR.data ?? []) as unknown as ChAtr[])
     avisos.push({ texto: `Chave ${m.chave?.codigo ?? ""} não devolvida por ${m.retirada_por}`, href: m.chave ? `/chaves/${m.chave.id}` : "/chaves", data: diaLocal(m.previsao_devolucao), tom: "ruim", icone: <KeyRound /> });
+  const desocupacoes = desocR.data ?? [];
+  if (desocupacoes.length)
+    avisos.push({ texto: `${desocupacoes.length} desocupação(ões) em andamento`, href: "/contratos?status=desocupacao", tom: "alerta", icone: <DoorOpen /> });
+  for (const g of garantiasR.data ?? [])
+    avisos.push({
+      texto: `Garantia (${String(g.tipo).replace(/_/g, " ")}) ${String(g.fim) < hoje ? "vencida" : "vencendo"}`,
+      href: `/contratos/${g.contrato_id}/partes`,
+      data: String(g.fim),
+      tom: String(g.fim) < hoje ? "ruim" : "alerta",
+      icone: <ShieldAlert />,
+    });
   if (semRetornoR.count)
     avisos.push({ texto: `${semRetornoR.count} visita(s) sem retorno do cliente (feedback)`, href: "/agenda?vista=lista&tipo=visita", tom: "alerta", icone: <MessageSquareWarning /> });
   if (!pessoal && repHoje.length)

@@ -79,6 +79,11 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
         seguro_incendio_apolice: texto(fd, "seguro_incendio_apolice"),
         seguro_incendio_vencimento: texto(fd, "seguro_incendio_vencimento"),
         observacoes: texto(fd, "observacoes"),
+        carencia_meses: inteiro(fd, "carencia_meses") ?? 0,
+        carencia_desconto_pct: taxaPct(fd, "carencia_desconto_pct") || 100,
+        desconto_pontualidade_pct: taxaPct(fd, "desconto_pontualidade_pct"),
+        status: booleano(fd, "rascunho") ? "rascunho" : "ativo",
+        ativado_em: booleano(fd, "rascunho") ? null : new Date().toISOString(),
       })
       .select("id")
       .single();
@@ -123,7 +128,18 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
         const r2 = await supabase.from("contrato_encargos").insert(encargos);
         if (r2.error) throw r2.error;
       }
-      await supabase.from("imoveis").update({ status: "alugado" }).eq("id", imovelId);
+      const gTipo = texto(fd, "garantia_tipo");
+      if (gTipo && gTipo !== "sem_garantia") {
+        const fiadorId = texto(fd, "fiador_id");
+        await supabase.from("contrato_garantias").insert({
+          contrato_id: id,
+          tipo: gTipo,
+          pessoa_id: gTipo === "fiador" ? fiadorId : null,
+          valor: numero(fd, "garantia_valor"),
+          observacoes: texto(fd, "garantia_detalhes"),
+        });
+      }
+      if (!booleano(fd, "rascunho")) await supabase.from("imoveis").update({ status: "alugado" }).eq("id", imovelId);
       for (const pid of [locatarioId, texto(fd, "fiador_id")].filter(Boolean) as string[]) {
         const { data: pes } = await supabase.from("pessoas").select("papeis").eq("id", pid).single();
         const papel = pid === locatarioId ? "locatario" : "fiador";
@@ -142,37 +158,32 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
   redirect(`/contratos/${id}`);
 }
 
+const CAMPOS_TEXTO = ["codigo", "modalidade", "indice_reajuste", "tipo_repasse", "garantia_tipo", "garantia_detalhes", "seguro_incendio_apolice", "seguro_incendio_vencimento", "observacoes"];
+const CAMPOS_INTEIRO = ["dia_vencimento", "dias_repasse", "carencia_dias", "carencia_meses", "aviso_fim_dias"];
+const CAMPOS_NUMERO = ["multa_atraso_pct", "juros_mes_pct", "garantia_valor", "multa_rescisoria_alugueis"];
+const CAMPOS_PCT = ["taxa_administracao_pct", "carencia_desconto_pct", "desconto_pontualidade_pct"];
+
+/** Salva sozinho só os campos que vieram (cada aba manda a sua parte). */
 export async function atualizarContrato(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   const { supabase } = await obterContexto();
   const id = String(fd.get("id"));
   try {
-    const { error } = await supabase
-      .from("contratos")
-      .update({
-        codigo: texto(fd, "codigo"),
-        dia_vencimento: inteiro(fd, "dia_vencimento"),
-        modalidade: texto(fd, "modalidade"),
-        indice_reajuste: texto(fd, "indice_reajuste"),
-        taxa_administracao_pct: taxaPct(fd, "taxa_administracao_pct"),
-        tipo_repasse: texto(fd, "tipo_repasse"),
-        dias_repasse: inteiro(fd, "dias_repasse"),
-        repassar_multa_juros: booleano(fd, "repassar_multa_juros"),
-        multa_atraso_pct: numero(fd, "multa_atraso_pct"),
-        juros_mes_pct: numero(fd, "juros_mes_pct"),
-        carencia_dias: inteiro(fd, "carencia_dias"),
-        garantia_tipo: texto(fd, "garantia_tipo"),
-        garantia_valor: numero(fd, "garantia_valor"),
-        garantia_detalhes: texto(fd, "garantia_detalhes"),
-        seguro_incendio_apolice: texto(fd, "seguro_incendio_apolice"),
-        seguro_incendio_vencimento: texto(fd, "seguro_incendio_vencimento"),
-        observacoes: texto(fd, "observacoes"),
-      })
-      .eq("id", id);
+    const d: Record<string, unknown> = {};
+    for (const c of CAMPOS_TEXTO) if (fd.has(c)) d[c] = texto(fd, c);
+    for (const c of CAMPOS_INTEIRO) if (fd.has(c)) d[c] = inteiro(fd, c) ?? 0;
+    for (const c of CAMPOS_NUMERO) if (fd.has(c)) d[c] = numero(fd, c);
+    for (const c of CAMPOS_PCT) if (fd.has(c)) d[c] = taxaPct(fd, c);
+    if (fd.has("carencia_desconto_pct") && !d.carencia_desconto_pct) d.carencia_desconto_pct = 100;
+    if (fd.has("_repassar")) d.repassar_multa_juros = booleano(fd, "repassar_multa_juros");
+    if (fd.has("_renovacao")) d.renovacao_automatica = booleano(fd, "renovacao_automatica");
+    for (const c of ["multa_atraso_pct", "juros_mes_pct", "multa_rescisoria_alugueis"]) if (c in d && d[c] === null) d[c] = 0;
+    if (typeof d.dia_vencimento === "number" && (d.dia_vencimento < 1 || d.dia_vencimento > 31)) throw new ErroValidacao("Dia de vencimento deve estar entre 1 e 31.");
+    const { error } = await supabase.from("contratos").update(d).eq("id", id);
     if (error) throw error;
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
-  revalidatePath(`/contratos/${id}`);
+  revalidatePath(`/contratos/${id}`, "layout");
   revalidatePath("/");
   return { ok: "Contrato atualizado." };
 }
@@ -192,7 +203,7 @@ export async function adicionarParte(_: EstadoAcao, fd: FormData): Promise<Estad
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
-  revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath(`/contratos/${contrato_id}`, "layout");
   revalidatePath("/");
   return { ok: "Parte adicionada." };
 }
@@ -206,7 +217,7 @@ export async function removerParte(fd: FormData) {
     .eq("contrato_id", contrato_id)
     .eq("pessoa_id", String(fd.get("pessoa_id")))
     .eq("papel", String(fd.get("papel")));
-  revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath(`/contratos/${contrato_id}`, "layout");
   revalidatePath("/");
 }
 
@@ -231,7 +242,7 @@ export async function adicionarEncargo(_: EstadoAcao, fd: FormData): Promise<Est
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
-  revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath(`/contratos/${contrato_id}`, "layout");
   revalidatePath("/");
   return { ok: "Encargo adicionado." };
 }
@@ -240,7 +251,7 @@ export async function removerEncargo(fd: FormData) {
   const { supabase } = await obterContexto();
   const contrato_id = String(fd.get("contrato_id"));
   await supabase.from("contrato_encargos").delete().eq("id", String(fd.get("id")));
-  revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath(`/contratos/${contrato_id}`, "layout");
   revalidatePath("/");
 }
 
@@ -256,7 +267,7 @@ export async function gerarFaturaManual(_: EstadoAcao, fd: FormData): Promise<Es
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
-  revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath(`/contratos/${contrato_id}`, "layout");
   revalidatePath("/");
   return { ok: "Fatura gerada." };
 }
@@ -294,7 +305,7 @@ export async function aplicarReajuste(_: EstadoAcao, fd: FormData): Promise<Esta
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
-  revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath(`/contratos/${contrato_id}`, "layout");
   revalidatePath("/");
   revalidatePath("/reajustes");
   return { ok: "Reajuste aplicado. O novo valor vale para as próximas faturas." };
@@ -313,11 +324,12 @@ export async function encerrarContrato(_: EstadoAcao, fd: FormData): Promise<Est
       .select("imovel_id")
       .single();
     if (error) throw error;
-    await supabase.from("imoveis").update({ status: "disponivel" }).eq("id", c.imovel_id);
+    const { count: outros } = await supabase.from("contratos").select("id", { count: "exact", head: true }).eq("imovel_id", c.imovel_id).eq("status", "ativo");
+    if (!outros) await supabase.from("imoveis").update({ status: "disponivel" }).eq("id", c.imovel_id).in("status", ["alugado", "reservado"]);
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
-  revalidatePath(`/contratos/${contrato_id}`);
+  revalidatePath(`/contratos/${contrato_id}`, "layout");
   revalidatePath("/");
   revalidatePath("/contratos");
   return { ok: "Contrato encerrado e imóvel marcado como desalugado." };

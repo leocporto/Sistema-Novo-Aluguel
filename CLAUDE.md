@@ -24,6 +24,7 @@ existe em cada um está em **`docs/MODOS.md`** — consulte antes de criar ou mu
   alertas de documentação, Prestador de serviço, importar/exportar/juntar repetidos.
 - **Despesas** existe nos dois, mas muda: imobiliária = escritório; pessoal = despesas dos imóveis.
 - **Agenda e Chaves** existem nos dois (`/agenda`, `/chaves`); no pessoal sem corretor/lead/avaliação de captação.
+- **Locações** (ficha do contrato em abas, aditivos, garantias, desocupação/acerto, recibos) existem nos dois; repasse/taxas/extrato do locador só na imobiliária.
 - Regra no código: `src/lib/modos.ts` (`rotaPermitida`, `quadroPermitido`, `PAPEIS_SO_IMOBILIARIA`).
   Tela só da imobiliária também precisa ser bloqueada no servidor (layout/página com `redirect("/")`).
 
