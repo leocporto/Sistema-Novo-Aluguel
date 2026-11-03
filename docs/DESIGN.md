@@ -66,6 +66,14 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
 - **`<AbasSegmentadas>`**: todo grupo de seleção única. A pílula azul é uma camada recortada por
   `clip-path` (frente 220ms, trás 340ms) e há uma pílula de hover neutra por baixo. Variantes
   `nav` (topo), `lateral` (menu) e `seg` (filtros).
+  - ⚠️ **Nunca** faça seletor com `<Link>`/botões soltos e `bg-acento` no ativo. Use:
+    - escolha que muda a URL (funil, período, filtro, lista/cartões): **`<PilulasLink>`**
+      (`src/components/pilulas-link.tsx`);
+    - abas entre telas irmãs: **`<SubAbas>`**;
+    - escolha só na tela (sem URL): `<AbasSegmentadas variante="seg">` direto.
+- **Botões**: sempre `classeBotao`/`BotaoLink`/`BotaoEnviar`/`BotaoExcluir` (sobem 1px no hover e
+  afundam no clique). Botão de ícone novo segue o `BotaoExcluir`: `size-8`, raio 9, borda,
+  `hover:-translate-y-px active:scale-90`.
 - **`<Contador>`**: todo número grande de KPI conta até o valor (0,85s ao abrir, 0,55s ao mudar);
   formatos `moeda`, `inteiro`, `pct`.
 - **Entrada de toda tela**: a cada troca de rota os blocos da tela sobem em cascata (`.tela`);

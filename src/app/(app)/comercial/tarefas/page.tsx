@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Check, ListTodo } from "lucide-react";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { JanelaCadastro } from "@/components/janela-cadastro";
+import { PilulasLink } from "@/components/pilulas-link";
 import { Cabecalho, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarDataBR, hojeISO } from "@/lib/dominio/datas";
@@ -53,14 +54,15 @@ export default async function TarefasPage({ searchParams }: PageProps<"/comercia
         }
       />
       <AbasComercial />
-      <div className="mb-4 flex gap-2 text-sm">
-        <Link href="/comercial/tarefas" className={`rounded-full px-3.5 py-1.5 font-semibold ${verConcluidas ? "text-texto-2 hover:bg-card-hover" : "bg-acento text-white"}`}>
-          A fazer
-        </Link>
-        <Link href="/comercial/tarefas?ver=concluidas" className={`rounded-full px-3.5 py-1.5 font-semibold ${verConcluidas ? "bg-acento text-white" : "text-texto-2 hover:bg-card-hover"}`}>
-          Concluídas
-        </Link>
-      </div>
+      <PilulasLink
+        className="mb-4"
+        rotulo="Tarefas"
+        ativo={verConcluidas ? "/comercial/tarefas?ver=concluidas" : "/comercial/tarefas"}
+        itens={[
+          { href: "/comercial/tarefas", rotulo: "A fazer" },
+          { href: "/comercial/tarefas?ver=concluidas", rotulo: "Concluídas" },
+        ]}
+      />
 
       {tarefas.length === 0 ? (
         <div className="rounded-card border border-borda bg-card px-5 py-10 text-center text-sm text-mudo">

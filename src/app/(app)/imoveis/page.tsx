@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Copy, FileSpreadsheet, LayoutGrid, List, Plus } from "lucide-react";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { PilulasLink } from "@/components/pilulas-link";
 import { BotaoLink, Cabecalho, Entrada, Selecao, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { acharDuplicados } from "@/lib/dominio/imoveis";
@@ -132,24 +133,14 @@ export default async function ImoveisPage({ searchParams }: PageProps<"/imoveis"
           </Selecao>
         )}
       </FiltroAutomatico>
-        <div className="flex rounded-btn border border-borda bg-card p-1" role="group" aria-label="Forma de ver">
-          <Link
-            href={urlVisual("lista")}
-            aria-label="Ver em lista"
-            title="Ver em lista"
-            className={`grid h-8 w-9 place-items-center rounded-[8px] transition ${visual === "lista" ? "bg-acento text-white" : "text-texto-2 hover:bg-card-hover"}`}
-          >
-            <List className="size-4" />
-          </Link>
-          <Link
-            href={urlVisual("cartoes")}
-            aria-label="Ver em cartões com foto"
-            title="Ver em cartões com foto"
-            className={`grid h-8 w-9 place-items-center rounded-[8px] transition ${visual === "cartoes" ? "bg-acento text-white" : "text-texto-2 hover:bg-card-hover"}`}
-          >
-            <LayoutGrid className="size-4" />
-          </Link>
-        </div>
+        <PilulasLink
+          rotulo="Forma de ver"
+          ativo={urlVisual(visual)}
+          itens={[
+            { href: urlVisual("cartoes"), rotulo: <LayoutGrid className="size-4" />, titulo: "Cartões com foto" },
+            { href: urlVisual("lista"), rotulo: <List className="size-4" />, titulo: "Lista" },
+          ]}
+        />
       </div>
       <ListaImoveis itens={itens} pessoal={pessoal} visual={visual} corretores={corretores ?? []} empreendimentos={emps ?? []} />
     </>

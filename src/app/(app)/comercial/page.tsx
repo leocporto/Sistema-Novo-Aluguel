@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { AlarmClock, Inbox, Timer, TrendingUp, UserPlus } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { JanelaCadastro } from "@/components/janela-cadastro";
+import { PilulasLink } from "@/components/pilulas-link";
 import { Cabecalho, Entrada, Indicador, Selecao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { FUNIS, ROTULO_FUNIL, horasAtePrimeiroAtendimento, textoHoras, type Funil } from "@/lib/dominio/crm";
@@ -99,17 +99,12 @@ export default async function LeadsPage({ searchParams }: PageProps<"/comercial"
       />
       <AbasComercial />
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        {FUNIS.map((x) => (
-          <Link
-            key={x}
-            href={x === "locacao" ? "/comercial" : `/comercial?funil=${x}`}
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${x === funil ? "bg-acento text-white" : "border border-borda bg-card text-texto-2 hover:border-borda-forte"}`}
-          >
-            Funil de {ROTULO_FUNIL[x].toLowerCase()}
-          </Link>
-        ))}
-      </div>
+      <PilulasLink
+        className="mb-5"
+        rotulo="Funil"
+        ativo={funil === "locacao" ? "/comercial" : `/comercial?funil=${funil}`}
+        itens={FUNIS.map((x) => ({ href: x === "locacao" ? "/comercial" : `/comercial?funil=${x}`, rotulo: `Funil de ${ROTULO_FUNIL[x].toLowerCase()}` }))}
+      />
 
       <div className="entrar-cascata mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Indicador

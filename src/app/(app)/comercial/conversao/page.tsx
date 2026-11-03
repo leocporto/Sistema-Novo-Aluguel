@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { BarraProgresso } from "@/components/barra-progresso";
+import { PilulasLink } from "@/components/pilulas-link";
 import { Cabecalho, Cartao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { FUNIS, ROTULO_FUNIL, conversaoPorEtapa, resumoPor, rotuloEtapa, textoHoras, type Funil, type LeadResumo } from "@/lib/dominio/crm";
@@ -85,18 +85,9 @@ export default async function ConversaoPage({ searchParams }: PageProps<"/comerc
     <>
       <Cabecalho titulo="Conversão" trilha="Comercial" descricao="Quantos leads avançam em cada etapa, por corretor e por origem, e por que os negócios são perdidos." />
       <AbasComercial />
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        {FUNIS.map((x) => (
-          <Link key={x} href={url(x, periodo)} className={`rounded-full px-4 py-2 text-sm font-semibold ${x === funil ? "bg-acento text-white" : "border border-borda bg-card text-texto-2"}`}>
-            {ROTULO_FUNIL[x]}
-          </Link>
-        ))}
-        <span className="mx-2 h-6 w-px bg-borda" />
-        {Object.entries(PERIODOS).map(([k, v]) => (
-          <Link key={k} href={url(funil, k)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${k === periodo ? "bg-texto text-card" : "text-texto-2 hover:bg-card-hover"}`}>
-            {v.rotulo}
-          </Link>
-        ))}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Funil" ativo={url(funil, periodo)} itens={FUNIS.map((x) => ({ href: url(x, periodo), rotulo: ROTULO_FUNIL[x] }))} />
+        <PilulasLink rotulo="Período" ativo={url(funil, periodo)} itens={Object.entries(PERIODOS).map(([k, v]) => ({ href: url(funil, k), rotulo: v.rotulo }))} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
