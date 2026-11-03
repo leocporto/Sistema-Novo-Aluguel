@@ -231,7 +231,7 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
                   </>
                 ) : (
                   <>
-                <Campo rotulo="Taxa adm. (%)">
+                <Campo rotulo="Taxa adm. (%)" dica="Pode ser 0%.">
                   <Entrada name="taxa_administracao_pct" defaultValue={String(c.taxa_administracao_pct)} />
                 </Campo>
                 <Campo rotulo="Tipo de repasse">

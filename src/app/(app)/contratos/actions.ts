@@ -17,6 +17,12 @@ import {
 } from "@/lib/form";
 import { calcularReajusteDoContrato, carregarContrato, gerarFaturaDoContrato } from "@/lib/servicos/locacao";
 
+function taxaPct(fd: FormData, campo: string): number {
+  const v = numero(fd, campo) ?? 0;
+  if (v < 0 || v > 100) throw new ErroValidacao("As taxas devem ficar entre 0% e 100%.");
+  return v;
+}
+
 export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   const { supabase, organizacao } = await obterContexto();
   const pessoal = organizacao.modo === "pessoal";
@@ -57,8 +63,9 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
         indice_reajuste: texto(fd, "indice_reajuste") ?? "IGPM",
         periodicidade_reajuste_meses: inteiro(fd, "periodicidade_reajuste_meses") ?? 12,
         data_base_reajuste: inicio,
-        taxa_administracao_pct: pessoal ? 0 : (numero(fd, "taxa_administracao_pct") ?? 10),
-        taxa_intermediacao_pct: pessoal ? 0 : (numero(fd, "taxa_intermediacao_pct") ?? 0),
+        // Vazio ou 0 = sem taxa (pode ser 0%).
+        taxa_administracao_pct: pessoal ? 0 : taxaPct(fd, "taxa_administracao_pct"),
+        taxa_intermediacao_pct: pessoal ? 0 : taxaPct(fd, "taxa_intermediacao_pct"),
         tipo_repasse: pessoal ? "manual" : (texto(fd, "tipo_repasse") ?? "automatico"),
         dias_repasse: inteiro(fd, "dias_repasse") ?? 2,
         repassar_multa_juros: booleano(fd, "repassar_multa_juros"),
@@ -146,7 +153,7 @@ export async function atualizarContrato(_: EstadoAcao, fd: FormData): Promise<Es
         dia_vencimento: inteiro(fd, "dia_vencimento"),
         modalidade: texto(fd, "modalidade"),
         indice_reajuste: texto(fd, "indice_reajuste"),
-        taxa_administracao_pct: numero(fd, "taxa_administracao_pct"),
+        taxa_administracao_pct: taxaPct(fd, "taxa_administracao_pct"),
         tipo_repasse: texto(fd, "tipo_repasse"),
         dias_repasse: inteiro(fd, "dias_repasse"),
         repassar_multa_juros: booleano(fd, "repassar_multa_juros"),

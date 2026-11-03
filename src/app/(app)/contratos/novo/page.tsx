@@ -139,7 +139,7 @@ export default async function NovoContratoPage({ searchParams }: PageProps<"/con
           {org.modo !== "pessoal" && (
           <Cartao titulo="Administração e repasse">
             <Grade colunas={4}>
-              <Campo rotulo="Taxa de administração (%)">
+              <Campo rotulo="Taxa de administração (%)" dica="Pode ser 0% (sem taxa).">
                 <Entrada name="taxa_administracao_pct" inputMode="decimal" defaultValue={String(org.taxa_administracao_pct)} />
               </Campo>
               <Campo rotulo="Intermediação (% do 1º aluguel)">

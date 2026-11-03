@@ -23,8 +23,9 @@ async function salvar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
         telefone: texto(fd, "telefone"),
         multa_atraso_pct: numero(fd, "multa_atraso_pct") ?? 10,
         juros_mes_pct: numero(fd, "juros_mes_pct") ?? 1,
-        taxa_administracao_pct: numero(fd, "taxa_administracao_pct") ?? 10,
-        taxa_intermediacao_pct: numero(fd, "taxa_intermediacao_pct") ?? 100,
+        // Vazio ou 0 = sem taxa.
+        taxa_administracao_pct: numero(fd, "taxa_administracao_pct") ?? 0,
+        taxa_intermediacao_pct: numero(fd, "taxa_intermediacao_pct") ?? 0,
         carencia_dias: inteiro(fd, "carencia_dias") ?? 0,
         imposto_pf_pct: numero(fd, "imposto_pf_pct") ?? 0,
         imposto_pj_pct: numero(fd, "imposto_pj_pct") ?? 0,
@@ -118,7 +119,7 @@ export default async function ConfiguracoesPage() {
               </>
             ) : (
               <>
-                <Campo rotulo="Taxa de administração (%)">
+                <Campo rotulo="Taxa de administração (%)" dica="Pode ser 0% (sem taxa).">
                   <Entrada name="taxa_administracao_pct" defaultValue={String(o.taxa_administracao_pct)} />
                 </Campo>
                 <Campo rotulo="Intermediação (% do 1º aluguel)">

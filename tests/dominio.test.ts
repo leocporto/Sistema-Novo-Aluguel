@@ -499,3 +499,19 @@ describe("modos: pessoas", () => {
     expect(rotaPermitida("/pessoas/x/interesse", "imobiliaria")).toBe(true);
   });
 });
+
+describe("taxa de administração zero", () => {
+  it("com 0% o proprietário recebe o aluguel inteiro e a imobiliária não fica com nada", () => {
+    const r = calcularRepasse([{ descricao: "Aluguel", tipo: "aluguel", valor: 200000, destino: "proprietario" }], {
+      taxaAdministracaoPct: 0,
+      taxaIntermediacaoPct: 0,
+      primeiraFatura: true,
+      valorAluguelContrato: 200000,
+      repassarMultaJuros: true,
+      proprietarios: [{ pessoaId: "a", percentual: 100 }],
+    });
+    expect(r.repasses[0].taxaAdministracao).toBe(0);
+    expect(r.repasses[0].valorLiquido).toBe(200000);
+    expect(r.receitaImobiliaria).toBe(0);
+  });
+});
