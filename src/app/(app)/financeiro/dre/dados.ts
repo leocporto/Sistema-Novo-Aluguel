@@ -14,17 +14,20 @@ type L = {
   valor_pago: number | null;
   liquidado_em: string;
   terceiros: boolean;
-  fatura_id: string | null;
   plano_id: string | null;
   plano: { codigo: string; nome: string; grupo_dre: string } | null;
 };
 
+type Recebido = { fatura_numero: number; valor: number; data: string };
+
 /**
  * O que foi recebido e pago no período (regime de caixa), com a classificação
  * do plano de contas.
- * - Pessoal: o aluguel recebido entra pela FATURA paga (na conta "1.1 Aluguéis
- *   recebidos" do plano, se existir). O lançamento automático que a baixa cria
- *   (com fatura_id) fica de fora para não contar duas vezes.
+ * - Pessoal: cada recebimento de aluguel (inteiro ou parcial) gera um lançamento
+ *   "Aluguel" (registrar_recebimento), que entra como os demais. Aluguéis pagos
+ *   ANTES disso (sem lançamento) vêm da visão `alugueis_recebidos`
+ *   (entra_no_resultado), na conta "Aluguéis recebidos" do plano, se existir.
+ *   Assim nada conta duas vezes.
  * - Imobiliária: o aluguel é dinheiro de terceiros (não entra); a taxa de
  *   administração entra pelo lançamento da baixa. Lançamentos marcados como
  *   "de terceiros" ficam fora.
@@ -34,25 +37,24 @@ export async function linhasRealizadas(supabase: Supabase, pessoal: boolean, de:
     todas<L>(() =>
       supabase
         .from("lancamentos")
-        .select("tipo, descricao, valor, valor_pago, liquidado_em, terceiros, fatura_id, plano_id, plano:plano_contas(codigo, nome, grupo_dre)")
+        .select("tipo, descricao, valor, valor_pago, liquidado_em, terceiros, plano_id, plano:plano_contas(codigo, nome, grupo_dre)")
         .eq("status", "liquidado")
         .gte("liquidado_em", de)
         .lte("liquidado_em", ate)
         .order("id"),
     ),
     pessoal
-      ? todas<{ numero: number; valor_total: number; valor_pago: number | null; pago_em: string }>(() =>
-          supabase.from("faturas").select("numero, valor_total, valor_pago, pago_em").eq("status", "paga").gte("pago_em", de).lte("pago_em", ate).order("id"),
+      ? todas<Recebido>(() =>
+          supabase.from("alugueis_recebidos").select("fatura_numero, valor, data").eq("entra_no_resultado", true).gte("data", de).lte("data", ate).order("id"),
         )
-      : Promise.resolve([]),
+      : Promise.resolve([] as Recebido[]),
     pessoal
-      ? supabase.from("plano_contas").select("id, codigo, nome, grupo_dre").eq("codigo", "1.1").eq("tipo", "receita").maybeSingle()
+      ? supabase.from("plano_contas").select("id, codigo, nome, grupo_dre").eq("tipo", "receita").eq("ativo", true).eq("nome", "Aluguéis recebidos").order("codigo").limit(1).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
   const linhas: LinhaComData[] = [];
   for (const l of lanc) {
     if (!pessoal && l.terceiros) continue;
-    if (pessoal && l.fatura_id) continue;
     linhas.push({
       tipo: l.tipo,
       valor: valorRealizado(l),
@@ -68,13 +70,13 @@ export async function linhasRealizadas(supabase: Supabase, pessoal: boolean, de:
   for (const f of fat)
     linhas.push({
       tipo: "receber",
-      valor: Number(f.valor_pago ?? f.valor_total),
+      valor: Number(f.valor),
       grupo_dre: p?.grupo_dre ?? "receita_operacional",
       plano_id: p?.id ?? "alugueis",
       plano_nome: p ? `${p.codigo} · ${p.nome}` : "Aluguéis recebidos",
       plano_codigo: p?.codigo ?? null,
-      data: f.pago_em,
-      descricao: `Aluguel · fatura #${f.numero}`,
+      data: f.data,
+      descricao: `Aluguel · fatura #${f.fatura_numero}`,
     });
   return linhas;
 }

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mail, MessageCircle, Plus, Trash2 } from "lucide-react";
+import { Mail, MessageCircle, Plus, Smartphone, X } from "lucide-react";
 import { EVENTO_SALVAR, Formulario } from "@/components/formulario";
 import { classeBotao } from "@/components/ui";
-import { salvarRegua, type AvisoRegua } from "./actions";
+import { salvarRegua, type AvisoRegua } from "../actions";
 
 const VARIAVEIS = [
   ["{{nome}}", "Nome"],
@@ -12,12 +12,19 @@ const VARIAVEIS = [
   ["{{vencimento}}", "Vencimento"],
   ["{{competencia}}", "Mês"],
   ["{{imovel}}", "Imóvel"],
+  ["{{multa}}", "Multa"],
+  ["{{juros}}", "Juros"],
+  ["{{saldo}}", "Aluguel sem encargos"],
+  ["{{dias}}", "Dias de atraso"],
+  ["{{link}}", "Link da 2ª via"],
+  ["{{pix}}", "Pix copia e cola"],
 ] as const;
 
 const MODELOS: Record<AvisoRegua["quando"], string> = {
   antes: "Olá {{nome}}! Lembrete: o aluguel de {{competencia}} ({{valor}}) vence em {{vencimento}}.",
   no_dia: "Olá {{nome}}! Seu aluguel de {{valor}} vence hoje ({{vencimento}}).",
-  depois: "Olá {{nome}}, não identificamos o pagamento do aluguel de {{competencia}} ({{valor}}), vencido em {{vencimento}}. Se já pagou, desconsidere.",
+  depois:
+    "Olá {{nome}}, não identificamos o pagamento do aluguel de {{competencia}}, vencido em {{vencimento}}. Hoje fica {{valor}} ({{saldo}} + multa {{multa}} + juros {{juros}}). 2ª via: {{link}}. Se já pagou, desconsidere.",
 };
 
 function ordem(a: AvisoRegua) {
@@ -75,7 +82,7 @@ export function EditorRegua({ inicial }: { inicial: AvisoRegua[] }) {
           return (
             <li key={a.id ?? `novo-${i}`} className="relative flex gap-4">
               <span className={`relative z-10 mt-4 flex size-10 shrink-0 items-center justify-center rounded-full text-white ${a.ativo ? cor : "bg-fraco"}`}>
-                {a.canal === "whatsapp" ? <MessageCircle className="size-[18px]" /> : <Mail className="size-[18px]" />}
+                {a.canal === "email" ? <Mail className="size-[18px]" /> : a.canal === "sms" ? <Smartphone className="size-[18px]" /> : <MessageCircle className="size-[18px]" />}
               </span>
               <div className={`flex-1 rounded-card border border-borda bg-card p-4 transition ${a.ativo ? "" : "opacity-60"}`}>
                 <div className="flex flex-wrap items-center gap-2 text-[14.5px]">
@@ -84,7 +91,7 @@ export function EditorRegua({ inicial }: { inicial: AvisoRegua[] }) {
                     <input
                       type="number"
                       min={1}
-                      max={90}
+                      max={180}
                       value={a.dias}
                       onChange={(e) => mudar(i, { dias: Number(e.target.value) })}
                       className="h-10 w-16 rounded-btn border border-borda-forte bg-input px-2 text-center font-semibold"
@@ -110,6 +117,7 @@ export function EditorRegua({ inicial }: { inicial: AvisoRegua[] }) {
                   >
                     <option value="whatsapp">WhatsApp</option>
                     <option value="email">E-mail</option>
+                    <option value="sms">SMS</option>
                   </select>
 
                   <div className="ml-auto flex items-center gap-2">
@@ -141,9 +149,9 @@ export function EditorRegua({ inicial }: { inicial: AvisoRegua[] }) {
                         setAvisos((l) => l.filter((_, k) => k !== i));
                         setAberto(null);
                       }}
-                      className="grid size-[34px] place-items-center rounded-[9px] text-mudo transition hover:bg-ruim-bg hover:text-ruim"
+                      className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-ruim-bd bg-ruim-bg text-ruim transition duration-150 hover:-translate-y-px hover:brightness-95 active:scale-90"
                     >
-                      <Trash2 className="size-4" />
+                      <X className="size-4" />
                     </button>
                   </div>
                 </div>

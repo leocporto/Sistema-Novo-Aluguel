@@ -6,7 +6,7 @@ import { SubAbas } from "@/components/sub-abas";
 import { Aviso, BotaoLink, Cabecalho, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { hojeISO } from "@/lib/dominio/datas";
-import { formatarReais } from "@/lib/dominio/dinheiro";
+import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { ativarContrato } from "../locacao-actions";
 
 const COR_STATUS = { ativo: "verde", rascunho: "amarelo", encerrado: "cinza", rescindido: "cinza" } as const;
@@ -18,12 +18,14 @@ export default async function ContratoLayout({ children, params }: LayoutProps<"
   const hoje = hojeISO();
   const [{ data: c }, { data: atrasadas }, { data: desoc }] = await Promise.all([
     supabase.from("contratos").select("id, numero, codigo, status, imovel:imoveis(id, codigo, logradouro, numero, complemento, bairro, cidade)").eq("id", id).maybeSingle(),
-    supabase.from("faturas").select("valor_total").eq("contrato_id", id).eq("status", "aberta").lt("vencimento", hoje),
+    // Saldo de cada fatura vencida (desconta os pagamentos parciais).
+    supabase.from("faturas").select("valor_total, valor_abatido").eq("contrato_id", id).eq("status", "aberta").lt("vencimento", hoje),
     supabase.from("contrato_desocupacoes").select("status").eq("contrato_id", id).maybeSingle(),
   ]);
   if (!c) notFound();
   const im = c.imovel as unknown as { id: string; codigo: string; logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null };
   const base = `/contratos/${id}`;
+  const emAtraso = (atrasadas ?? []).map((f) => paraCentavos(f.valor_total) - paraCentavos(f.valor_abatido ?? 0)).filter((v) => v > 0);
 
   return (
     <>
@@ -54,10 +56,13 @@ export default async function ContratoLayout({ children, params }: LayoutProps<"
             </>
           }
         />
-        {(atrasadas ?? []).length > 0 && (
+        {emAtraso.length > 0 && (
           <div className="mb-5">
             <Aviso tipo="erro">
-              {atrasadas!.length} fatura(s) em atraso, total {formatarReais(atrasadas!.reduce((s, f) => s + Number(f.valor_total), 0))}.
+              {emAtraso.length} fatura(s) em atraso, faltando {formatarReais(paraReais(emAtraso.reduce((s, v) => s + v, 0)))} (sem multa e juros).{" "}
+              <Link href={`${base}/cobrancas`} className="underline">
+                Ver cobranças
+              </Link>
             </Aviso>
           </div>
         )}

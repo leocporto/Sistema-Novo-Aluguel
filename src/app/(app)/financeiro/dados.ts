@@ -95,23 +95,29 @@ export async function opcoesFinanceiro(supabase: Supabase) {
 
 /**
  * Movimentos que mexem no saldo das contas: lançamentos baixados, aluguéis
- * recebidos e repasses pagos que foram ligados a uma conta, e transferências.
+ * recebidos (cada recebimento na sua data, inclusive os parciais — visão
+ * `alugueis_recebidos`, que não conta duas vezes o que já virou lançamento no
+ * modo pessoal) e repasses pagos que foram ligados a uma conta, e transferências.
  */
 export async function movimentosDasContas(supabase: Supabase) {
   type L = MovConta;
-  type F = { valor_total: number; valor_pago: number | null; pago_em: string; conta_id: string };
+  type A = { valor: number; data: string; conta_id: string };
   type R = { valor_liquido: number; pago_em: string; conta_id: string };
   type T = { id: string; origem_id: string; destino_id: string; valor: number; data: string; descricao: string | null };
   const [l, f, r, transferencias] = await Promise.all([
-    // Lançamentos derivados de aluguel (fatura_id) não contam: o dinheiro entra pela própria fatura.
-    todas<L>(() => supabase.from("lancamentos").select("tipo, valor, valor_pago, liquidado_em, conta_id, status").not("conta_id", "is", null).eq("status", "liquidado").is("fatura_id", null).order("id")),
-    todas<F>(() => supabase.from("faturas").select("valor_total, valor_pago, pago_em, conta_id").not("conta_id", "is", null).eq("status", "paga").order("id")),
+    // A taxa de administração (lançamento com fatura_id na imobiliária) está dentro do aluguel recebido: não conta de novo.
+    // O lançamento "Aluguel" do modo pessoal conta (a visão abaixo tira a conta dele para não somar duas vezes).
+    todas<L>(() =>
+      supabase.from("lancamentos").select("tipo, valor, valor_pago, liquidado_em, conta_id, status").not("conta_id", "is", null).eq("status", "liquidado").or("fatura_id.is.null,categoria.eq.Aluguel").order("id"),
+    ),
+    // Cada recebimento de aluguel (inclusive parcial) na sua data e na sua conta.
+    todas<A>(() => supabase.from("alugueis_recebidos").select("valor, data, conta_id").not("conta_id", "is", null).order("id")),
     todas<R>(() => supabase.from("repasses").select("valor_liquido, pago_em, conta_id").not("conta_id", "is", null).eq("status", "pago").order("id")),
     todas<T>(() => supabase.from("transferencias").select("id, origem_id, destino_id, valor, data, descricao").order("data", { ascending: false }).order("id")),
   ]);
   const movs: MovConta[] = [
     ...l,
-    ...f.map((x) => ({ tipo: "receber" as const, valor: Number(x.valor_pago ?? x.valor_total), liquidado_em: x.pago_em, conta_id: x.conta_id, status: "liquidado" })),
+    ...f.map((x) => ({ tipo: "receber" as const, valor: Number(x.valor), liquidado_em: x.data, conta_id: x.conta_id, status: "liquidado" })),
     ...r.map((x) => ({ tipo: "pagar" as const, valor: Number(x.valor_liquido), liquidado_em: x.pago_em, conta_id: x.conta_id, status: "liquidado" })),
   ];
   return { movs, transferencias };

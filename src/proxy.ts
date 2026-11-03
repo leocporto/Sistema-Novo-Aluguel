@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseConfig } from "@/lib/supabase/config";
 
-const ROTAS_PUBLICAS = ["/login", "/l", "/api/leads", "/api/agenda", "/assinar"];
+const ROTAS_PUBLICAS = ["/login", "/l", "/api/leads", "/api/agenda", "/assinar", "/pagar"];
 
 /**
  * Renova a sessão do Supabase a cada requisição e redireciona visitantes não

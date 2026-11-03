@@ -188,7 +188,7 @@ export default async function LancamentoPage({ params }: PageProps<"/financeiro/
                   ))}
                 </Selecao>
               </Campo>
-              {!l.fatura_id && (
+              {!(l.fatura_id && l.categoria !== "Aluguel") && (
                 <Campo rotulo="Conta">
                   <Selecao name="conta_id" defaultValue={l.conta_id ?? ""}>
                     <option value="">—</option>

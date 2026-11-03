@@ -111,8 +111,9 @@ export default async function PainelPage() {
         .from("contratos")
         .select("id, numero, status, data_inicio, data_fim, data_base_reajuste, periodicidade_reajuste_meses, valor_aluguel, seguro_incendio_vencimento, imovel:imoveis(codigo)")
         .neq("status", "rascunho"),
-      supabase.from("faturas").select("valor_total, vencimento").eq("status", "aberta"),
-      supabase.from("faturas").select("valor_pago").eq("status", "paga").gte("pago_em", iniMes).lte("pago_em", fimMes),
+      supabase.from("faturas").select("valor_total, valor_abatido, vencimento").eq("status", "aberta"),
+      // Cada recebimento de aluguel no mês (inclusive parcial), na data dele.
+      supabase.from("alugueis_recebidos").select("valor").gte("data", iniMes).lte("data", fimMes),
       supabase.from("lancamentos").select("valor, liquidado_em").eq("tipo", "receber").eq("status", "liquidado").gte("liquidado_em", desde),
       supabase.from("lancamentos").select("tipo, valor, vencimento, categoria").eq("status", "aberto"),
       supabase.from("repasses").select("valor_liquido, previsto_para").eq("status", "pendente"),
@@ -176,8 +177,10 @@ export default async function PainelPage() {
   // ------------------------------------------------------------- financeiro
   const abertas = abertasR.data ?? [];
   const atrasadas = abertas.filter((f) => f.vencimento < hoje);
-  const valorAtraso = atrasadas.reduce((s, f) => s + Number(f.valor_total), 0);
-  const aluguelRecebidoMes = (pagasMesR.data ?? []).reduce((s, f) => s + Number(f.valor_pago ?? 0), 0);
+  // Saldo da fatura = total − o que já foi recebido/abatido (pagamentos parciais).
+  const saldoFatura = (f: { valor_total: number; valor_abatido: number | null }) => Number(f.valor_total) - Number(f.valor_abatido ?? 0);
+  const valorAtraso = atrasadas.reduce((s, f) => s + saldoFatura(f), 0);
+  const aluguelRecebidoMes = (pagasMesR.data ?? []).reduce((s, f) => s + Number(f.valor ?? 0), 0);
   const receitas = (receitasR.data ?? []).map((l) => ({ data: l.liquidado_em as string, valor: Number(l.valor) }));
   const fat12 = somarPorMes(receitas, meses12);
   const fatAnt = somarPorMes(receitas, mesesAnt);
@@ -189,7 +192,7 @@ export default async function PainelPage() {
   const repasses = repassesR.data ?? [];
   const repassesAteFim = repasses.filter((r) => r.previsto_para <= fimMes);
   const aReceber =
-    abertas.filter((f) => f.vencimento <= fimMes).reduce((s, f) => s + Number(f.valor_total), 0) +
+    abertas.filter((f) => f.vencimento <= fimMes).reduce((s, f) => s + saldoFatura(f), 0) +
     abertos.filter((l) => l.tipo === "receber" && l.vencimento <= fimMes).reduce((s, l) => s + Number(l.valor), 0);
   const aPagar =
     aPagarLanc.reduce((s, l) => s + Number(l.valor), 0) + (pessoal ? 0 : repassesAteFim.reduce((s, r) => s + Number(r.valor_liquido), 0));
@@ -233,7 +236,7 @@ export default async function PainelPage() {
       avisos.push({ texto: `${t.prioridade === "alta" ? "Prioridade alta" : "Para hoje"}: ${t.titulo}`, href: "/comercial/tarefas", data: t.vencimento ?? undefined, tom: "alerta", icone: <ListTodo /> });
   }
   if (atrasadas.length)
-    avisos.push({ texto: `${atrasadas.length} aluguel(is) em atraso — ${formatarReais(valorAtraso)}`, href: "/regua", tom: "ruim", icone: <AlertTriangle /> });
+    avisos.push({ texto: `${atrasadas.length} aluguel(is) em atraso — ${formatarReais(valorAtraso)}`, href: "/cobrancas", tom: "ruim", icone: <AlertTriangle /> });
   // Cadastros de inquilinos, fiadores e proprietários com documentação faltando.
   const docsPorPessoa = new Map<string, string[]>();
   for (const a of arquivosR.data ?? []) docsPorPessoa.set(a.pessoa_id as string, [...(docsPorPessoa.get(a.pessoa_id as string) ?? []), a.categoria as string]);
@@ -468,7 +471,7 @@ export default async function PainelPage() {
           valor={<Contador valor={valorAtraso} formato="moeda" />}
           detalhe={`${atrasadas.length} aluguel(is)`}
           tom={atrasadas.length ? "perigo" : "sucesso"}
-          href="/regua"
+          href="/cobrancas"
         />
       ),
     },

@@ -186,7 +186,8 @@ export interface Fatura {
   periodo_fim: string | null;
   vencimento: string;
   valor_total: Num;
-  status: "aberta" | "paga" | "cancelada";
+  /** renegociada = entrou num acordo de cobrança (paga pelas parcelas do acordo). */
+  status: "aberta" | "paga" | "cancelada" | "renegociada";
   pago_em: string | null;
   valor_pago: Num | null;
   forma_pagamento: string | null;

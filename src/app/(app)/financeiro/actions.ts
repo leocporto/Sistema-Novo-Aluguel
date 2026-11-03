@@ -101,13 +101,14 @@ export async function atualizarLancamento(_: EstadoAcao, fd: FormData): Promise<
   const { supabase, organizacao } = await obterContexto();
   const id = String(fd.get("id"));
   try {
-    const { data: atual } = await supabase.from("lancamentos").select("status, valor, fatura_id").eq("id", id).single();
+    const { data: atual } = await supabase.from("lancamentos").select("status, valor, fatura_id, categoria").eq("id", id).single();
     if (!atual) throw new ErroValidacao("Lançamento não encontrado.");
     const d: Record<string, unknown> = {};
     for (const c of CAMPOS_TEXTO) if (fd.has(c)) d[c] = texto(fd, c);
     if (fd.has("descricao") && !d.descricao) throw new ErroValidacao("A descrição não pode ficar vazia.");
-    // O dinheiro do aluguel entra pela fatura: o lançamento derivado não ganha conta (evita contar duas vezes).
-    if (atual.fatura_id) delete d.conta_id;
+    // A taxa de administração está dentro do aluguel recebido: não ganha conta (evita contar duas vezes).
+    // O lançamento "Aluguel" (modo pessoal) pode trocar de conta: o recebimento acompanha.
+    if (atual.fatura_id && atual.categoria !== "Aluguel") delete d.conta_id;
     if (fd.has("vencimento")) d.vencimento = textoObrigatorio(fd, "vencimento", "o vencimento");
     if (fd.has("terceiros")) d.terceiros = organizacao.modo !== "pessoal" && fd.getAll("terceiros").includes("on");
     if (fd.has("valor")) {

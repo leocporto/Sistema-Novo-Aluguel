@@ -17,7 +17,7 @@ import { adicionarDesconto, adicionarItemFatura, descontarNoRepasse, excluirDesc
 
 export const metadata: Metadata = { title: "Cobranças do contrato" };
 
-const corFatura = { aberta: "amarelo", paga: "verde", cancelada: "cinza" } as const;
+const corFatura = { aberta: "amarelo", paga: "verde", cancelada: "cinza", renegociada: "azul" } as const;
 
 export default async function CobrancasContrato({ params }: PageProps<"/contratos/[id]/cobrancas">) {
   const { id } = await params;
@@ -54,9 +54,17 @@ export default async function CobrancasContrato({ params }: PageProps<"/contrato
             </Formulario>
           }
         >
-          <p className="mb-3 text-sm text-texto-2">
-            {pagas.length} paga(s), total {formatarReais(totalPago)} · {abertas.length} em aberto
-          </p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-texto-2">
+              {pagas.length} paga(s), total {formatarReais(totalPago)} · {abertas.length} em aberto
+              {faturas.some((f) => f.status === "renegociada") ? ` · ${faturas.filter((f) => f.status === "renegociada").length} em acordo` : ""}
+            </p>
+            {abertas.some((f) => f.vencimento < hoje) && (
+              <Link href={`/cobrancas/acordos/novo?contrato=${id}`} className="text-sm font-medium text-acento hover:underline">
+                Fazer acordo dos atrasados
+              </Link>
+            )}
+          </div>
           <Tabela colunas={["Nº", "Competência", "Vencimento", "Valor", "Situação", "Pago em", ""]}>
             {faturas.length === 0 && <LinhaVazia colunas={7}>Nenhuma fatura gerada.</LinhaVazia>}
             {faturas.map((f) => (
@@ -68,10 +76,21 @@ export default async function CobrancasContrato({ params }: PageProps<"/contrato
                 </Celula>
                 <Celula>{formatarCompetencia(f.competencia)}</Celula>
                 <Celula>{formatarDataBR(f.vencimento)}</Celula>
-                <Celula>{formatarReais(f.valor_pago ?? f.valor_total)}</Celula>
                 <Celula>
-                  <Selo cor={f.status === "aberta" && f.vencimento < hoje ? "vermelho" : corFatura[f.status as keyof typeof corFatura]}>
-                    {f.status === "aberta" && f.vencimento < hoje ? "em atraso" : f.status}
+                  {formatarReais(f.valor_pago ?? f.valor_total)}
+                  {f.status === "aberta" && Number((f as Fatura & { valor_abatido?: number }).valor_abatido ?? 0) > 0 && (
+                    <span className="block text-xs text-alerta">falta {formatarReais(Number(f.valor_total) - Number((f as Fatura & { valor_abatido?: number }).valor_abatido))}</span>
+                  )}
+                </Celula>
+                <Celula>
+                  <Selo cor={f.status === "aberta" && f.vencimento < hoje ? "vermelho" : (corFatura[f.status as keyof typeof corFatura] ?? "cinza")}>
+                    {f.status === "renegociada"
+                      ? "em acordo"
+                      : f.status === "aberta" && Number((f as Fatura & { valor_abatido?: number }).valor_abatido ?? 0) > 0
+                        ? "parcial"
+                        : f.status === "aberta" && f.vencimento < hoje
+                          ? "em atraso"
+                          : f.status}
                   </Selo>
                 </Celula>
                 <Celula>{formatarDataBR(f.pago_em)}</Celula>

@@ -88,7 +88,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     titulo: "Locação",
     itens: [
       { href: "/reajustes", rotulo: "Reajustes", icone: TrendingUp },
-      { href: "/regua", rotulo: "Inadimplência", icone: Bell },
+      { href: "/cobrancas", rotulo: "Cobranças", icone: Bell },
     ],
   },
   {
@@ -252,10 +252,10 @@ export function CascaApp({
           <button
             type="button"
             className="topo-btn topo-sino"
-            onClick={() => ir("/regua")}
-            onMouseEnter={() => router.prefetch("/regua")}
+            onClick={() => ir("/cobrancas/fila")}
+            onMouseEnter={() => router.prefetch("/cobrancas/fila")}
             title={emAtraso ? `${emAtraso} cobrança(s) em atraso — cobrar agora` : "Nenhum aluguel em atraso"}
-            aria-label={emAtraso ? `${emAtraso} cobranças em atraso` : "Inadimplência"}
+            aria-label={emAtraso ? `${emAtraso} cobranças em atraso` : "Cobranças: avisos de hoje"}
           >
             <Bell className="size-[18px]" />
             {emAtraso > 0 && <span className="topo-sino-num">{emAtraso > 99 ? "99+" : emAtraso}</span>}

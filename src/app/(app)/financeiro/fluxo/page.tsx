@@ -33,9 +33,11 @@ export default async function FluxoPage({ searchParams }: PageProps<"/financeiro
   const incluiAlugueis = pessoal || comTerceiros;
 
   type L = { tipo: "receber" | "pagar"; valor: number; valor_pago: number | null; vencimento: string; liquidado_em: string | null; status: string; terceiros: boolean; fatura_id: string | null };
-  type F = { valor_total: number; valor_pago: number | null; vencimento: string; pago_em: string | null; status: string };
+  type Rec = { valor: number; data: string };
+  type F = { valor_total: number; valor_abatido: number | null; vencimento: string };
+  type P = { valor: number; vencimento: string };
   type R = { valor_liquido: number; previsto_para: string; pago_em: string | null; status: string };
-  const [lanc, fat, rep, op] = await Promise.all([
+  const [lanc, recebidos, fat, parc, rep, op] = await Promise.all([
     todas<L>(() =>
       supabase
         .from("lancamentos")
@@ -44,9 +46,19 @@ export default async function FluxoPage({ searchParams }: PageProps<"/financeiro
         .or(`liquidado_em.gte.${de},and(status.eq.aberto,vencimento.lte.${ate})`)
         .order("id"),
     ),
+    // Aluguéis: o que entrou (cada recebimento, inclusive parcial, na sua data; no pessoal só o
+    // que ainda não virou lançamento "Aluguel") e o que falta (saldo das faturas e parcelas de acordo).
     incluiAlugueis
-      ? todas<F>(() => supabase.from("faturas").select("valor_total, valor_pago, vencimento, pago_em, status").neq("status", "cancelada").or(`pago_em.gte.${de},and(status.eq.aberta,vencimento.lte.${ate})`).order("id"))
+      ? todas<Rec>(() => supabase.from("alugueis_recebidos").select("valor, data").eq("entra_no_resultado", true).gte("data", de).order("id"))
+      : Promise.resolve([] as Rec[]),
+    incluiAlugueis
+      ? todas<F>(() => supabase.from("faturas").select("valor_total, valor_abatido, vencimento").eq("status", "aberta").lte("vencimento", ate).order("id"))
       : Promise.resolve([] as F[]),
+    incluiAlugueis
+      ? todas<P>(() =>
+          supabase.from("acordo_parcelas").select("valor, vencimento, acordo:acordos!inner(status)").eq("status", "aberta").eq("acordo.status", "ativo").lte("vencimento", ate).order("id"),
+        )
+      : Promise.resolve([] as P[]),
     !pessoal && comTerceiros
       ? todas<R>(() => supabase.from("repasses").select("valor_liquido, previsto_para, pago_em, status").neq("status", "cancelado").or(`pago_em.gte.${de},and(status.eq.pendente,previsto_para.lte.${ate})`).order("id"))
       : Promise.resolve([] as R[]),
@@ -63,16 +75,19 @@ export default async function FluxoPage({ searchParams }: PageProps<"/financeiro
   };
   for (const l of lanc) {
     if (!pessoal && !comTerceiros && l.terceiros) continue;
-    // Com os aluguéis no fluxo, o lançamento automático da baixa (aluguel no pessoal,
-    // taxa na imobiliária) já está dentro da fatura: não conta de novo.
-    if (incluiAlugueis && l.fatura_id) continue;
+    // Imobiliária com terceiros: o aluguel recebido entra inteiro (visão acima), então a taxa
+    // de administração (lançamento com fatura_id) já está dentro dele: não conta de novo.
+    // No pessoal o lançamento "Aluguel" de cada recebimento conta (a visão não o repete).
+    if (!pessoal && comTerceiros && l.fatura_id) continue;
     if (l.status === "liquidado" && l.liquidado_em) realizado(l.tipo, valorRealizado(l), l.liquidado_em);
     else if (l.status === "aberto") movs.push({ tipo: l.tipo, valor: Number(l.valor), data: previstoEm(l.vencimento), realizado: false });
   }
+  for (const r of recebidos) realizado("receber", Number(r.valor), r.data);
   for (const f of fat) {
-    if (f.status === "paga" && f.pago_em) realizado("receber", Number(f.valor_pago ?? f.valor_total), f.pago_em);
-    else if (f.status === "aberta") movs.push({ tipo: "receber", valor: Number(f.valor_total), data: previstoEm(f.vencimento), realizado: false });
+    const falta = paraReais(paraCentavos(f.valor_total) - paraCentavos(f.valor_abatido ?? 0));
+    if (falta > 0) movs.push({ tipo: "receber", valor: falta, data: previstoEm(f.vencimento), realizado: false });
   }
+  for (const p of parc) movs.push({ tipo: "receber", valor: Number(p.valor), data: previstoEm(p.vencimento), realizado: false });
   for (const r of rep) {
     if (r.status === "pago" && r.pago_em) realizado("pagar", Number(r.valor_liquido), r.pago_em);
     else if (r.status === "pendente") movs.push({ tipo: "pagar", valor: Number(r.valor_liquido), data: previstoEm(r.previsto_para), realizado: false });

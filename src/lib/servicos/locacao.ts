@@ -226,8 +226,12 @@ export function simularLiquidacao(
   contrato: Contrato,
   pagoEm: string,
   dispensarEncargos = false,
-  /** Multa digitada pelo usuário (R$). Quando informada, substitui o cálculo automático; 0 = sem multa. */
-  multaManual?: number | null,
+  /**
+   * Encargos digitados pelo usuário (R$). Número = só multa (formato antigo);
+   * objeto = multa e juros separados. Quando informado, substitui o cálculo
+   * automático; 0 = sem encargo.
+   */
+  multaManual?: number | { multa: number; juros: number } | null,
 ): SimulacaoLiquidacao {
   const base = paraCentavos(fatura.valor_total);
   const atraso = calcularAtraso({
@@ -238,13 +242,20 @@ export function simularLiquidacao(
     jurosMesPct: dispensarEncargos ? 0 : Number(contrato.juros_mes_pct),
     carenciaDias: contrato.carencia_dias,
   });
-  const destino =
-    contrato.repassar_multa_juros && contrato.tipo_repasse !== "garantido" ? "proprietario" : "imobiliaria";
+  const destino = destinoEncargos(contrato);
   const sugestao = atraso.multa + atraso.juros;
   if (multaManual !== undefined && multaManual !== null) {
-    const valor = Math.max(0, paraCentavos(multaManual));
-    const itens: ItemFatura[] = valor > 0 ? [{ descricao: "Multa por atraso", tipo: "multa", valor, destino }] : [];
-    return { diasAtraso: atraso.diasAtraso, multa: valor, juros: 0, total: base + valor, itensExtras: itens, sugestao };
+    if (typeof multaManual === "number") {
+      const valor = Math.max(0, paraCentavos(multaManual));
+      const itens: ItemFatura[] = valor > 0 ? [{ descricao: "Multa por atraso", tipo: "multa", valor, destino }] : [];
+      return { diasAtraso: atraso.diasAtraso, multa: valor, juros: 0, total: base + valor, itensExtras: itens, sugestao };
+    }
+    const multa = Math.max(0, paraCentavos(multaManual.multa));
+    const juros = Math.max(0, paraCentavos(multaManual.juros));
+    const itens: ItemFatura[] = [];
+    if (multa > 0) itens.push({ descricao: `Multa por atraso (${Number(contrato.multa_atraso_pct)}%)`, tipo: "multa", valor: multa, destino });
+    if (juros > 0) itens.push({ descricao: "Juros de mora", tipo: "juros", valor: juros, destino });
+    return { diasAtraso: atraso.diasAtraso, multa, juros, total: base + multa + juros, itensExtras: itens, sugestao };
   }
   const itensExtras: ItemFatura[] = [];
   // Desconto de pontualidade: pagou até o vencimento.
@@ -265,25 +276,42 @@ export function simularLiquidacao(
   return { diasAtraso: atraso.diasAtraso, multa: atraso.multa, juros: atraso.juros, total: atraso.total, itensExtras, sugestao };
 }
 
-/** Dá baixa na fatura, lança multa/juros e cria os repasses aos proprietários. */
-export async function liquidarFatura(
-  sb: SupabaseClient,
-  faturaId: string,
-  opcoes: { pagoEm: string; formaPagamento: string; dispensarEncargos?: boolean; multa?: number | null },
-) {
-  const fatura = verificar(await sb.from("faturas").select("*").eq("id", faturaId).single()) as Fatura;
-  if (fatura.status !== "aberta") throw new ErroValidacao("Esta fatura não está em aberto.");
-  const c = await carregarContrato(sb, fatura.contrato_id);
-  if (!c) throw new ErroValidacao("Contrato não encontrado.");
-  validarProprietarios(c);
-  const itens = verificar(await sb.from("fatura_itens").select("*").eq("fatura_id", faturaId)) as FaturaItem[];
+/** Para quem vão multa e juros: proprietário (se o contrato repassa) ou imobiliária. */
+export function destinoEncargos(contrato: Pick<Contrato, "repassar_multa_juros" | "tipo_repasse">): "proprietario" | "imobiliaria" {
+  return contrato.repassar_multa_juros && contrato.tipo_repasse !== "garantido" ? "proprietario" : "imobiliaria";
+}
 
-  const sim = simularLiquidacao(fatura, c.contrato, opcoes.pagoEm, opcoes.dispensarEncargos, opcoes.multa);
+/** Dados que a função do banco `liquidar_fatura` recebe para quitar uma fatura. */
+export interface Liquidacao {
+  fatura_id: string;
+  p: {
+    pago_em: string;
+    valor_pago: number;
+    forma_pagamento: string;
+    itens_extras: (Omit<ItemFatura, "valor"> & { valor: number })[];
+    repasses: ReturnType<typeof repassesParaJson>;
+    receita_imobiliaria: number;
+  };
+}
+
+/**
+ * Prepara a quitação de uma fatura: itens extras (multa, juros, descontos da
+ * baixa), repasse aos proprietários e taxa da imobiliária — tudo calculado
+ * sobre a fatura inteira, só no momento em que o saldo zera.
+ */
+export async function prepararLiquidacao(
+  sb: SupabaseClient,
+  c: ContratoCompleto,
+  fatura: Fatura,
+  itens: FaturaItem[],
+  extras: ItemFatura[],
+  opcoes: { pagoEm: string; formaPagamento: string; valorPago: number },
+): Promise<Liquidacao> {
+  validarProprietarios(c);
   const todos: ItemFatura[] = [
     ...itens.map((i) => ({ descricao: i.descricao, tipo: i.tipo as ItemFatura["tipo"], valor: paraCentavos(i.valor), destino: i.destino })),
-    ...sim.itensExtras,
+    ...extras,
   ];
-
   const garantido = c.contrato.tipo_repasse === "garantido";
   const primeira = await ehPrimeiraFatura(sb, c.contrato.id, fatura.competencia, fatura.id);
   const calculo = aplicarIrrfIndividual(
@@ -297,37 +325,20 @@ export async function liquidarFatura(
     }),
     Object.fromEntries(Object.entries(fatura.irrf_por_proprietario ?? {}).map(([k, v]) => [k, Number(v)])),
   );
-
-  const { error } = await sb.rpc("liquidar_fatura", {
-    p_fatura_id: faturaId,
+  return {
+    fatura_id: fatura.id,
     p: {
       pago_em: opcoes.pagoEm,
-      valor_pago: paraReais(sim.total),
+      valor_pago: opcoes.valorPago,
       forma_pagamento: opcoes.formaPagamento,
-      itens_extras: sim.itensExtras.map((i) => ({ ...i, valor: paraReais(i.valor) })),
-      // Imóveis pessoais: sem repasse nem taxa; o aluguel entra inteiro no financeiro (abaixo).
-      repasses:
-        garantido || c.pessoal ? [] : repassesParaJson(calculo.repasses, somarDias(opcoes.pagoEm, c.contrato.dias_repasse)),
+      itens_extras: extras.map((i) => ({ ...i, valor: paraReais(i.valor) })),
+      // Imóveis pessoais: sem repasse nem taxa. O dinheiro já entrou no
+      // Financeiro a cada recebimento (um lançamento por recebimento, gravado
+      // pelo banco em registrar_recebimento).
+      repasses: garantido || c.pessoal ? [] : repassesParaJson(calculo.repasses, somarDias(opcoes.pagoEm, c.contrato.dias_repasse)),
       receita_imobiliaria: c.pessoal ? 0 : paraReais(calculo.receitaImobiliaria),
     },
-  });
-  if (error) throw new Error(error.message);
-
-  if (c.pessoal) {
-    const mes = `${fatura.competencia.slice(5, 7)}/${fatura.competencia.slice(0, 4)}`;
-    const { error: e2 } = await sb.from("lancamentos").insert({
-      tipo: "receber",
-      descricao: `Aluguel ${mes} — ${c.imovel.codigo}`,
-      categoria: "Aluguel",
-      valor: paraReais(sim.total),
-      vencimento: opcoes.pagoEm,
-      status: "liquidado",
-      liquidado_em: opcoes.pagoEm,
-      contrato_id: c.contrato.id,
-      fatura_id: faturaId,
-    });
-    if (e2) throw new Error(e2.message);
-  }
+  };
 }
 
 /** Calcula o reajuste do contrato com base nos índices cadastrados. */

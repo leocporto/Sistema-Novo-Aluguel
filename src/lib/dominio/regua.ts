@@ -45,11 +45,20 @@ export function enviosDevidos(
 
 export interface VariaveisMensagem {
   nome: string;
+  /** Valor a pagar (R$), já com multa e juros quando em atraso. */
   valor: number;
   vencimento: DataISO;
   competencia: DataISO;
   imovel: string;
   link?: string;
+  /** Saldo do aluguel sem encargos (R$). */
+  saldo?: number;
+  multa?: number;
+  juros?: number;
+  /** Dias de atraso (ou 0). */
+  dias?: number;
+  /** Pix copia e cola. */
+  pix?: string;
 }
 
 /** Substitui {{variavel}} no modelo da mensagem. */
@@ -61,6 +70,11 @@ export function renderizarMensagem(modelo: string, v: VariaveisMensagem): string
     competencia: formatarCompetencia(v.competencia),
     imovel: v.imovel,
     link: v.link ?? "",
+    saldo: formatarReais(v.saldo ?? v.valor),
+    multa: formatarReais(v.multa ?? 0),
+    juros: formatarReais(v.juros ?? 0),
+    dias: String(v.dias ?? 0),
+    pix: v.pix ?? "",
   };
   return modelo.replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k: string) => mapa[k] ?? m);
 }

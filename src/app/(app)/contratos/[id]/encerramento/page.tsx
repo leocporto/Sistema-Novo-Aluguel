@@ -57,7 +57,7 @@ export default async function EncerramentoContrato({ params }: PageProps<"/contr
   const [{ data: dRaw }, { data: ultimaPaga }, { data: abertas }, { data: caucoes }] = await Promise.all([
     supabase.from("contrato_desocupacoes").select("*").eq("contrato_id", id).maybeSingle(),
     supabase.from("faturas").select("periodo_fim").eq("contrato_id", id).eq("status", "paga").order("competencia", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("faturas").select("id, numero, competencia, periodo_inicio, valor_total").eq("contrato_id", id).eq("status", "aberta").order("competencia"),
+    supabase.from("faturas").select("id, numero, competencia, periodo_inicio, valor_total, valor_recebido").eq("contrato_id", id).eq("status", "aberta").order("competencia"),
     supabase.from("contrato_garantias").select("valor").eq("contrato_id", id).eq("tipo", "caucao").eq("status", "ativa"),
   ]);
   const d = dRaw as D | null;
@@ -274,6 +274,16 @@ export default async function EncerramentoContrato({ params }: PageProps<"/contr
                   <p className="mt-3 text-xs text-texto-2">
                     Ao concluir, {seraoCanceladas.length} fatura(s) em aberto depois de {formatarDataBR(pagoAte)} são canceladas (o saldo já está no acerto):{" "}
                     {seraoCanceladas.map((f) => `#${f.numero} (${formatarCompetencia(f.competencia)})`).join(", ")}.
+                  </p>
+                )}
+                {seraoCanceladas.some((f) => Number(f.valor_recebido ?? 0) > 0) && (
+                  <p className="mt-2 text-xs text-ruim">
+                    Já há dinheiro recebido em{" "}
+                    {seraoCanceladas
+                      .filter((f) => Number(f.valor_recebido ?? 0) > 0)
+                      .map((f) => `#${f.numero} (${formatarReais(f.valor_recebido)})`)
+                      .join(", ")}
+                    : fatura com recebimento não pode ser cancelada. Antes de concluir, quite essa fatura ou desfaça o recebimento (e lance o valor no acerto).
                   </p>
                 )}
                 {continuaAberto.length > 0 && (
