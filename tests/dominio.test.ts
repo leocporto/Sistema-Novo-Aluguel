@@ -357,6 +357,7 @@ describe("modos de uso", () => {
     expect(rotaPermitida("/captacao", "imobiliaria")).toBe(true);
     expect(rotaPermitida("/agenda/abc", "pessoal")).toBe(true);
     expect(rotaPermitida("/chaves", "pessoal")).toBe(true);
+    expect(rotaPermitida("/vendas/x/propostas", "pessoal")).toBe(false);
     expect(rotaPermitida("/repasses/extrato", "pessoal")).toBe(false);
     expect(rotaPermitida("/despesas", "pessoal")).toBe(true);
     expect(rotaPermitida("/comercial", "imobiliaria")).toBe(true);
@@ -647,5 +648,44 @@ describe("agenda", () => {
     expect(situacaoChave([], "2026-11-04T00:00:00Z").situacao).toBe("disponivel");
     expect(situacaoChave([{ retirada_em: "2026-11-01", previsao_devolucao: "2026-11-02T00:00:00Z", devolvida_em: null }], "2026-11-04T00:00:00Z").situacao).toBe("atrasada");
     expect(sugerirCodigoChave(["CH-001", "ch-004", null])).toBe("CH-005");
+  });
+});
+
+import { cadeiaPropostas, calcularItbi, comissaoTotal, dividirComissao, resumoPagamentos } from "@/lib/dominio/vendas";
+
+describe("vendas", () => {
+  it("divide a comissão no centavo e o resto fica com a imobiliária", () => {
+    const total = comissaoTotal(333333.33, 6);
+    expect(total).toBe(20000);
+    const d = dividirComissao(total, [{ percentual: 33.333 }, { percentual: 33.333 }]);
+    expect(d.porPessoa[0] + d.porPessoa[1] + d.imobiliaria).toBe(20000);
+    expect(d.imobiliaria).toBeCloseTo(6666.8, 1);
+    expect(() => dividirComissao(1000, [{ percentual: 70 }, { percentual: 40 }])).toThrow();
+    expect(comissaoTotal(500000, 6, 25000)).toBe(25000);
+  });
+  it("calcula ITBI pelo maior valor (venda ou venal)", () => {
+    expect(calcularItbi(400000, 3)).toBe(12000);
+    expect(calcularItbi(400000, 2, 450000)).toBe(9000);
+  });
+  it("resume o cronograma de pagamentos", () => {
+    const r = resumoPagamentos(
+      [
+        { valor: 20000, vencimento: "2026-11-01", pago_em: "2026-11-01" },
+        { valor: 80000, vencimento: "2026-11-02", pago_em: null },
+        { valor: 300000, vencimento: "2026-12-30", pago_em: null },
+      ],
+      500000,
+      "2026-11-10",
+    );
+    expect(r).toMatchObject({ programado: 400000, pago: 20000, aReceber: 380000, atrasado: 80000, semCronograma: 100000, pctPago: 4 });
+  });
+  it("põe a contraproposta logo abaixo da proposta", () => {
+    const c = cadeiaPropostas([
+      { id: "b", proposta_pai_id: "a", created_at: "2026-11-02" },
+      { id: "a", proposta_pai_id: null, created_at: "2026-11-01" },
+      { id: "x", proposta_pai_id: null, created_at: "2026-11-03" },
+      { id: "c", proposta_pai_id: "b", created_at: "2026-11-04" },
+    ]);
+    expect(c.map((p) => `${p.id}${p.nivel}`)).toEqual(["a0", "b1", "c2", "x0"]);
   });
 });

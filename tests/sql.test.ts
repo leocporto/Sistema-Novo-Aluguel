@@ -262,6 +262,21 @@ describe("comercial, comissões e preferências do painel", () => {
       const pLoc = await um(`insert into propostas (imovel_id, tipo, valor) values ($1,'locacao',2500) returning id`, [ap]);
       await db.query(`select public.aceitar_proposta($1)`, [pVenda]);
       await db.query(`select public.aceitar_proposta($1)`, [pLoc]);
+      // Venda aceita abre o processo e só reserva o imóvel
+      const venda = (await db.query<{ id: string; status: string }>(`select v.id, v.status from vendas v join propostas p on p.venda_id = v.id where p.id = $1`, [pVenda])).rows[0];
+      const antes = (await db.query<{ status: string }>(`select status from imoveis where id = $1`, [casa])).rows[0].status;
+      const leadAntes = (await db.query<{ status: string }>(`select status from leads where id = $1`, [lead])).rows[0].status;
+      const parceiro = await um(`insert into pessoas (nome, papeis) values ('Paulo Parceiro','{parceiro}') returning id`);
+      await db.query(`update venda_comissoes set percentual = 60 where venda_id = $1`, [venda.id]);
+      await db.query(`insert into venda_comissoes (venda_id, pessoa_id, papel, percentual) values ($1, $2, 'parceiro', 40)`, [venda.id, parceiro]);
+      await db.query(`select public.concluir_venda($1)`, [venda.id]);
+      let dupla = "";
+      try {
+        await db.query(`select public.concluir_venda($1)`, [venda.id]);
+      } catch (e) {
+        dupla = String(e);
+      }
+      const daVenda = (await db.query<{ tipo: string; valor: string; pessoa_id: string | null }>(`select tipo, valor, pessoa_id from lancamentos where venda_id = $1 order by tipo, valor desc`, [venda.id])).rows;
       const imoveis = (await db.query<{ codigo: string; status: string; vendido_em: string | null; captado_em: string }>(
         `select codigo, status, vendido_em::text, captado_em::text from imoveis order by codigo`,
       )).rows;
@@ -270,17 +285,25 @@ describe("comercial, comissões e preferências do painel", () => {
         `select valor, categoria, pessoa_id from lancamentos where proposta_id is not null`,
       )).rows;
       await db.query(`insert into painel_preferencias (organizacao_id, widgets) values ($1, '{"ordem":["a"]}')`, [orgC]);
-      return { imoveis, leadSt, comissoes, corretor, pVenda };
+      return { imoveis, leadSt, comissoes, corretor, pVenda, venda, antes, leadAntes, dupla, daVenda, parceiro };
     });
 
     expect(r.imoveis.find((i) => i.codigo === "CA-1")?.status).toBe("vendido");
     expect(r.imoveis.find((i) => i.codigo === "CA-1")?.vendido_em).toBeTruthy();
     expect(r.imoveis.find((i) => i.codigo === "AP-2")?.status).toBe("reservado");
     expect(r.imoveis.every((i) => Boolean(i.captado_em))).toBe(true);
+    expect(r.venda.status).toBe("aprovado");
+    expect(r.antes).toBe("reservado");
+    expect(r.leadAntes).toBe("proposta");
     expect(r.leadSt).toBe("ganho");
-    expect(r.comissoes).toHaveLength(1);
-    expect(Number(r.comissoes[0].valor)).toBe(30000);
-    expect(r.comissoes[0].pessoa_id).toBe(r.corretor);
+    expect(r.comissoes).toHaveLength(0); // venda só gera comissão ao concluir
+    expect(r.dupla).toContain("já foi concluída");
+    // Comissão total a receber (6% de 500 mil) e divisão 60/40 a pagar
+    expect(r.daVenda.map((l) => [l.tipo, Number(l.valor), l.pessoa_id])).toEqual([
+      ["pagar", 18000, r.corretor],
+      ["pagar", 12000, r.parceiro],
+      ["receber", 30000, null],
+    ]);
 
     // Aceitar de novo é recusado
     await expect(comoUsuario(USER_C, () => db.query(`select public.aceitar_proposta($1)`, [r.pVenda]))).rejects.toThrow();
@@ -512,5 +535,24 @@ describe("agenda e chaves", () => {
     expect(direto).toMatch(/permission|denied/i);
     const deM = await comoUsuario(USER_M, async () => (await db.query(`select * from chaves`)).rows.length);
     expect(deM).toBe(0);
+  });
+});
+
+describe("vendas: reserva acompanha o processo", () => {
+  const USER_N = "00000000-0000-0000-0000-000000000017";
+  it("reserva o imóvel durante a venda e libera ao cancelar", async () => {
+    await comoUsuario(USER_N, () => db.query(`select public.criar_organizacao('Imob N')`));
+    const r = await comoUsuario(USER_N, async () => {
+      const im = (await db.query<{ id: string }>(`insert into imoveis (codigo, finalidades) values ('VD-1','{venda}') returning id`)).rows[0].id;
+      const st = async () => (await db.query<{ status: string }>(`select status from imoveis where id = $1`, [im])).rows[0].status;
+      const v = (await db.query<{ id: string }>(`insert into vendas (imovel_id, valor, status) values ($1, 300000, 'negociacao') returning id`, [im])).rows[0].id;
+      const a = await st();
+      await db.query(`update vendas set status = 'documentacao' where id = $1`, [v]);
+      const b = await st();
+      await db.query(`update vendas set status = 'cancelada', motivo_cancelamento = 'Desistiu' where id = $1`, [v]);
+      const c = await st();
+      return [a, b, c];
+    });
+    expect(r).toEqual(["disponivel", "reservado", "disponivel"]);
   });
 });

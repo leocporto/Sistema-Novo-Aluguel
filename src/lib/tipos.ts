@@ -335,6 +335,7 @@ export interface Lead {
 export const ROTULO_STATUS_VISITA: Record<string, string> = { agendada: "Agendada", realizada: "Realizada", cancelada: "Cancelada" };
 export const ROTULO_STATUS_PROPOSTA: Record<string, string> = {
   em_negociacao: "Em negociação",
+  contraproposta: "Contraproposta",
   aceita: "Aceita",
   recusada: "Recusada",
   cancelada: "Cancelada",

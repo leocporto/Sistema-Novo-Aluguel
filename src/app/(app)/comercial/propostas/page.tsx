@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BadgeDollarSign, CircleCheck, Handshake, Wallet } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
+import { BotaoAcao } from "@/components/botao-acao";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoEnviar } from "@/components/formulario";
 import { JanelaCadastro } from "@/components/janela-cadastro";
@@ -17,6 +18,7 @@ import { carregarOpcoes } from "../dados";
 export const metadata: Metadata = { title: "Propostas" };
 
 type P = {
+  venda_id: string | null;
   id: string;
   tipo: "locacao" | "venda";
   valor: number;
@@ -30,7 +32,7 @@ type P = {
   corretor: { nome: string } | null;
 };
 
-const COR = { em_negociacao: "amarelo", aceita: "verde", recusada: "vermelho", cancelada: "cinza" } as const;
+const COR = { em_negociacao: "amarelo", contraproposta: "azul", aceita: "verde", recusada: "vermelho", cancelada: "cinza" } as const;
 
 export default async function PropostasPage({ searchParams }: PageProps<"/comercial/propostas">) {
   const sp = await searchParams;
@@ -41,7 +43,7 @@ export default async function PropostasPage({ searchParams }: PageProps<"/comerc
   const [{ data }, opcoes, { data: comissoes }] = await Promise.all([
     supabase
       .from("propostas")
-      .select("id, tipo, valor, status, comissao_pct, fechada_em, created_at, observacoes, lead:leads(id, nome), imovel:imoveis(id, codigo), corretor:pessoas(nome)")
+      .select("id, tipo, valor, status, venda_id, comissao_pct, fechada_em, created_at, observacoes, lead:leads(id, nome), imovel:imoveis(id, codigo), corretor:pessoas(nome)")
       .order("created_at", { ascending: false })
       .limit(300),
     carregarOpcoes(supabase),
@@ -140,20 +142,21 @@ export default async function PropostasPage({ searchParams }: PageProps<"/comerc
             </Celula>
             <Celula>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {p.status === "em_negociacao" && (
+                {(p.status === "em_negociacao" || p.status === "contraproposta") && (
                   <>
-                    <form action={aceitarProposta}>
-                      <input type="hidden" name="id" value={p.id} />
-                      <BotaoEnviar
-                        confirmar={
-                          p.tipo === "venda"
-                            ? "Aceitar a proposta? O imóvel será marcado como vendido."
-                            : "Aceitar a proposta? O imóvel fica reservado até você criar o contrato."
-                        }
-                      >
-                        Aceitar
-                      </BotaoEnviar>
-                    </form>
+                    <BotaoAcao
+                      acao={aceitarProposta}
+                      id={p.id}
+                      variante="primario"
+                      tamanho="sm"
+                      confirmar={
+                        p.tipo === "venda"
+                          ? "Aceitar a proposta? Abre o processo da venda (o imóvel fica reservado; vendido só ao concluir)."
+                          : "Aceitar a proposta? O imóvel fica reservado até você criar o contrato."
+                      }
+                    >
+                      Aceitar
+                    </BotaoAcao>
                     <form action={recusarProposta}>
                       <input type="hidden" name="id" value={p.id} />
                       <BotaoEnviar variante="secundario" confirmar="Marcar a proposta como recusada?">
@@ -161,6 +164,11 @@ export default async function PropostasPage({ searchParams }: PageProps<"/comerc
                       </BotaoEnviar>
                     </form>
                   </>
+                )}
+                {p.venda_id && (
+                  <Link href={`/vendas/${p.venda_id}`} className={classeBotao("secundario", "sm")}>
+                    Abrir venda
+                  </Link>
                 )}
                 {p.status === "aceita" && p.tipo === "locacao" && p.imovel && (
                   <Link href={`/contratos/novo?imovel=${p.imovel.id}`} className={classeBotao("secundario", "sm")}>

@@ -4,19 +4,12 @@ import { BotaoImprimir } from "@/components/formulario";
 import { obterContexto } from "@/lib/contexto";
 import { formatarDataBR } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
-import { formatarDocumento } from "@/lib/dominio/documentos";
+import { formatarDocumento, qualificacao } from "@/lib/dominio/documentos";
 import { NOME_INDICE } from "@/lib/dominio/reajuste";
 import { carregarContrato } from "@/lib/servicos/locacao";
-import { ROTULO_GARANTIA, type Pessoa } from "@/lib/tipos";
+import { ROTULO_GARANTIA } from "@/lib/tipos";
 
 export const metadata: Metadata = { title: "Contrato de locação" };
-
-function qualificacao(p: Pessoa) {
-  const doc = formatarDocumento(p.documento);
-  const end = [p.logradouro, p.numero, p.complemento, p.bairro, p.cidade, p.uf].filter(Boolean).join(", ");
-  if (p.tipo_pessoa === "PJ") return `${p.nome}, pessoa jurídica inscrita no CNPJ ${doc || "____"}, com sede em ${end || "____"}`;
-  return `${p.nome}${p.estado_civil ? `, ${p.estado_civil}` : ""}${p.profissao ? `, ${p.profissao}` : ""}, inscrito(a) no CPF ${doc || "____"}${p.rg_ie ? `, RG ${p.rg_ie}` : ""}, residente em ${end || "____"}`;
-}
 
 /**
  * Minuta de contrato gerada a partir dos dados cadastrados. É um modelo-base

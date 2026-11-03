@@ -334,13 +334,16 @@ export async function criarProposta(_: EstadoAcao, fd: FormData): Promise<Estado
   return { ok: "Proposta registrada." };
 }
 
-export async function aceitarProposta(fd: FormData) {
+export async function aceitarProposta(id: string): Promise<Resultado> {
   const { supabase } = await obterContexto();
-  await supabase.rpc("aceitar_proposta", { p_id: String(fd.get("id")) });
+  const { error } = await supabase.rpc("aceitar_proposta", { p_id: id });
+  if (error) return { ok: false, erro: mensagemErro(error) };
   revalidarTudo();
+  revalidatePath("/vendas", "layout");
   revalidatePath("/imoveis");
   revalidatePath("/despesas");
   revalidatePath("/financeiro");
+  return { ok: true };
 }
 
 export async function recusarProposta(fd: FormData) {
@@ -349,7 +352,7 @@ export async function recusarProposta(fd: FormData) {
     .from("propostas")
     .update({ status: "recusada", fechada_em: new Date().toISOString().slice(0, 10) })
     .eq("id", String(fd.get("id")))
-    .eq("status", "em_negociacao");
+    .in("status", ["em_negociacao", "contraproposta"]);
   revalidarTudo();
 }
 

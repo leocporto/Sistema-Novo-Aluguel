@@ -8,7 +8,7 @@
 export type ModoUso = "imobiliaria" | "pessoal";
 
 /** Telas que só existem no modo imobiliária (e tudo abaixo delas). */
-export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/captacao", "/empreendimentos"] as const;
+export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/captacao", "/vendas", "/empreendimentos"] as const;
 
 /** Partes de telas compartilhadas que só existem na imobiliária (ex.: aba Comercialização do imóvel). */
 const SUBROTAS_SO_IMOBILIARIA = [/^\/imoveis\/[^/]+\/comercializacao(\/|$)/, /^\/pessoas\/[^/]+\/interesse(\/|$)/];

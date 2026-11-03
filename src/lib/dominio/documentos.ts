@@ -32,3 +32,26 @@ export function formatarDocumento(valor: string | null | undefined): string {
   if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
   return valor ?? "";
 }
+
+export type DadosQualificacao = {
+  nome: string;
+  tipo_pessoa?: string | null;
+  documento?: string | null;
+  rg_ie?: string | null;
+  estado_civil?: string | null;
+  profissao?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+};
+
+/** Qualificação da parte para contratos ("Fulano, casado, engenheiro, CPF …, residente em …"). */
+export function qualificacao(p: DadosQualificacao) {
+  const doc = formatarDocumento(p.documento);
+  const end = [p.logradouro, p.numero, p.complemento, p.bairro, p.cidade, p.uf].filter(Boolean).join(", ");
+  if (p.tipo_pessoa === "PJ") return `${p.nome}, pessoa jurídica inscrita no CNPJ ${doc || "____"}, com sede em ${end || "____"}`;
+  return `${p.nome}${p.estado_civil ? `, ${p.estado_civil}` : ""}${p.profissao ? `, ${p.profissao}` : ""}, inscrito(a) no CPF ${doc || "____"}${p.rg_ie ? `, RG ${p.rg_ie}` : ""}, residente em ${end || "____"}`;
+}

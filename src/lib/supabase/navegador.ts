@@ -68,3 +68,14 @@ export async function enviarArquivoPessoa(organizacaoId: string, pessoaId: strin
   if (error) throw new Error(`Não foi possível enviar "${arquivo.name}": ${error.message}`);
   return caminho;
 }
+
+/** Documento de uma venda (bucket privado "vendas", pasta <org>/<venda>/). */
+export async function enviarArquivoVenda(organizacaoId: string, vendaId: string, arquivo: File): Promise<string> {
+  if (!TIPOS_COMPROVANTE.includes(arquivo.type)) throw new Error(`"${arquivo.name}": envie imagem (JPG, PNG) ou PDF.`);
+  if (arquivo.size > TAMANHO_MAX_COMPROVANTE) throw new Error(`"${arquivo.name}" passa de 10 MB.`);
+  const nome = arquivo.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80);
+  const caminho = `${organizacaoId}/${vendaId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${nome}`;
+  const { error } = await clienteNavegador().storage.from("vendas").upload(caminho, arquivo, { contentType: arquivo.type, upsert: false });
+  if (error) throw new Error(`Não foi possível enviar "${arquivo.name}": ${error.message}`);
+  return caminho;
+}
