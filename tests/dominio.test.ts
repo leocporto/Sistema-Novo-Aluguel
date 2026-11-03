@@ -758,3 +758,104 @@ describe("modelos de documento", () => {
     for (const m of MODELOS_PADRAO) for (const v of variaveisDoTexto(m.conteudo)) expect(conhecidas.has(v), `${m.chave}: ${v}`).toBe(true);
   });
 });
+
+describe("financeiro", () => {
+  it("gera série mensal e parcelada sem perder centavos e respeita fim de mês", async () => {
+    const { gerarSerie } = await import("@/lib/dominio/financeiro");
+    const m = gerarSerie({ descricao: "Internet", valor: 99.9, vencimento: "2026-01-31", repeticao: "mensal", vezes: 3 });
+    expect(m.map((x) => x.vencimento)).toEqual(["2026-01-31", "2026-02-28", "2026-03-31"]);
+    expect(m.every((x) => x.valor === 99.9)).toBe(true);
+    const p = gerarSerie({ descricao: "Móveis", valor: 100, vencimento: "2026-05-10", repeticao: "parcelado", vezes: 3 });
+    expect(p.map((x) => x.valor)).toEqual([33.33, 33.33, 33.34]);
+    expect(p[2].descricao).toBe("Móveis (3/3)");
+    expect(gerarSerie({ descricao: "X", valor: 5, vencimento: "2026-05-10", repeticao: "parcelado", vezes: 1 })).toHaveLength(1);
+  });
+
+  it("baixa com juros e desconto, aprovação e situação", async () => {
+    const { valorDaBaixa, precisaAprovacao, situacaoLancamento } = await import("@/lib/dominio/financeiro");
+    expect(valorDaBaixa(100, 2.5, 0.1)).toBe(102.4);
+    expect(valorDaBaixa(10, 0, 20)).toBe(0);
+    expect(precisaAprovacao("pagar", 5000.01, 5000)).toBe(true);
+    expect(precisaAprovacao("receber", 9000, 5000)).toBe(false);
+    expect(precisaAprovacao("pagar", 9000, null)).toBe(false);
+    expect(situacaoLancamento({ status: "aberto", vencimento: "2026-01-01" }, "2026-01-02")).toBe("vencido");
+    expect(situacaoLancamento({ status: "aberto", vencimento: "2026-01-01", requer_aprovacao: true, aprovado_em: null }, "2026-01-02")).toBe("aguardando_aprovacao");
+  });
+
+  it("saldo da conta soma baixas e transferências desde o saldo inicial", async () => {
+    const { saldoConta } = await import("@/lib/dominio/financeiro");
+    const conta = { id: "c1", saldo_inicial: 1000, saldo_inicial_em: "2026-01-01" };
+    const lanc = [
+      { tipo: "receber" as const, valor: 500, liquidado_em: "2026-01-05", conta_id: "c1", status: "liquidado" },
+      { tipo: "pagar" as const, valor: 200, valor_pago: 210, liquidado_em: "2026-01-06", conta_id: "c1", status: "liquidado" },
+      { tipo: "pagar" as const, valor: 999, liquidado_em: null, conta_id: "c1", status: "aberto" },
+      { tipo: "receber" as const, valor: 50, liquidado_em: "2025-12-31", conta_id: "c1", status: "liquidado" },
+    ];
+    const transf = [{ origem_id: "c1", destino_id: "c2", valor: 100, data: "2026-01-07" }];
+    expect(saldoConta(conta, lanc, transf)).toBe(1190);
+    expect(saldoConta(conta, lanc, transf, "2026-01-05")).toBe(1500);
+  });
+
+  it("lê extrato OFX e CSV brasileiro", async () => {
+    const { lerOFX, lerCSVExtrato, lerNumero } = await import("@/lib/dominio/financeiro");
+    const ofx = `<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261105120000[-3:BRT]<TRNAMT>-12.50<FITID>A1<MEMO>TARIFA PACOTE</STMTTRN><STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261106<TRNAMT>2000.00<FITID>A2<NAME>PIX JOAO</STMTTRN></BANKTRANLIST></OFX>`;
+    const o = lerOFX(ofx);
+    expect(o).toHaveLength(2);
+    expect(o[0]).toMatchObject({ data: "2026-11-05", valor: -12.5, fitid: "A1", descricao: "TARIFA PACOTE" });
+    expect(o[1].valor).toBe(2000);
+    const csv = "Data;Histórico;Valor\n05/11/2026;Tarifa;-12,50\n06/11/2026;\"Pix recebido; João\";1.234,56\n06/11/2026;SALDO DO DIA;5000,00";
+    const c = lerCSVExtrato(csv);
+    expect(c).toHaveLength(2);
+    expect(c[1]).toMatchObject({ data: "2026-11-06", valor: 1234.56, descricao: "Pix recebido; João" });
+    expect(lerCSVExtrato(csv)[0].fitid).toBe(c[0].fitid);
+    const cd = lerCSVExtrato("Data,Descrição,Crédito,Débito\n2026-11-01,Venda,100.00,\n2026-11-02,Luz,,80.00");
+    expect(cd.map((x) => x.valor)).toEqual([100, -80]);
+    expect(lerNumero("(10,00)")).toBe(-10);
+    expect(lerNumero("1,234.50")).toBe(1234.5);
+  });
+
+  it("sugere conciliação por sentido, valor e data", async () => {
+    const { sugerirConciliacao } = await import("@/lib/dominio/financeiro");
+    const lanc = [
+      { id: "a", tipo: "pagar" as const, descricao: "Conta de luz", valor: 80, vencimento: "2026-11-03", liquidado_em: null, status: "aberto" },
+      { id: "b", tipo: "pagar" as const, descricao: "Internet", valor: 80, vencimento: "2026-12-20", liquidado_em: null, status: "aberto" },
+      { id: "c", tipo: "receber" as const, descricao: "Aluguel", valor: 80, vencimento: "2026-11-02", liquidado_em: null, status: "aberto" },
+      { id: "d", tipo: "pagar" as const, descricao: "Luz", valor: 80, vencimento: "2026-11-02", liquidado_em: null, status: "aberto", conciliado_em: "x" },
+    ];
+    expect(sugerirConciliacao({ data: "2026-11-02", valor: -80, descricao: "DEB CONTA LUZ" }, lanc).map((l) => l.id)).toEqual(["a"]);
+    expect(sugerirConciliacao({ data: "2026-11-02", valor: 80, descricao: "PIX" }, lanc).map((l) => l.id)).toEqual(["c"]);
+    expect(sugerirConciliacao({ data: "2026-11-02", valor: -80, descricao: "x" }, lanc, new Set(["a"]))).toHaveLength(0);
+  });
+
+  it("monta a DRE, o fluxo de caixa e o orçado × realizado", async () => {
+    const { montarDRE, fluxoDeCaixa, orcadoRealizado, planoPadrao, paraCSV } = await import("@/lib/dominio/financeiro");
+    const d = montarDRE([
+      { tipo: "receber", valor: 1000, grupo_dre: "receita_operacional", plano_id: "p1", plano_nome: "Taxa" },
+      { tipo: "pagar", valor: 50, grupo_dre: "deducoes", plano_id: "p2", plano_nome: "ISS" },
+      { tipo: "pagar", valor: 300, grupo_dre: null, plano_id: null },
+      { tipo: "receber", valor: 20, grupo_dre: "despesas_operacionais", plano_id: "p3", plano_nome: "Reembolso" },
+      { tipo: "receber", valor: 5000, grupo_dre: "nao_dre", plano_id: "p9" },
+    ]);
+    expect(d.receitaBruta).toBe(1000);
+    expect(d.resultado).toBe(670);
+    expect(d.linhas.find((l) => l.grupo === "despesas_operacionais")?.total).toBe(280);
+    const f = fluxoDeCaixa(
+      [
+        { tipo: "receber", valor: 100, data: "2026-11-01", realizado: true },
+        { tipo: "pagar", valor: 30, data: "2026-11-15", realizado: false },
+        { tipo: "receber", valor: 10, data: "2026-12-01", realizado: false },
+        { tipo: "receber", valor: 999, data: "2027-01-01", realizado: false },
+      ],
+      50,
+      "mes",
+      "2026-11-01",
+      "2026-12-31",
+    );
+    expect(f.map((p) => p.saldoFinal)).toEqual([120, 130]);
+    expect(orcadoRealizado(100, 120)).toEqual({ diferenca: -20, pct: 120, estourou: true });
+    const pp = planoPadrao("pessoal");
+    expect(new Set(pp.map((c) => c.codigo)).size).toBe(pp.length);
+    expect(new Set(planoPadrao("imobiliaria").map((c) => c.codigo)).size).toBe(planoPadrao("imobiliaria").length);
+    expect(paraCSV(["a", "b"], [["x;y", 1.5]])).toBe('﻿a;b\r\n"x;y";1,50');
+  });
+});

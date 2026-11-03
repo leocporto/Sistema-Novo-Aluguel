@@ -11,7 +11,11 @@ export type ModoUso = "imobiliaria" | "pessoal";
 export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/captacao", "/vendas", "/empreendimentos"] as const;
 
 /** Partes de telas compartilhadas que só existem na imobiliária (ex.: aba Comercialização do imóvel). */
-const SUBROTAS_SO_IMOBILIARIA = [/^\/imoveis\/[^/]+\/comercializacao(\/|$)/, /^\/pessoas\/[^/]+\/interesse(\/|$)/];
+const SUBROTAS_SO_IMOBILIARIA = [
+  /^\/imoveis\/[^/]+\/comercializacao(\/|$)/,
+  /^\/pessoas\/[^/]+\/interesse(\/|$)/,
+  /^\/financeiro\/(proprietarios|notas)(\/|$)/,
+];
 
 /** A rota pode ser aberta neste modo? */
 export function rotaPermitida(caminho: string, modo: ModoUso | null | undefined): boolean {

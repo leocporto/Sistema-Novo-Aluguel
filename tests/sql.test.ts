@@ -657,3 +657,37 @@ describe("documentos: assinatura eletrônica, restritos e auditoria", () => {
     expect(doCorretor).toBe(1);
   });
 });
+
+describe("financeiro: histórico, contas e isolamento", () => {
+  const USER_F = "00000000-0000-0000-0000-00000000001b";
+  const USER_G = "00000000-0000-0000-0000-00000000001c";
+  it("grava histórico de criação, baixa e estorno, não deixa apagar e isola contas por organização", async () => {
+    await comoUsuario(USER_F, () => db.query(`select public.criar_organizacao('Imob F')`));
+    await comoUsuario(USER_G, () => db.query(`select public.criar_organizacao('Imob G')`));
+    const r = await comoUsuario(USER_F, async () => {
+      const conta = (await db.query<{ id: string }>(`insert into contas_financeiras (nome, tipo, saldo_inicial) values ('Banco X', 'corrente', 1000) returning id`)).rows[0].id;
+      const plano = (await db.query<{ id: string }>(`insert into plano_contas (codigo, nome, tipo, grupo_dre) values ('2.1', 'Aluguel do escritório', 'despesa', 'despesas_operacionais') returning id`)).rows[0].id;
+      const l = (await db.query<{ id: string }>(`insert into lancamentos (tipo, descricao, valor, vencimento, conta_id, plano_id) values ('pagar', 'Aluguel sala', 500, '2026-11-10', $1, $2) returning id`, [conta, plano])).rows[0].id;
+      await db.query(`update lancamentos set status = 'liquidado', liquidado_em = '2026-11-10', valor_pago = 510, juros = 10 where id = $1`, [l]);
+      await db.query(`update lancamentos set status = 'aberto', liquidado_em = null, valor_pago = null, juros = 0 where id = $1`, [l]);
+      await db.query(`insert into extrato_itens (conta_id, data, descricao, valor, fitid) values ($1, '2026-11-10', 'TARIFA', -12.5, 'abc')`, [conta]);
+      let dup = "";
+      try {
+        await db.query(`insert into extrato_itens (conta_id, data, descricao, valor, fitid) values ($1, '2026-11-10', 'TARIFA', -12.5, 'abc')`, [conta]);
+      } catch (e) {
+        dup = String(e);
+      }
+      const hist = (await db.query<{ acao: string }>(`select acao from lancamento_historico where lancamento_id = $1 order by data, acao`, [l])).rows.map((x) => x.acao);
+      const apagou = (await db.query(`delete from lancamento_historico where lancamento_id = $1 returning id`, [l])).rows.length;
+      return { hist, apagou, dup };
+    });
+    expect(r.hist.sort()).toEqual(["criado", "estornado", "liquidado"]);
+    expect(r.apagou).toBe(0);
+    expect(r.dup).toContain("duplicate");
+    const doOutro = await comoUsuario(USER_G, async () => ({
+      contas: (await db.query(`select id from contas_financeiras`)).rows.length,
+      hist: (await db.query(`select id from lancamento_historico`)).rows.length,
+    }));
+    expect(doOutro).toEqual({ contas: 0, hist: 0 });
+  });
+});

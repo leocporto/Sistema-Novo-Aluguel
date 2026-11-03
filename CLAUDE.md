@@ -23,6 +23,7 @@ existe em cada um está em **`docs/MODOS.md`** — consulte antes de criar ou mu
 - Nos dois modos (pessoas): documentos, relacionamento/anotações, contatos vinculados, comunicação (LGPD),
   alertas de documentação, Prestador de serviço, importar/exportar/juntar repetidos.
 - **Despesas** existe nos dois, mas muda: imobiliária = escritório; pessoal = despesas dos imóveis.
+- **Financeiro** (`/financeiro`, abas) existe nos dois; Proprietários (saldo/adiantamentos), Notas fiscais e "valores de terceiros" só na imobiliária. Histórico financeiro é gravado por gatilho (`lancamento_historico`, só leitura).
 - **Agenda e Chaves** existem nos dois (`/agenda`, `/chaves`); no pessoal sem corretor/lead/avaliação de captação.
 - **Documentos** (`/documentos`) existem nos dois; modelos de venda/administração/intermediação/exclusividade/autorização só na imobiliária.
 - **Locações** (ficha do contrato em abas, aditivos, garantias, desocupação/acerto, recibos) existem nos dois; repasse/taxas/extrato do locador só na imobiliária.
