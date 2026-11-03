@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Copy, ImageIcon } from "lucide-react";
+import { ClipboardCheck, Copy, ImageIcon } from "lucide-react";
 import { BotaoEnviar } from "@/components/formulario";
 import { SubAbas } from "@/components/sub-abas";
 import { BotaoLink, Cabecalho, Selo } from "@/components/ui";
@@ -85,6 +85,9 @@ export default async function ImovelLayout({ children, params }: LayoutProps<"/i
                     <Copy className="size-4" /> Duplicar
                   </BotaoEnviar>
                 </form>
+                <BotaoLink href={`/vistorias?imovel=${id}`} variante="secundario">
+                  <ClipboardCheck className="size-4" /> Vistorias
+                </BotaoLink>
                 <BotaoLink href={`/contratos/novo?imovel=${id}`}>Novo contrato de locação</BotaoLink>
               </>
             }

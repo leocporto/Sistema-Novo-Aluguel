@@ -14,6 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   KeyRound,
+  ClipboardCheck,
   LogOut,
   Menu,
   Percent,
@@ -72,6 +73,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/agenda", rotulo: "Agenda", icone: CalendarDays },
       { href: "/chaves", rotulo: "Chaves", icone: KeyRound },
+      { href: "/vistorias", rotulo: "Vistorias", icone: ClipboardCheck },
     ],
   },
   {

@@ -11,6 +11,7 @@ import {
   CalendarClock,
   CalendarDays,
   CircleDollarSign,
+  ClipboardList,
   FileClock,
   Handshake,
   Home,
@@ -26,6 +27,7 @@ import {
   UserPlus,
   Users,
   Wallet,
+  Wrench,
 } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
 import { BarraProgresso } from "@/components/barra-progresso";
@@ -101,7 +103,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -150,6 +152,11 @@ export default async function PainelPage() {
       supabase.from("contrato_desocupacoes").select("id, contrato_id, entrega_prevista").neq("status", "concluida"),
       supabase.from("contrato_garantias").select("id, contrato_id, tipo, fim").eq("status", "ativa").not("fim", "is", null).lte("fim", somarDias(hoje, 30)),
       supabase.from("documentos").select("id, titulo, status, validade, alerta_dias, updated_at").or(`status.eq.aguardando_assinatura,validade.lte.${somarDias(hoje, 120)}`).neq("status", "cancelado"),
+      supabase.from("vistorias").select("id", { count: "exact", head: true }).in("status", ["rascunho", "em_andamento"]),
+      supabase.from("vistorias").select("id", { count: "exact", head: true }).in("status", ["rascunho", "em_andamento"]).eq("data", hoje),
+      supabase.from("vistoria_contestacoes").select("id", { count: "exact", head: true }).eq("status", "aberta"),
+      supabase.from("vistoria_pendencias").select("id", { count: "exact", head: true }).in("status", ["aberta", "em_reparo"]),
+      supabase.from("vistoria_pendencias").select("id", { count: "exact", head: true }).in("status", ["aberta", "em_reparo"]).lt("prazo", hoje),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -570,6 +577,50 @@ export default async function PainelPage() {
             {visitas.length === 0 && <li className="py-2 text-mudo">Nada marcado.</li>}
           </ul>
         </Cartao>
+      ),
+    },
+    {
+      id: "vistorias_abertas",
+      titulo: "Vistorias em aberto",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Vistorias em aberto"
+          icone={<ClipboardList />}
+          valor={<Contador valor={vistAbertasR.count ?? 0} />}
+          detalhe={vistHojeR.count ? `${vistHojeR.count} marcada(s) para hoje` : "agendadas ou em andamento"}
+          href="/vistorias?situacao=abertas"
+        />
+      ),
+    },
+    {
+      id: "vistorias_contestadas",
+      titulo: "Vistorias contestadas",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Contestações a responder"
+          icone={<MessageSquareWarning />}
+          valor={<Contador valor={contestR.count ?? 0} />}
+          detalhe="enviadas pelo locatário"
+          tom={contestR.count ? "perigo" : "sucesso"}
+          href="/vistorias?situacao=contestadas"
+        />
+      ),
+    },
+    {
+      id: "reparos_vistoria",
+      titulo: "Reparos de vistoria",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Danos e reparos em aberto"
+          icone={<Wrench />}
+          valor={<Contador valor={reparosR.count ?? 0} />}
+          detalhe={reparosVencR.count ? `${reparosVencR.count} com prazo vencido` : "nenhum prazo vencido"}
+          tom={reparosVencR.count ? "alerta" : "neutro"}
+          href="/vistorias/pendencias"
+        />
       ),
     },
     {

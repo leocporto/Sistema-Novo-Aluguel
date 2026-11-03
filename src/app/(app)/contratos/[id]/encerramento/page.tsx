@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarPlus, CheckCircle2, DoorOpen, MessageCircle } from "lucide-react";
+import { CalendarPlus, CheckCircle2, ClipboardCheck, DoorOpen, MessageCircle } from "lucide-react";
 import { BotaoAcao } from "@/components/botao-acao";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { Formulario } from "@/components/formulario";
@@ -212,9 +212,14 @@ export default async function EncerramentoContrato({ params }: PageProps<"/contr
                     <Campo rotulo="O que foi encontrado">
                       <AreaTexto name="vistoria_obs" rows={2} defaultValue={d.vistoria_obs ?? ""} placeholder="Pintura da sala, torneira da cozinha, falta uma chave…" />
                     </Campo>
-                    <Link href={`/agenda?novo=1&imovel_novo=${imovel.id}`} className="mt-2 inline-flex items-center gap-1 text-xs text-acento hover:underline">
-                      <CalendarPlus className="size-3.5" /> agendar a vistoria na agenda
-                    </Link>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                      <Link href={`/vistorias?novo=1&tipo_novo=saida&contrato_novo=${id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-acento hover:underline">
+                        <ClipboardCheck className="size-3.5" /> Fazer vistoria de saída (checklist, fotos e reparos)
+                      </Link>
+                      <Link href={`/agenda?novo=1&imovel_novo=${imovel.id}`} className="inline-flex items-center gap-1 text-xs text-acento hover:underline">
+                        <CalendarPlus className="size-3.5" /> agendar a vistoria na agenda
+                      </Link>
+                    </div>
                   </fieldset>
                   <fieldset className="rounded-[14px] border border-borda-suave p-3">
                     <legend className="px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-mudo">Entrega e valores do acerto</legend>

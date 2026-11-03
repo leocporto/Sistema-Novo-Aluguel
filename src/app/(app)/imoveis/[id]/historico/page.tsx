@@ -7,6 +7,7 @@ import { obterContexto } from "@/lib/contexto";
 import { formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { PORTAIS_ANUNCIO, ROTULO_STATUS_VISITA } from "@/lib/tipos";
+import { HistoricoVistoriasImovel } from "../../../vistorias/historico-imovel";
 import { criarAnuncio, encerrarAnuncio, excluirAnuncio } from "../../actions";
 
 export const metadata: Metadata = { title: "Histórico do imóvel" };
@@ -85,6 +86,8 @@ export default async function HistoricoImovelPage({ params }: PageProps<"/imovei
           {!contratos?.length && <li className="text-mudo">Nenhum contrato.</li>}
         </ul>
       </Cartao>
+
+      <HistoricoVistoriasImovel imovelId={id} naFichaDoImovel />
 
       {!pessoal && (
         <>

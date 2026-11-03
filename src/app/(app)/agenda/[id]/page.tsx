@@ -102,6 +102,8 @@ export default async function CompromissoPage({ params }: PageProps<"/agenda/[id
   const { data: chaves } = v.imovel_id
     ? await supabase.from("chaves").select("id, codigo, identificacao, local, chave_movimentacoes(id, retirada_por, devolvida_em, visita_id)").eq("imovel_id", v.imovel_id)
     : { data: [] };
+  // Compromisso marcado pela tela de vistorias: leva de volta à vistoria.
+  const { data: vistoria } = v.tipo === "vistoria" ? await supabase.from("vistorias").select("id, numero").eq("visita_id", id).limit(1).maybeSingle() : { data: null };
 
   const cliente = clienteDo(v);
   const endereco = enderecoDo(v);
@@ -137,6 +139,11 @@ export default async function CompromissoPage({ params }: PageProps<"/agenda/[id
             <span className="capitalize">
               {quando} · {v.duracao_min} min
             </span>
+            {vistoria && (
+              <Link href={`/vistorias/${vistoria.id}`} className="text-acento hover:underline">
+                abrir a vistoria nº {vistoria.numero}
+              </Link>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
