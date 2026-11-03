@@ -39,6 +39,7 @@ import {
 import { AbasSegmentadas, type ItemAba } from "./abas-segmentadas";
 import { BotaoTema } from "./menu-lateral";
 import { useMovimentoJanelas } from "@/lib/movimento/useMovimentoJanelas";
+import { rotaPermitida } from "@/lib/modos";
 
 type Item = { href: string; rotulo: string; icone: LucideIcon };
 
@@ -151,7 +152,12 @@ export function CascaApp({
   modo?: "imobiliaria" | "pessoal";
   children: ReactNode;
 }) {
-  const topo = modo === "pessoal" ? TOPO.filter((i) => i.href !== "/repasses") : TOPO;
+  // Cada modo só mostra as telas que existem nele (regras em src/lib/modos.ts).
+  const topo = useMemo(() => TOPO.filter((i) => rotaPermitida(i.href, modo)), [modo]);
+  const lateral = useMemo(
+    () => LATERAL.map((g) => ({ ...g, itens: g.itens.filter((i) => rotaPermitida(i.href, modo)) })).filter((g) => g.itens.length > 0),
+    [modo],
+  );
   const caminho = usePathname();
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
@@ -179,12 +185,12 @@ export function CascaApp({
       linhas.push({ id: "g_principal", ehRotulo: true, className: "lateral-grupo", rotulo: "Principal" });
       topo.forEach((i) => linhas.push(linhaLateral(i)));
     }
-    for (const g of LATERAL) {
+    for (const g of lateral) {
       linhas.push({ id: "g_" + g.titulo, ehRotulo: true, className: "lateral-grupo", rotulo: g.titulo });
       g.itens.forEach((i) => linhas.push(linhaLateral(i)));
     }
     return linhas;
-  }, [telaGrande, topo]);
+  }, [telaGrande, topo, lateral]);
 
   const ir = (href: string) => {
     setGavetaAberta(false);

@@ -2,6 +2,7 @@ import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { AreaTexto, Campo, Cartao, Entrada, Grade, Selecao } from "@/components/ui";
 import type { Pessoa } from "@/lib/tipos";
 import { ROTULO_PAPEL } from "@/lib/tipos";
+import { PAPEIS_SO_IMOBILIARIA } from "@/lib/modos";
 import { salvarPessoa } from "./actions";
 
 export interface ImovelOpcao {
@@ -69,7 +70,9 @@ export function FormPessoa({
           <fieldset>
             <legend className="mb-1 text-sm font-medium text-texto-2">Papéis</legend>
             <div className="flex flex-wrap gap-4 text-sm">
-              {Object.entries(ROTULO_PAPEL).map(([k, v]) => (
+              {Object.entries(ROTULO_PAPEL)
+                .filter(([k]) => !pessoal || !(PAPEIS_SO_IMOBILIARIA as readonly string[]).includes(k) || papeis.includes(k))
+                .map(([k, v]) => (
                 <label key={k} className="flex items-center gap-2">
                   <input type="checkbox" name="papeis" value={k} defaultChecked={papeis.includes(k)} />
                   {v}

@@ -346,3 +346,17 @@ describe("painel", () => {
     expect(aplicarPreferencia(padrao, { ordem: ["c", "a", "x"], ocultos: ["a"] })).toEqual({ visiveis: ["c", "d", "b"], ocultos: ["a"] });
   });
 });
+
+import { quadroPermitido, rotaPermitida } from "@/lib/modos";
+
+describe("modos de uso", () => {
+  it("esconde comercial e repasses no modo pessoal", () => {
+    expect(rotaPermitida("/comercial", "pessoal")).toBe(false);
+    expect(rotaPermitida("/comercial/leads/1", "pessoal")).toBe(false);
+    expect(rotaPermitida("/repasses/extrato", "pessoal")).toBe(false);
+    expect(rotaPermitida("/despesas", "pessoal")).toBe(true);
+    expect(rotaPermitida("/comercial", "imobiliaria")).toBe(true);
+    expect(quadroPermitido("leads_mes", "pessoal")).toBe(false);
+    expect(quadroPermitido("faturamento", "pessoal")).toBe(true);
+  });
+});

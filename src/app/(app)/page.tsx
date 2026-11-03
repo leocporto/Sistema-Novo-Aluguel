@@ -33,6 +33,7 @@ import { formatarReais } from "@/lib/dominio/dinheiro";
 import { contarPorMes, mesAnoAnterior, mesesAte, progressoMeta, somarPorMes, variacaoPct } from "@/lib/dominio/painel";
 import { proximoReajuste } from "@/lib/dominio/reajuste";
 import { ROTULO_META, ROTULO_STATUS_IMOVEL, TIPOS_META, type TipoMeta } from "@/lib/tipos";
+import { quadroPermitido } from "@/lib/modos";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -196,7 +197,8 @@ export default async function PainelPage() {
 
   // --------------------------------------------------------- notificações
   const avisos: Aviso[] = [];
-  for (const t of tarefas) {
+  // Tarefas, leads e visitas são da parte comercial: só no modo imobiliária.
+  for (const t of pessoal ? [] : tarefas) {
     if (t.vencimento && t.vencimento < hoje)
       avisos.push({ texto: `Tarefa atrasada: ${t.titulo}`, href: "/comercial/tarefas", data: t.vencimento, tom: "ruim", icone: <ListTodo /> });
     else if (t.prioridade === "alta" || t.vencimento === hoje)
@@ -206,9 +208,9 @@ export default async function PainelPage() {
     avisos.push({ texto: `${atrasadas.length} aluguel(is) em atraso — ${formatarReais(valorAtraso)}`, href: "/regua", tom: "ruim", icone: <AlertTriangle /> });
   if (despesasVencidas.length)
     avisos.push({ texto: `${despesasVencidas.length} despesa(s) vencida(s) sem pagamento`, href: "/despesas", tom: "ruim", icone: <Wallet /> });
-  if (novosAntigos.length)
+  if (!pessoal && novosAntigos.length)
     avisos.push({ texto: `${novosAntigos.length} lead(s) esperando atendimento há mais de 1 dia`, href: "/comercial", tom: "alerta", icone: <Inbox /> });
-  for (const v of visitasHoje)
+  for (const v of pessoal ? [] : visitasHoje)
     avisos.push({ texto: `Visita hoje às ${horaLocal(v.data_hora)}${v.lead ? ` com ${v.lead.nome}` : ""}${v.imovel ? ` (${v.imovel.codigo})` : ""}`, href: "/comercial/visitas", tom: "info", icone: <CalendarDays /> });
   if (!pessoal && repHoje.length)
     avisos.push({ texto: `${repHoje.length} repasse(s) para pagar até hoje`, href: "/repasses", tom: "alerta", icone: <ArrowLeftRight /> });
@@ -438,19 +440,21 @@ export default async function PainelPage() {
     },
     {
       id: "notificacoes",
-      titulo: "Notificações e tarefas prioritárias",
+      titulo: pessoal ? "Notificações" : "Notificações e tarefas prioritárias",
       largura: 2,
       conteudo: (
         <Cartao
           titulo={
             <span className="flex items-center gap-2">
-              <Bell className="size-4" /> Notificações e tarefas ({avisos.length})
+              <Bell className="size-4" /> {pessoal ? "Notificações" : "Notificações e tarefas"} ({avisos.length})
             </span>
           }
           acoes={
-            <Link href="/comercial/tarefas?novo=1" className="text-xs text-acento hover:underline">
-              + tarefa
-            </Link>
+            pessoal ? undefined : (
+              <Link href="/comercial/tarefas?novo=1" className="text-xs text-acento hover:underline">
+                + tarefa
+              </Link>
+            )
           }
           className="h-full"
         >
@@ -683,9 +687,11 @@ export default async function PainelPage() {
         descricao={`${organizacao.nome} · resumo de ${formatarDataBR(hoje)}`}
         acoes={
           <>
-            <BotaoLink href="/comercial" variante="secundario">
-              <UserPlus className="size-4" /> Leads
-            </BotaoLink>
+            {!pessoal && (
+              <BotaoLink href="/comercial" variante="secundario">
+                <UserPlus className="size-4" /> Leads
+              </BotaoLink>
+            )}
             <BotaoLink href="/faturas" variante="secundario">
               <CalendarClock className="size-4" /> Aluguéis do mês
             </BotaoLink>
@@ -693,7 +699,10 @@ export default async function PainelPage() {
           </>
         }
       />
-      <PainelWidgets quadros={quadros.filter((q): q is Quadro => Boolean(q))} preferencia={pref} />
+      <PainelWidgets
+        quadros={quadros.filter((q): q is Quadro => Boolean(q) && quadroPermitido((q as Quadro).id, organizacao.modo))}
+        preferencia={pref}
+      />
     </>
   );
 }

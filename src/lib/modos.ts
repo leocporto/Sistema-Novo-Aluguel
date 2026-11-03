@@ -1,0 +1,37 @@
+/**
+ * Regras do modo de uso (ver docs/MODOS.md).
+ * - "imobiliaria": administra imóveis de terceiros e vende/aluga (tudo liberado).
+ * - "pessoal": a pessoa aluga os PRÓPRIOS imóveis — sem repasse, sem taxa de
+ *   administração e sem a parte comercial (leads, visitas, propostas, tarefas, metas,
+ *   comissões, corretores).
+ */
+export type ModoUso = "imobiliaria" | "pessoal";
+
+/** Telas que só existem no modo imobiliária (e tudo abaixo delas). */
+export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial"] as const;
+
+/** A rota pode ser aberta neste modo? */
+export function rotaPermitida(caminho: string, modo: ModoUso | null | undefined): boolean {
+  if (modo !== "pessoal") return true;
+  return !ROTAS_SO_IMOBILIARIA.some((r) => caminho === r || caminho.startsWith(`${r}/`));
+}
+
+/** Papéis de pessoa que só fazem sentido no modo imobiliária. */
+export const PAPEIS_SO_IMOBILIARIA = ["corretor"] as const;
+
+/** Quadros do Painel que só aparecem no modo imobiliária. */
+export const QUADROS_SO_IMOBILIARIA = [
+  "disp_venda",
+  "captados",
+  "leads_mes",
+  "leads_aguardando",
+  "visitas",
+  "propostas",
+  "repasses",
+  "comissoes",
+  "metas",
+] as const;
+
+export function quadroPermitido(id: string, modo: ModoUso | null | undefined): boolean {
+  return modo !== "pessoal" || !(QUADROS_SO_IMOBILIARIA as readonly string[]).includes(id);
+}

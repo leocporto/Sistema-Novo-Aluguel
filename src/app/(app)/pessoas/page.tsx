@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BotaoLink, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarDocumento } from "@/lib/dominio/documentos";
+import { PAPEIS_SO_IMOBILIARIA } from "@/lib/modos";
 import { ROTULO_PAPEL, type Pessoa } from "@/lib/tipos";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { LinhaLink } from "@/components/linha-link";
@@ -13,7 +14,7 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
   const sp = await searchParams;
   const busca = typeof sp.q === "string" ? sp.q.trim() : "";
   const papel = typeof sp.papel === "string" ? sp.papel : "";
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
 
   let q = supabase.from("pessoas").select("*").order("nome").limit(200);
   if (busca) q = q.or(`nome.ilike.%${busca.replace(/[%,()]/g, "")}%,documento.ilike.%${busca.replace(/\D/g, "") || "_"}%`);
@@ -32,7 +33,9 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
         <Entrada name="q" placeholder="Buscar por nome ou documento" defaultValue={busca} className="max-w-xs" />
         <Selecao name="papel" defaultValue={papel} className="max-w-48">
           <option value="">Todos os papéis</option>
-          {Object.entries(ROTULO_PAPEL).map(([k, v]) => (
+          {Object.entries(ROTULO_PAPEL)
+            .filter(([k]) => organizacao.modo !== "pessoal" || !(PAPEIS_SO_IMOBILIARIA as readonly string[]).includes(k))
+            .map(([k, v]) => (
             <option key={k} value={k}>
               {v}
             </option>
