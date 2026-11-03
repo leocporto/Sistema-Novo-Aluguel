@@ -7,6 +7,7 @@ import { JanelaCadastro } from "@/components/janela-cadastro";
 import { Campo, Cartao, Celula, Entrada, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarReais } from "@/lib/dominio/dinheiro";
+import { COR_STATUS_COMISSAO, ROTULO_STATUS_COMISSAO, type StatusComissao } from "@/lib/dominio/comissoes";
 import { ROTULO_PAPEL_COMISSAO, comissaoTotal, dividirComissao } from "@/lib/dominio/vendas";
 import { adicionarComissaoVenda, atualizarVenda, excluirComissaoVenda } from "../../actions";
 import { carregarOpcoesVenda } from "../../dados";
@@ -20,9 +21,12 @@ export default async function ComissoesVenda({ params }: PageProps<"/vendas/[id]
   const { supabase } = await obterContexto();
   const [{ data: v }, { data }, opcoes] = await Promise.all([
     supabase.from("vendas").select("valor, comissao_pct, comissao_valor, status").eq("id", id).single(),
-    supabase.from("venda_comissoes").select("id, papel, percentual, lancamento_id, pessoa:pessoas(id, nome), lancamento:lancamentos(status)").eq("venda_id", id),
+    supabase.from("venda_comissoes").select("id, papel, percentual, lancamento_id, pessoa:pessoas(id, nome), lancamento:lancamentos(status)").eq("venda_id", id).order("id"),
     carregarOpcoesVenda(supabase),
   ]);
+  // Situação real de cada parte (prevista, a pagar, paga, estornada…) vem da comissão gerada ao concluir.
+  const { data: geradas } = await supabase.from("comissoes").select("id, venda_comissao_id, status").eq("venda_id", id);
+  const comissaoDa = new Map((geradas ?? []).filter((g) => g.venda_comissao_id).map((g) => [g.venda_comissao_id as string, g as { id: string; status: StatusComissao }]));
   const lista = ((data ?? []) as unknown as C[]).filter((c) => c.papel !== "imobiliaria");
   const total = comissaoTotal(Number(v?.valor ?? 0), Number(v?.comissao_pct ?? 0), v?.comissao_valor == null ? null : Number(v.comissao_valor));
   let divisao = { porPessoa: lista.map(() => 0), imobiliaria: total, distribuido: 0 };
@@ -97,7 +101,17 @@ export default async function ComissoesVenda({ params }: PageProps<"/vendas/[id]
               <Celula>{ROTULO_PAPEL_COMISSAO[c.papel]}</Celula>
               <Celula className="tabular-nums">{String(Number(c.percentual)).replace(".", ",")}%</Celula>
               <Celula className="tabular-nums">{formatarReais(divisao.porPessoa[i] ?? 0)}</Celula>
-              <Celula>{c.lancamento ? <Selo cor={c.lancamento.status === "liquidado" ? "verde" : "amarelo"}>{c.lancamento.status === "liquidado" ? "paga" : "a pagar"}</Selo> : <Selo>prevista</Selo>}</Celula>
+              <Celula>
+                {comissaoDa.get(c.id) ? (
+                  <Link href={`/comissoes/${comissaoDa.get(c.id)!.id}`}>
+                    <Selo cor={COR_STATUS_COMISSAO[comissaoDa.get(c.id)!.status]}>{ROTULO_STATUS_COMISSAO[comissaoDa.get(c.id)!.status].toLowerCase()}</Selo>
+                  </Link>
+                ) : c.lancamento ? (
+                  <Selo cor={c.lancamento.status === "liquidado" ? "verde" : "amarelo"}>{c.lancamento.status === "liquidado" ? "paga" : "a pagar"}</Selo>
+                ) : (
+                  <Selo>{v?.status === "concluida" ? "sem comissão" : "prevista"}</Selo>
+                )}
+              </Celula>
               <Celula>
                 <BotaoExcluir acao={excluirComissaoVenda} id={c.id} rotulo="Tirar da divisão" confirmar="Tirar esta pessoa da divisão?" />
               </Celula>
@@ -116,7 +130,12 @@ export default async function ComissoesVenda({ params }: PageProps<"/vendas/[id]
           {lista.length === 0 && <LinhaVazia colunas={6}>Ninguém na divisão: a comissão inteira fica com a imobiliária.</LinhaVazia>}
         </Tabela>
         <p className="mt-3 text-xs text-mudo">
-          Ao concluir a venda, a comissão total entra em Financeiro como “a receber” e a parte de cada pessoa como “a pagar” (vencimento em 30 dias).
+          Ao concluir a venda, a comissão total entra no Financeiro como “a receber” e a parte de cada pessoa (o % dela sobre a comissão, arredondado no centavo) vira conta a
+          pagar no prazo da regra de comissão (sem regra: 30 dias). Se a regra for “só depois de receber”, a parte fica prevista até a imobiliária receber a comissão. Regras em{" "}
+          <Link href="/comissoes/regras" className="text-acento hover:underline">
+            Comissões › Regras e equipes
+          </Link>
+          .
         </p>
       </Cartao>
 

@@ -15,7 +15,7 @@ import { opcoesFinanceiro, todas } from "../dados";
 
 export const metadata: Metadata = { title: "Proprietários" };
 
-type Rep = { pessoa_id: string; valor_liquido: number; status: string; pago_em: string | null; previsto_para: string; pessoa: { nome: string } | null };
+type Rep = { pessoa_id: string; valor_liquido: number; status: string; pago_em: string | null; pagar_em: string; pessoa: { nome: string } | null };
 type Adi = { id: string; pessoa_id: string; valor: number; liquidado_em: string; compensado_em: string | null; descricao: string };
 
 /** Saldo de cada proprietário com a imobiliária: repasses a fazer, pagos no mês e adiantamentos. */
@@ -24,7 +24,7 @@ export default async function ProprietariosFinanceiroPage() {
   const hoje = hojeISO();
   const mes = inicioDoMes(hoje);
   const [reps, adis, op, { data: donos }] = await Promise.all([
-    todas<Rep>(() => supabase.from("repasses").select("pessoa_id, valor_liquido, status, pago_em, previsto_para, pessoa:pessoas(nome)").or(`status.eq.pendente,pago_em.gte.${mes}`).order("id")),
+    todas<Rep>(() => supabase.from("repasses").select("pessoa_id, valor_liquido, status, pago_em, pagar_em, pessoa:pessoas(nome)").or(`status.eq.pendente,pago_em.gte.${mes}`).order("id")),
     todas<Adi>(() => supabase.from("lancamentos").select("id, pessoa_id, valor, liquidado_em, compensado_em, descricao").eq("adiantamento", true).neq("status", "cancelado").order("liquidado_em", { ascending: false }).order("id")),
     opcoesFinanceiro(supabase),
     supabase.from("pessoas").select("id, nome").contains("papeis", ["proprietario"]).order("nome"),
@@ -39,7 +39,7 @@ export default async function ProprietariosFinanceiroPage() {
     const a = obter(r.pessoa_id);
     if (r.status === "pendente") {
       a.pendente += paraCentavos(r.valor_liquido);
-      if (!a.proximo || r.previsto_para < a.proximo) a.proximo = r.previsto_para;
+      if (!a.proximo || r.pagar_em < a.proximo) a.proximo = r.pagar_em;
     } else if (r.status === "pago") a.pagoMes += paraCentavos(r.valor_liquido);
     mapa.set(r.pessoa_id, a);
   }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { obterContexto } from "@/lib/contexto";
+import { divisaoInicialDaVenda } from "../comissoes/dados";
 import { type EstadoAcao, ErroValidacao, inteiro, lista, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 import { somarMeses } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
@@ -64,7 +65,9 @@ export async function criarVenda(_: EstadoAcao, fd: FormData): Promise<EstadoAca
       .single();
     if (error) throw error;
     id = data.id;
-    if (corretor_id) await supabase.from("venda_comissoes").insert({ venda_id: id, pessoa_id: corretor_id, papel: "vendedor", percentual: 100 });
+    // Mesma divisão inicial do aceitar proposta: regras de venda e de angariação (Comissões › Regras).
+    const partes = await divisaoInicialDaVenda(supabase, corretor_id, imovel_id);
+    if (partes.length) await supabase.from("venda_comissoes").insert(partes.map((p) => ({ ...p, venda_id: id })));
     await evento(supabase, id, "entrada", "Negociação aberta");
   } catch (e) {
     return { erro: mensagemErro(e) };

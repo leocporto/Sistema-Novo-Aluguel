@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { BotaoImprimir } from "@/components/formulario";
 import { Aviso, Cabecalho, Celula, Entrada, LinhaVazia, Selecao, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarCompetencia, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
-import { formatarReais } from "@/lib/dominio/dinheiro";
+import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { formatarDocumento } from "@/lib/dominio/documentos";
 import type { Pessoa, Repasse } from "@/lib/tipos";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
-import { redirect } from "next/navigation";
-import { ehPessoal } from "@/lib/tipos";
+import { AbasRepasses } from "../abas";
 
 export const metadata: Metadata = { title: "Extrato do proprietário" };
 
-type Linha = Repasse & { contrato: { numero: number; imovel: { codigo: string; logradouro: string | null; numero: string | null } } };
+type Linha = Repasse & { observacoes: string | null; contrato: { numero: number; imovel: { codigo: string; logradouro: string | null; numero: string | null } } };
 
 /** Extrato e informe de rendimentos do proprietário (repasses no período). */
 export default async function ExtratoPage({ searchParams }: PageProps<"/repasses/extrato">) {
@@ -20,7 +20,6 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
   const pessoaId = typeof sp.pessoa === "string" ? sp.pessoa : "";
   const ano = typeof sp.ano === "string" && sp.ano ? sp.ano : hojeISO().slice(0, 4);
   const { supabase, organizacao } = await obterContexto();
-  if (ehPessoal(organizacao)) redirect("/");
   const { data: props } = await supabase.from("pessoas").select("id, nome").contains("papeis", ["proprietario"]).order("nome");
 
   let pessoa: Pessoa | null = null;
@@ -37,14 +36,15 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
       .order("competencia");
     repasses = (data ?? []) as unknown as Linha[];
   }
-  const tot = (k: keyof Repasse) => repasses.reduce((s, r) => s + Number(r[k]), 0);
+  const tot = (k: keyof Repasse) => paraReais(repasses.reduce((s, r) => s + paraCentavos(r[k] as number | string | null), 0));
 
   return (
     <>
       <div className="nao-imprimir">
-        <Cabecalho titulo="Extrato do proprietário" descricao="Repasses do ano e informe de rendimentos de aluguéis." acoes={pessoa ? <BotaoImprimir /> : undefined} />
+        <Cabecalho titulo="Extrato do proprietário" trilha="Repasses" descricao="Repasses do ano, despesas descontadas e informe de rendimentos de aluguéis." acoes={pessoa ? <BotaoImprimir /> : undefined} />
+        <AbasRepasses />
         <FiltroAutomatico className="mb-6 flex flex-wrap gap-2">
-          <Selecao name="pessoa" defaultValue={pessoaId} className="max-w-xs">
+          <Selecao name="pessoa" defaultValue={pessoaId} className="max-w-xs" aria-label="Proprietário">
             <option value="">Selecione o proprietário…</option>
             {(props ?? []).map((p) => (
               <option key={p.id} value={p.id}>
@@ -52,7 +52,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
               </option>
             ))}
           </Selecao>
-          <Entrada type="number" name="ano" defaultValue={ano} className="w-28" />
+          <Entrada type="number" name="ano" defaultValue={ano} className="w-28" aria-label="Ano" />
         </FiltroAutomatico>
       </div>
       {pessoa && (
@@ -73,8 +73,8 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
               </div>
             </div>
           </div>
-          <Tabela colunas={["Competência", "Contrato / imóvel", "Aluguel", "Encargos", "Multa/juros", "Taxa adm.", "Intermediação", "IRRF", "Imposto", "Líquido", "Pago em"]}>
-            {repasses.length === 0 && <LinhaVazia colunas={11}>Nenhum repasse no ano.</LinhaVazia>}
+          <Tabela colunas={["Competência", "Contrato / imóvel", "Aluguel", "Encargos", "Multa/juros", "Taxa adm.", "Intermediação", "IRRF", "Imposto", "Descontos", "Líquido", "Pago em"]}>
+            {repasses.length === 0 && <LinhaVazia colunas={12}>Nenhum repasse no ano.</LinhaVazia>}
             {repasses.map((r) => (
               <tr key={r.id}>
                 <Celula>{formatarCompetencia(r.competencia)}</Celula>
@@ -88,8 +88,16 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
                 <Celula>{formatarReais(r.taxa_intermediacao)}</Celula>
                 <Celula>{formatarReais(r.irrf)}</Celula>
                 <Celula>{formatarReais(r.imposto ?? 0)}</Celula>
+                <Celula>
+                  {formatarReais(r.outros_descontos ?? 0)}
+                  {r.observacoes && <span className="block text-xs text-mudo">{r.observacoes}</span>}
+                </Celula>
                 <Celula className="font-medium">{formatarReais(r.valor_liquido)}</Celula>
-                <Celula>{r.status === "pago" ? formatarDataBR(r.pago_em) : "pendente"}</Celula>
+                <Celula>
+                  <Link href={`/repasses/${r.id}`} className="text-acento hover:underline">
+                    {r.status === "pago" ? formatarDataBR(r.pago_em) : "pendente"}
+                  </Link>
+                </Celula>
               </tr>
             ))}
             {repasses.length > 0 && (
@@ -103,6 +111,7 @@ export default async function ExtratoPage({ searchParams }: PageProps<"/repasses
                 <Celula>{formatarReais(tot("taxa_intermediacao"))}</Celula>
                 <Celula>{formatarReais(tot("irrf"))}</Celula>
                 <Celula>{formatarReais(tot("imposto"))}</Celula>
+                <Celula>{formatarReais(tot("outros_descontos"))}</Celula>
                 <Celula>{formatarReais(tot("valor_liquido"))}</Celula>
                 <Celula />
               </tr>

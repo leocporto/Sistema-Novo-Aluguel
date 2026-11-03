@@ -77,7 +77,7 @@ export function CamposNovaVenda({
             ))}
           </Selecao>
         </Campo>
-        <Campo rotulo="Comissão (%)">
+        <Campo rotulo="Comissão da imobiliária (% da venda)">
           <Entrada name="comissao_pct" inputMode="decimal" defaultValue="6" />
         </Campo>
       </div>

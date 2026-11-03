@@ -38,6 +38,7 @@ import {
   HousePlus,
   FolderOpen,
   BadgeDollarSign,
+  BadgePercent,
   type LucideIcon,
 } from "lucide-react";
 import { AbasSegmentadas, type ItemAba } from "./abas-segmentadas";
@@ -79,6 +80,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
       { href: "/comercial", rotulo: "Leads", icone: UserPlus },
       { href: "/captacao", rotulo: "Captação de imóveis", icone: HousePlus },
       { href: "/vendas", rotulo: "Vendas", icone: BadgeDollarSign },
+      { href: "/comissoes", rotulo: "Comissões", icone: BadgePercent },
       { href: "/comercial/propostas", rotulo: "Propostas", icone: Handshake },
       { href: "/comercial/tarefas", rotulo: "Tarefas", icone: ListTodo },
       { href: "/comercial/metas", rotulo: "Metas", icone: Target },

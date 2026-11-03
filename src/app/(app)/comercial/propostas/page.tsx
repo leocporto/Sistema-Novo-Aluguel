@@ -9,6 +9,7 @@ import { JanelaCadastro } from "@/components/janela-cadastro";
 import { Cabecalho, Celula, Indicador, LinhaVazia, Selo, Tabela, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { formatarDataBR, hojeISO } from "@/lib/dominio/datas";
+import { COMISSAO_VENDA_PADRAO_PCT, valorComissao } from "@/lib/dominio/comissoes";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_STATUS_PROPOSTA, ROTULO_TIPO_PROPOSTA } from "@/lib/tipos";
 import { aceitarProposta, criarProposta, excluirProposta, recusarProposta } from "../actions";
@@ -61,7 +62,7 @@ export default async function PropostasPage({ searchParams }: PageProps<"/comerc
       <Cabecalho
         titulo="Propostas"
         trilha="Comercial"
-        descricao="Propostas de locação e venda. Ao aceitar, o imóvel muda de situação e a comissão do corretor vira conta a pagar."
+        descricao="Propostas de locação e venda. Locação aceita: o imóvel fica reservado e a comissão do corretor (% sobre o aluguel) — e a do captador do imóvel, se houver regra de angariação — vira conta a pagar, ou fica prevista até o próximo aluguel do imóvel ser recebido, se a regra mandar. Venda aceita: abre o processo da venda com a divisão pelas regras (captador e corretor que vendeu); as comissões só vão para o Financeiro ao concluir a venda."
         acoes={
           <JanelaCadastro
             rotuloBotao={<><Handshake className="size-4" /> Nova proposta</>}
@@ -125,11 +126,19 @@ export default async function PropostasPage({ searchParams }: PageProps<"/comerc
                 {p.corretor ? (
                   <>
                     {p.corretor.nome}
-                    {p.comissao_pct ? (
+                    {p.tipo === "venda" ? (
                       <div className="text-xs text-mudo">
-                        {Number(p.comissao_pct)}% = {formatarReais((Number(p.valor) * Number(p.comissao_pct)) / 100)}
+                        comissão da venda {String(Number(p.comissao_pct ?? COMISSAO_VENDA_PADRAO_PCT)).replace(".", ",")}% ={" "}
+                        {formatarReais(valorComissao(Number(p.valor), Number(p.comissao_pct ?? COMISSAO_VENDA_PADRAO_PCT)))}
+                        {p.comissao_pct == null ? " (padrão)" : ""}
                       </div>
-                    ) : null}
+                    ) : p.comissao_pct ? (
+                      <div className="text-xs text-mudo">
+                        {String(Number(p.comissao_pct)).replace(".", ",")}% do aluguel = {formatarReais(valorComissao(Number(p.valor), Number(p.comissao_pct)))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-mudo">% da regra de comissão</div>
+                    )}
                   </>
                 ) : (
                   "—"
@@ -181,7 +190,7 @@ export default async function PropostasPage({ searchParams }: PageProps<"/comerc
                   rotulo="Excluir proposta"
                   confirmar={
                     p.status === "aceita"
-                      ? "Excluir esta proposta aceita? A comissão ainda não paga sai junto. A situação do imóvel não muda."
+                      ? "Excluir esta proposta aceita? A comissão ainda não paga (prevista ou a pagar) sai junto. A situação do imóvel não muda."
                       : "Excluir esta proposta?"
                   }
                 />

@@ -72,7 +72,7 @@ export function QuadroVendas({ itens }: { itens: CartaoVenda[] }) {
       setMotivo(MOTIVOS_CANCELAMENTO_VENDA[0]);
       setCancelar({ id, nome: v.comprador });
     } else if (status === "concluida") {
-      if (window.confirm(`Concluir a venda de ${v.imovel}? O imóvel vira "vendido" e as comissões vão para o financeiro.`)) mover(id, status);
+      if (window.confirm(`Concluir a venda de ${v.imovel}? O imóvel vira "vendido", a comissão da imobiliária entra no financeiro como "a receber" e a parte de cada corretor vira conta a pagar (ou fica prevista até a imobiliária receber, se a regra mandar).`)) mover(id, status);
     } else mover(id, status);
   };
 

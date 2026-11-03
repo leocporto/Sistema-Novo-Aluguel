@@ -36,7 +36,7 @@ export default async function FluxoPage({ searchParams }: PageProps<"/financeiro
   type Rec = { valor: number; data: string };
   type F = { valor_total: number; valor_abatido: number | null; vencimento: string };
   type P = { valor: number; vencimento: string };
-  type R = { valor_liquido: number; previsto_para: string; pago_em: string | null; status: string };
+  type R = { valor_liquido: number; pagar_em: string; pago_em: string | null; status: string };
   const [lanc, recebidos, fat, parc, rep, op] = await Promise.all([
     todas<L>(() =>
       supabase
@@ -60,7 +60,7 @@ export default async function FluxoPage({ searchParams }: PageProps<"/financeiro
         )
       : Promise.resolve([] as P[]),
     !pessoal && comTerceiros
-      ? todas<R>(() => supabase.from("repasses").select("valor_liquido, previsto_para, pago_em, status").neq("status", "cancelado").or(`pago_em.gte.${de},and(status.eq.pendente,previsto_para.lte.${ate})`).order("id"))
+      ? todas<R>(() => supabase.from("repasses").select("valor_liquido, pagar_em, pago_em, status").neq("status", "cancelado").or(`pago_em.gte.${de},and(status.eq.pendente,pagar_em.lte.${ate})`).order("id"))
       : Promise.resolve([] as R[]),
     opcoesFinanceiro(supabase),
   ]);
@@ -90,7 +90,7 @@ export default async function FluxoPage({ searchParams }: PageProps<"/financeiro
   for (const p of parc) movs.push({ tipo: "receber", valor: Number(p.valor), data: previstoEm(p.vencimento), realizado: false });
   for (const r of rep) {
     if (r.status === "pago" && r.pago_em) realizado("pagar", Number(r.valor_liquido), r.pago_em);
-    else if (r.status === "pendente") movs.push({ tipo: "pagar", valor: Number(r.valor_liquido), data: previstoEm(r.previsto_para), realizado: false });
+    else if (r.status === "pendente") movs.push({ tipo: "pagar", valor: Number(r.valor_liquido), data: previstoEm(r.pagar_em), realizado: false });
   }
   const saldos = await saldosDasContas(supabase, contas, somarDias(inicioReal, -1));
   const saldoInicial = paraReais([...saldos.values()].reduce((a, v) => a + paraCentavos(v), 0));

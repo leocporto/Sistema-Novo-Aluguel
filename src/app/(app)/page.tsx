@@ -116,7 +116,7 @@ export default async function PainelPage() {
       supabase.from("alugueis_recebidos").select("valor").gte("data", iniMes).lte("data", fimMes),
       supabase.from("lancamentos").select("valor, liquidado_em").eq("tipo", "receber").eq("status", "liquidado").gte("liquidado_em", desde),
       supabase.from("lancamentos").select("tipo, valor, vencimento, categoria").eq("status", "aberto"),
-      supabase.from("repasses").select("valor_liquido, previsto_para").eq("status", "pendente"),
+      supabase.from("repasses").select("valor_liquido, pagar_em").eq("status", "pendente"),
       supabase.from("leads").select("status, created_at, proximo_contato"),
       supabase
         .from("visitas")
@@ -190,14 +190,14 @@ export default async function PainelPage() {
   const despesasVencidas = abertos.filter((l) => l.tipo === "pagar" && l.vencimento < hoje);
   const comissoes = abertos.filter((l) => l.tipo === "pagar" && l.categoria === "Comissões");
   const repasses = repassesR.data ?? [];
-  const repassesAteFim = repasses.filter((r) => r.previsto_para <= fimMes);
+  const repassesAteFim = repasses.filter((r) => r.pagar_em <= fimMes);
   const aReceber =
     abertas.filter((f) => f.vencimento <= fimMes).reduce((s, f) => s + saldoFatura(f), 0) +
     abertos.filter((l) => l.tipo === "receber" && l.vencimento <= fimMes).reduce((s, l) => s + Number(l.valor), 0);
   const aPagar =
     aPagarLanc.reduce((s, l) => s + Number(l.valor), 0) + (pessoal ? 0 : repassesAteFim.reduce((s, r) => s + Number(r.valor_liquido), 0));
   const somaRep = repasses.reduce((s, r) => s + Number(r.valor_liquido), 0);
-  const repHoje = repasses.filter((r) => r.previsto_para <= hoje);
+  const repHoje = repasses.filter((r) => r.pagar_em <= hoje);
 
   // -------------------------------------------------------------- comercial
   const leads = leadsR.data ?? [];
@@ -501,7 +501,7 @@ export default async function PainelPage() {
           valor={<Contador valor={comissoes.reduce((s, c) => s + Number(c.valor), 0)} formato="moeda" />}
           detalhe={`${comissoes.length} comissão(ões) em aberto`}
           tom={comissoes.length ? "alerta" : "neutro"}
-          href="/despesas"
+          href="/comissoes?f=a_pagar"
         />
       ),
     },

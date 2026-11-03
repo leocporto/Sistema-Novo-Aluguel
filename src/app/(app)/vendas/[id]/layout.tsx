@@ -67,7 +67,7 @@ export default async function VendaLayout({ children, params }: LayoutProps<"/ve
             <Printer className="size-4" /> Contrato de compra e venda
           </BotaoLink>
           {aberta && (
-            <BotaoAcao acao={concluirVenda} id={id} variante="primario" confirmar='Concluir a venda? O imóvel vira "vendido", o lead fica como ganho e as comissões vão para o financeiro.'>
+            <BotaoAcao acao={concluirVenda} id={id} variante="primario" confirmar='Concluir a venda? O imóvel vira "vendido", o lead fica como ganho, a comissão da imobiliária entra no financeiro como "a receber" e a parte de cada corretor vira conta a pagar (ou fica prevista até a imobiliária receber, se a regra mandar).'>
               <CheckCircle2 className="size-4" /> Concluir venda
             </BotaoAcao>
           )}

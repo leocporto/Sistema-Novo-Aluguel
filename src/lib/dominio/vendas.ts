@@ -1,5 +1,5 @@
 /** Regras puras da gestão de vendas: etapas, comissão dividida, ITBI, pagamentos e checklists. */
-import { paraCentavos, paraReais, ratear } from "./dinheiro";
+import { paraCentavos, paraReais } from "./dinheiro";
 
 export const ETAPAS_VENDA = ["negociacao", "aprovado", "documentacao", "financiamento", "escritura", "registro", "concluida"] as const;
 export const TODAS_ETAPAS_VENDA = ["proposta", "negociacao", "reservado", "aprovado", "documentacao", "financiamento", "escritura", "registro", "concluida", "cancelada"] as const;
@@ -129,15 +129,22 @@ export function comissaoTotal(valorVenda: number, pct: number, valorFixo?: numbe
 }
 
 /**
- * Divide a comissão entre as pessoas pelos percentuais (sobre a comissão).
- * O que não for distribuído fica com a imobiliária. A soma bate no centavo.
+ * Divide a comissão entre as pessoas pelos percentuais (sobre a comissão),
+ * exatamente como o banco faz ao concluir a venda (concluir_venda): a parte de
+ * cada pessoa é o % arredondado no centavo, na ordem da lista, sem nunca passar
+ * do total. O que sobra fica com a imobiliária. A soma bate no centavo.
  */
 export function dividirComissao(total: number, partes: { percentual: number }[]) {
   const soma = partes.reduce((s, p) => s + p.percentual, 0);
   if (soma > 100.0001) throw new Error("A divisão passa de 100% da comissão.");
-  const pcts = [...partes.map((p) => p.percentual), Math.max(0, 100 - soma)];
-  const valores = total > 0 && pcts.some((p) => p > 0) ? ratear(paraCentavos(total), pcts).map(paraReais) : pcts.map(() => 0);
-  return { porPessoa: valores.slice(0, -1), imobiliaria: valores.at(-1) ?? 0, distribuido: soma };
+  const totalC = Math.max(0, paraCentavos(total));
+  let distribuido = 0;
+  const porPessoa = partes.map((p) => {
+    const parte = Math.min(Math.round((totalC * p.percentual) / 100), totalC - distribuido);
+    distribuido += Math.max(0, parte);
+    return paraReais(Math.max(0, parte));
+  });
+  return { porPessoa, imobiliaria: paraReais(totalC - distribuido), distribuido: soma };
 }
 
 /** ITBI = alíquota (%) sobre o maior entre valor da venda e valor venal (se informado). */

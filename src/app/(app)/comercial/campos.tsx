@@ -238,8 +238,11 @@ export function CamposProposta({
             <Campo rotulo="Corretor">
               <SelNome name="corretor_id" opcoes={corretores} />
             </Campo>
-            <Campo rotulo="Comissão do corretor (%)" dica="Sobre o valor proposto. Vira conta a pagar quando a proposta é aceita.">
-              <Entrada name="comissao_pct" inputMode="decimal" placeholder="6" />
+            <Campo
+              rotulo="Comissão (%)"
+              dica="Locação: % do corretor sobre o aluguel proposto (em branco = % da regra de comissão); vira conta a pagar ao aceitar, ou fica prevista até o próximo aluguel do imóvel ser recebido, se a regra mandar. Venda: % de comissão da imobiliária sobre o valor da venda (em branco = 6%); a parte de cada corretor é definida na venda e só vai para o Financeiro ao concluir."
+            >
+              <Entrada name="comissao_pct" inputMode="decimal" placeholder="em branco = regra" />
             </Campo>
           </div>
           {corretores.length === 0 && <SemCorretor />}

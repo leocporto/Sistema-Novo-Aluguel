@@ -143,7 +143,7 @@ export async function sugestoesDeConciliacao(supabase: Supabase, pessoal: boolea
   const de = somarDias(datas[0], -15);
   const ate = somarDias(datas[datas.length - 1], 15);
   type F = { id: string; numero: number; valor_total: number; valor_pago: number | null; vencimento: string; pago_em: string | null; status: string; contrato: { imovel: { codigo: string } | null } | null };
-  type R = { id: string; valor_liquido: number; previsto_para: string; pago_em: string | null; status: string; pessoa: { nome: string } | null };
+  type R = { id: string; valor_liquido: number; pagar_em: string; pago_em: string | null; status: string; pessoa: { nome: string } | null };
   // Aluguéis e repasses entram só depois de pagos no sistema (a baixa deles tem regras próprias).
   // Lançamentos derivados de aluguel (fatura_id) ficam de fora: concilia-se a fatura.
   const [lanc, fat, rep] = await Promise.all([
@@ -170,7 +170,7 @@ export async function sugestoesDeConciliacao(supabase: Supabase, pessoal: boolea
     pessoal
       ? Promise.resolve([] as R[])
       : todas<R>(() =>
-          supabase.from("repasses").select("id, valor_liquido, previsto_para, pago_em, status, pessoa:pessoas(nome)").is("conciliado_em", null).eq("status", "pago").gte("pago_em", de).lte("pago_em", ate).order("id"),
+          supabase.from("repasses").select("id, valor_liquido, pagar_em, pago_em, status, pessoa:pessoas(nome)").is("conciliado_em", null).eq("status", "pago").gte("pago_em", de).lte("pago_em", ate).order("id"),
         ),
   ]);
   const candidatos: CandidatoConciliacao[] = [];
@@ -192,7 +192,7 @@ export async function sugestoesDeConciliacao(supabase: Supabase, pessoal: boolea
       tipo: "pagar",
       descricao: `Repasse · ${r.pessoa?.nome ?? "proprietário"}`,
       valor: Number(r.valor_liquido),
-      vencimento: r.previsto_para,
+      vencimento: r.pagar_em,
       liquidado_em: r.pago_em,
       status: r.status === "pago" ? "liquidado" : "aberto",
     });
