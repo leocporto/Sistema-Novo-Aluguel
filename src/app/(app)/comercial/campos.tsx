@@ -15,10 +15,6 @@ export function AbasComercial() {
       rotulo="Comercial"
       itens={[
         { href: "/comercial", rotulo: "Leads" },
-        { href: "/comercial/visitas", rotulo: "Visitas" },
-        { href: "/comercial/propostas", rotulo: "Propostas" },
-        { href: "/comercial/tarefas", rotulo: "Tarefas" },
-        { href: "/comercial/metas", rotulo: "Metas" },
         { href: "/comercial/reativar", rotulo: "Reativar" },
         { href: "/comercial/conversao", rotulo: "Conversão" },
         { href: "/comercial/captacao", rotulo: "Captação de leads" },

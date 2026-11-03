@@ -185,8 +185,8 @@ export default async function LeadsPage({ searchParams }: PageProps<"/comercial"
             ))}
           </Selecao>
         )}
-        <Entrada name="regiao" defaultValue={f.regiao} placeholder="Bairro/cidade" className="w-40" />
-        <Entrada name="ate" defaultValue={f.ate} placeholder="Orçamento até R$" inputMode="decimal" className="w-44" />
+        <Entrada name="regiao" defaultValue={f.regiao} placeholder="Bairro/cidade" className="max-w-44" />
+        <Entrada name="ate" defaultValue={f.ate} placeholder="Orçamento até R$" inputMode="decimal" className="max-w-48" />
       </FiltroAutomatico>
 
       <QuadroLeads funil={funil} leads={cartoes} hoje={hoje} />
