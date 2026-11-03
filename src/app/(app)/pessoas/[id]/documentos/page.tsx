@@ -6,6 +6,7 @@ import { formatarDataBR } from "@/lib/dominio/datas";
 import { pendencias } from "@/lib/dominio/pessoas";
 import { CATEGORIAS_DOCUMENTO_PESSOA, type Pessoa } from "@/lib/tipos";
 import { ArquivosPessoa } from "./arquivos-pessoa";
+import { DocumentosVinculados } from "../../../documentos/vinculados";
 
 export const metadata: Metadata = { title: "Documentos da pessoa" };
 
@@ -50,6 +51,7 @@ export default async function DocumentosPessoaPage({ params }: PageProps<"/pesso
         </ul>
         <p className="mt-3 text-xs text-mudo">O que é exigido depende do papel: locatário e fiador precisam de documento, residência e renda; proprietário, de documento (e contrato social se for empresa).</p>
       </Cartao>
+      <DocumentosVinculados campo="pessoa_id" id={id} />
     </div>
   );
 }

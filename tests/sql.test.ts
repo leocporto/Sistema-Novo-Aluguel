@@ -611,3 +611,49 @@ describe("locação completa: aditivo, renovação e desocupação", () => {
     expect(r.est).toEqual({ s: "disponivel", c: "rescindido" });
   });
 });
+
+describe("documentos: assinatura eletrônica, restritos e auditoria", () => {
+  const USER_P = "00000000-0000-0000-0000-000000000019";
+  const USER_Q = "00000000-0000-0000-0000-00000000001a";
+  it("assina por link, conclui quando todos assinam, esconde restrito do corretor e não deixa apagar auditoria", async () => {
+    const org = await comoUsuario(USER_P, async () => (await db.query<{ id: string }>(`select public.criar_organizacao('Imob P') as id`)).rows[0].id);
+    await db.query(`insert into membros (organizacao_id, user_id, papel) values ($1, $2, 'corretor')`, [org, USER_Q]);
+    const r = await comoUsuario(USER_P, async () => {
+      const d = (await db.query<{ id: string }>(`insert into documentos (titulo, conteudo, status) values ('Contrato X', 'Texto do contrato', 'aguardando_assinatura') returning id`)).rows[0].id;
+      await db.query(`insert into documentos (titulo, restrito) values ('Segredo', true)`);
+      const t1 = (await db.query<{ token: string }>(`insert into documento_signatarios (documento_id, nome, cpf, papel) values ($1, 'Ana', '123.456.789-09', 'locatario') returning token`, [d])).rows[0].token;
+      const t2 = (await db.query<{ token: string }>(`insert into documento_signatarios (documento_id, nome, papel, ordem) values ($1, 'Teste Munha', 'testemunha', 2) returning token`, [d])).rows[0].token;
+      await db.query(`insert into documento_eventos (documento_id, tipo, descricao) values ($1, 'criado', 'x')`, [d]);
+      return { d, t1, t2 };
+    });
+    await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
+    const info = (await db.query<{ r: { titulo: string; signatario: { nome: string } } }>(`select public.info_assinatura($1) as r`, [r.t1])).rows[0].r;
+    let cpfErrado = "";
+    try {
+      await db.query(`select public.assinar_documento($1, $2)`, [r.t1, JSON.stringify({ nome: "Ana Souza", cpf: "11111111111", aceite: true })]);
+    } catch (e) {
+      cpfErrado = String(e);
+    }
+    const a1 = (await db.query<{ r: { concluido: boolean } }>(`select public.assinar_documento($1, $2) as r`, [r.t1, JSON.stringify({ nome: "Ana Souza", cpf: "12345678909", aceite: true, ip: "1.2.3.4" })])).rows[0].r;
+    const a2 = (await db.query<{ r: { concluido: boolean } }>(`select public.assinar_documento($1, $2) as r`, [r.t2, JSON.stringify({ nome: "Teste Munha", cpf: "98765432100", aceite: true })])).rows[0].r;
+    await db.exec(`reset role;`);
+    expect(info.titulo).toBe("Contrato X");
+    expect(info.signatario.nome).toBe("Ana");
+    expect(cpfErrado).toContain("não confere");
+    expect(a1.concluido).toBe(false);
+    expect(a2.concluido).toBe(true);
+    const v = await comoUsuario(USER_P, async () => ({
+      st: (await db.query<{ status: string; hash_final: string }>(`select status, hash_final from documentos where id = $1`, [r.d])).rows[0],
+      eventos: (await db.query<{ tipo: string }>(`select tipo from documento_eventos where documento_id = $1 order by data`, [r.d])).rows.map((e) => e.tipo),
+      apagou: (await db.query(`delete from documento_eventos where documento_id = $1 returning id`, [r.d])).rows.length,
+      todos: (await db.query(`select id from documentos`)).rows.length,
+    }));
+    expect(v.st.status).toBe("assinado");
+    expect(v.st.hash_final).toHaveLength(64);
+    expect(v.eventos).toEqual(["criado", "visualizado", "assinado", "assinado", "concluido"]);
+    expect(v.apagou).toBe(0);
+    expect(v.todos).toBe(2);
+    const doCorretor = await comoUsuario(USER_Q, async () => (await db.query(`select id from documentos`)).rows.length);
+    expect(doCorretor).toBe(1);
+  });
+});

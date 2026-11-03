@@ -60,6 +60,9 @@ export default async function VendaLayout({ children, params }: LayoutProps<"/ve
               <MessageCircle className="size-4" /> WhatsApp
             </a>
           )}
+          <BotaoLink href={`/documentos?novo=1&venda=${id}${v.imovel ? `&imovel=${v.imovel.id}` : ""}`} variante="secundario">
+            Gerar documento
+          </BotaoLink>
           <BotaoLink href={`${base}/contrato`} variante="secundario">
             <Printer className="size-4" /> Contrato de compra e venda
           </BotaoLink>

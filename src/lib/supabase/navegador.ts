@@ -79,3 +79,16 @@ export async function enviarArquivoVenda(organizacaoId: string, vendaId: string,
   if (error) throw new Error(`Não foi possível enviar "${arquivo.name}": ${error.message}`);
   return caminho;
 }
+
+export const TIPOS_DOCUMENTO_ARQUIVO = [...TIPOS_COMPROVANTE, "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+
+/** Arquivo da central de documentos (bucket privado "documentos", pasta <org>/). */
+export async function enviarArquivoDocumento(organizacaoId: string, arquivo: File): Promise<string> {
+  if (!TIPOS_DOCUMENTO_ARQUIVO.includes(arquivo.type)) throw new Error(`"${arquivo.name}": envie PDF, imagem ou Word.`);
+  if (arquivo.size > 20 * 1024 * 1024) throw new Error(`"${arquivo.name}" passa de 20 MB.`);
+  const nome = arquivo.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80);
+  const caminho = `${organizacaoId}/arquivos/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${nome}`;
+  const { error } = await clienteNavegador().storage.from("documentos").upload(caminho, arquivo, { contentType: arquivo.type, upsert: false });
+  if (error) throw new Error(`Não foi possível enviar "${arquivo.name}": ${error.message}`);
+  return caminho;
+}

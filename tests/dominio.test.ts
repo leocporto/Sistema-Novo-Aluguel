@@ -733,3 +733,28 @@ describe("locação: carência, descontos, acerto e garantias", () => {
     expect(situacaoGarantia({ tipo: "caucao", fim: null, status: "devolvida" }, "2026-11-04")).toBe("inativa");
   });
 });
+
+import { preencherModelo, reaisPorExtenso, variaveisDoTexto } from "@/lib/dominio/modelos";
+import { MODELOS_PADRAO } from "@/lib/dominio/modelos-padrao";
+
+describe("modelos de documento", () => {
+  it("preenche variáveis e marca as vazias", () => {
+    expect(preencherModelo("Aluguel R$ {{contrato.valor_aluguel}} em {{ cidade }} por {{x}}", { "contrato.valor_aluguel": "2.000,00", cidade: "Santos" })).toBe(
+      "Aluguel R$ 2.000,00 em Santos por ________",
+    );
+    expect(variaveisDoTexto("{{a}} {{b.c}} {{a}}")).toEqual(["a", "b.c"]);
+  });
+  it("escreve valores por extenso", () => {
+    expect(reaisPorExtenso(1250.5)).toBe("mil duzentos e cinquenta reais e cinquenta centavos");
+    expect(reaisPorExtenso(1200)).toBe("mil e duzentos reais");
+    expect(reaisPorExtenso(2101)).toBe("dois mil cento e um reais");
+    expect(reaisPorExtenso(1_000_000)).toBe("um milhão de reais");
+    expect(reaisPorExtenso(350000)).toBe("trezentos e cinquenta mil reais");
+    expect(reaisPorExtenso(0.01)).toBe("um centavo");
+  });
+  it("modelos padrão só usam variáveis conhecidas", async () => {
+    const { VARIAVEIS } = await import("@/lib/dominio/modelos");
+    const conhecidas = new Set(VARIAVEIS.map((v) => v.chave));
+    for (const m of MODELOS_PADRAO) for (const v of variaveisDoTexto(m.conteudo)) expect(conhecidas.has(v), `${m.chave}: ${v}`).toBe(true);
+  });
+});

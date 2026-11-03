@@ -246,6 +246,16 @@ export default async function ContratoResumo({ params }: PageProps<"/contratos/[
                 Recibos e demonstrativos
               </Link>
             </li>
+            <li>
+              <Link href={`/documentos?novo=1&contrato=${id}&imovel=${c.imovel_id}`} className="text-acento hover:underline">
+                Gerar documento (aditivo, notificação…) para assinar
+              </Link>
+            </li>
+            <li>
+              <Link href={`/documentos?imovel=${c.imovel_id}`} className="text-acento hover:underline">
+                Documentos deste imóvel
+              </Link>
+            </li>
           </ul>
         </Cartao>
         <BotaoExcluir

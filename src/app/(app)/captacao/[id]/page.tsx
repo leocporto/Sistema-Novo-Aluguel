@@ -180,6 +180,9 @@ export default async function CaptacaoFicha({ params, searchParams }: PageProps<
               </Campo>
             </JanelaCadastro>
           )}
+          <BotaoLink href={`/documentos?novo=1&captacao=${c.id}${c.imovel_id ? `&imovel=${c.imovel_id}` : ""}${c.proprietario_id ? `&pessoa=${c.proprietario_id}` : ""}`} variante="secundario">
+            Autorização / exclusividade
+          </BotaoLink>
           <BotaoLink href={`/captacao/${c.id}/proposta`} variante="secundario">
             <Printer className="size-4" /> Proposta
           </BotaoLink>

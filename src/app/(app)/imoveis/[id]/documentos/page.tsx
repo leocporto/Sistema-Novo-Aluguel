@@ -4,6 +4,7 @@ import { obterContexto } from "@/lib/contexto";
 import { CATEGORIAS_DOCUMENTO_IMOVEL } from "@/lib/tipos";
 import { carregarArquivos } from "../arquivos";
 import { GaleriaImovel } from "../galeria";
+import { DocumentosVinculados } from "../../../documentos/vinculados";
 
 export const metadata: Metadata = { title: "Documentos do imóvel" };
 
@@ -39,6 +40,9 @@ export default async function DocumentosImovelPage({ params }: PageProps<"/imove
           <p className="text-xs text-mudo">Edite esses números na aba Dados.</p>
         </dl>
       </Cartao>
+      <div className="xl:col-span-2">
+        <DocumentosVinculados campo="imovel_id" id={id} />
+      </div>
     </div>
   );
 }

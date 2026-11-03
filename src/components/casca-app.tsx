@@ -36,6 +36,7 @@ import {
   TrendingDown,
   UserPlus,
   HousePlus,
+  FolderOpen,
   BadgeDollarSign,
   type LucideIcon,
 } from "lucide-react";
@@ -62,6 +63,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/pessoas", rotulo: "Pessoas", icone: Users },
       { href: "/empreendimentos", rotulo: "Empreendimentos", icone: Building },
+      { href: "/documentos", rotulo: "Documentos", icone: FolderOpen },
     ],
   },
   {

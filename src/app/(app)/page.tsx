@@ -101,7 +101,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -148,6 +148,7 @@ export default async function PainelPage() {
         .gte("data_hora", `${somarDias(hoje, -30)}T00:00:00-03:00`),
       supabase.from("contrato_desocupacoes").select("id, contrato_id, entrega_prevista").neq("status", "concluida"),
       supabase.from("contrato_garantias").select("id, contrato_id, tipo, fim").eq("status", "ativa").not("fim", "is", null).lte("fim", somarDias(hoje, 30)),
+      supabase.from("documentos").select("id, titulo, status, validade, alerta_dias, updated_at").or(`status.eq.aguardando_assinatura,validade.lte.${somarDias(hoje, 120)}`).neq("status", "cancelado"),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -267,6 +268,12 @@ export default async function PainelPage() {
       tom: String(g.fim) < hoje ? "ruim" : "alerta",
       icone: <ShieldAlert />,
     });
+  for (const d of docsR.data ?? []) {
+    if (d.validade && d.validade <= somarDias(hoje, Number(d.alerta_dias ?? 30)))
+      avisos.push({ texto: `Documento ${d.validade < hoje ? "vencido" : "vencendo"}: ${d.titulo}`, href: `/documentos/${d.id}`, data: d.validade, tom: d.validade < hoje ? "ruim" : "alerta", icone: <FileClock /> });
+    else if (d.status === "aguardando_assinatura" && String(d.updated_at).slice(0, 10) <= somarDias(hoje, -5))
+      avisos.push({ texto: `Assinatura pendente há dias: ${d.titulo}`, href: `/documentos/${d.id}`, tom: "alerta", icone: <FileClock /> });
+  }
   if (semRetornoR.count)
     avisos.push({ texto: `${semRetornoR.count} visita(s) sem retorno do cliente (feedback)`, href: "/agenda?vista=lista&tipo=visita", tom: "alerta", icone: <MessageSquareWarning /> });
   if (!pessoal && repHoje.length)
