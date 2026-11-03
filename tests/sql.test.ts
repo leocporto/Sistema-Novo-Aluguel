@@ -433,3 +433,38 @@ describe("CRM: entrada pública de leads", () => {
     expect(r3.duplicado).toBe(false);
   });
 });
+
+describe("captação de imóveis", () => {
+  const USER_K = "00000000-0000-0000-0000-000000000014";
+  it("formulário de anunciar vira captação, e a captação vira imóvel com proprietário", async () => {
+    const org = await comoUsuario(USER_K, async () => (await db.query<{ id: string }>(`select public.criar_organizacao('Imob K') as id`)).rows[0].id);
+    const token = await comoUsuario(USER_K, async () => (await db.query<{ t: string }>(`select leads_token as t from organizacoes where id = $1`, [org])).rows[0].t);
+    await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
+    const r = (await db.query<{ r: { id: string; captacao: boolean } }>(`select public.receber_lead($1, $2) as r`, [token, JSON.stringify({ nome: "Seu Zé", telefone: "11977776666", funil: "captacao", mensagem: "Casa para alugar" })])).rows[0].r;
+    await db.exec(`reset role;`);
+    expect(r.captacao).toBe(true);
+    const v = await comoUsuario(USER_K, async () => {
+      await db.query(
+        `update captacoes set tipo='casa', finalidades='{locacao}', logradouro='Rua Um', numero_end='10', cidade='Santos', quartos=3, valor_avaliado_aluguel=3200, exclusivo=true where id=$1`,
+        [r.id],
+      );
+      const imovel = (await db.query<{ id: string }>(`select public.converter_captacao($1, 'CA-900') as id`, [r.id])).rows[0].id;
+      const im = (await db.query<{ codigo: string; valor_aluguel: string; status: string; captado_em: string; exclusivo: boolean }>(`select codigo, valor_aluguel, status, captado_em::text, exclusivo from imoveis where id=$1`, [imovel])).rows[0];
+      const dono = (await db.query<{ nome: string; papeis: string[] }>(`select p.nome, p.papeis from imovel_proprietarios ip join pessoas p on p.id = ip.pessoa_id where ip.imovel_id=$1`, [imovel])).rows[0];
+      const cap = (await db.query<{ status: string; imovel_id: string }>(`select status, imovel_id from captacoes where id=$1`, [r.id])).rows[0];
+      let segunda = "";
+      try {
+        await db.query(`select public.converter_captacao($1, 'CA-901')`, [r.id]);
+      } catch (e) {
+        segunda = String(e);
+      }
+      return { im, dono, cap, imovel, segunda };
+    });
+    expect(v.im).toMatchObject({ codigo: "CA-900", status: "disponivel", exclusivo: true });
+    expect(Number(v.im.valor_aluguel)).toBe(3200);
+    expect(v.im.captado_em).toBeTruthy();
+    expect(v.dono).toEqual({ nome: "Seu Zé", papeis: ["proprietario"] });
+    expect(v.cap).toEqual({ status: "captado", imovel_id: v.imovel });
+    expect(v.segunda).toContain("já virou imóvel");
+  });
+});

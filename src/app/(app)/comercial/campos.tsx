@@ -102,7 +102,6 @@ export function CamposLead({
           <Selecao name="funil" defaultValue={lead?.funil ?? funilPadrao}>
             <option value="locacao">Locação (quer alugar)</option>
             <option value="venda">Venda (quer comprar)</option>
-            <option value="captacao">Captação (quer anunciar imóvel)</option>
           </Selecao>
         </Campo>
         <Campo rotulo="Origem">

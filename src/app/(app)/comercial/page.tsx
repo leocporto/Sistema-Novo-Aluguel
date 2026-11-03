@@ -27,7 +27,7 @@ function haQuanto(iso: string, agora: number) {
 export default async function LeadsPage({ searchParams }: PageProps<"/comercial">) {
   const sp = await searchParams;
   const s = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
-  const funil: Funil = FUNIS.includes(s("funil") as Funil) ? (s("funil") as Funil) : "locacao";
+  const funil: Funil = (FUNIS as readonly string[]).includes(s("funil")) ? (s("funil") as Funil) : "locacao";
   const f = { corretor: s("corretor"), origem: s("origem"), prioridade: s("prioridade"), etiqueta: s("etiqueta"), ate: s("ate"), regiao: s("regiao"), tipo: s("tipo") };
   const { supabase } = await obterContexto();
   const hoje = hojeISO();

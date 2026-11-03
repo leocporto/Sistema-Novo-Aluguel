@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { obterContexto } from "@/lib/contexto";
 import { type EstadoAcao, ErroValidacao, booleano, lista, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
-import { FUNIS, TODAS_ETAPAS, ordemEtapa, rotuloEtapa, type Funil } from "@/lib/dominio/crm";
+import { FUNIS, TODAS_ETAPAS, ordemEtapa, rotuloEtapa } from "@/lib/dominio/crm";
 import { TIPOS_META } from "@/lib/tipos";
 
 function revalidarTudo() {
@@ -23,7 +23,7 @@ function lerLead(fd: FormData) {
   if (fd.has("prioridade")) d.prioridade = texto(fd, "prioridade") ?? "morno";
   if (fd.has("funil")) {
     const f = texto(fd, "funil");
-    d.funil = FUNIS.includes(f as Funil) ? f : "locacao";
+    d.funil = (FUNIS as readonly string[]).includes(f ?? "") ? f : "locacao";
     d.interesse = d.funil === "venda" ? "compra" : "locacao";
   }
   for (const c of ["orcamento_min", "orcamento_max"]) if (fd.has(c)) d[c] = numero(fd, c);

@@ -13,7 +13,7 @@ Leia também `AGENTS.md` (regras do Next.js desta versão) e `docs/DESIGN.md` (v
 O sistema tem **modo imobiliária** e **modo imóveis pessoais**. A tabela completa do que
 existe em cada um está em **`docs/MODOS.md`** — consulte antes de criar ou mudar qualquer tela.
 - **Recurso novo nasce só no modo imobiliária**, a não ser que o Leo diga o contrário.
-- Só da imobiliária: Repasses, **Comercial** (leads, visitas, propostas, tarefas, metas),
+- Só da imobiliária: Repasses, **Comercial** (leads, visitas, propostas, tarefas, metas), **Captação de imóveis** (`/captacao`),
   comissões, papel Corretor, taxa de administração/intermediação, imposto do proprietário, DIMOB,
   **Empreendimentos**, e no imóvel: proprietários, aba Comercialização (corretor, exclusividade,
   autorização, similares), anúncios em portais e visitas; em Pessoas: papéis Comprador, Investidor,

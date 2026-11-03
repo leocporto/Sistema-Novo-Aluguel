@@ -353,6 +353,8 @@ describe("modos de uso", () => {
   it("esconde comercial e repasses no modo pessoal", () => {
     expect(rotaPermitida("/comercial", "pessoal")).toBe(false);
     expect(rotaPermitida("/comercial/leads/1", "pessoal")).toBe(false);
+    expect(rotaPermitida("/captacao/abc", "pessoal")).toBe(false);
+    expect(rotaPermitida("/captacao", "imobiliaria")).toBe(true);
     expect(rotaPermitida("/repasses/extrato", "pessoal")).toBe(false);
     expect(rotaPermitida("/despesas", "pessoal")).toBe(true);
     expect(rotaPermitida("/comercial", "imobiliaria")).toBe(true);
@@ -559,5 +561,45 @@ describe("CRM de leads", () => {
     expect(rotuloEtapa("captacao", "ganho")).toBe("Captado");
     expect(rotuloEtapa("venda", "ganho")).toBe("Vendido");
     expect(rotuloEtapa("locacao", "visita")).toBe("Visita");
+  });
+});
+
+import { avaliacaoMercado, funilCaptacao, progressoChecklist, resumoCaptacoes, sugerirCodigo } from "@/lib/dominio/captacao";
+
+describe("captação: avaliação de mercado", () => {
+  it("sugere valor pelo R$/m² mediano de imóveis parecidos + comparativos", () => {
+    const cad = [
+      { codigo: "A", tipo: "apartamento", bairro: "Gonzaga", cidade: "Santos", area: 50, quartos: 2, valor_aluguel: 2500, valor_venda: null },
+      { codigo: "B", tipo: "apartamento", bairro: "Gonzaga", cidade: "Santos", area: 100, quartos: 3, valor_aluguel: 4000, valor_venda: 800000 },
+      { codigo: "C", tipo: "casa", bairro: "Gonzaga", cidade: "Santos", area: 200, quartos: 3, valor_aluguel: 9000, valor_venda: null },
+    ];
+    const r = avaliacaoMercado({ tipo: "Apartamento", bairro: "gonzaga", cidade: "Santos", area: 80, quartos: 2 }, cad, [
+      { descricao: "Anúncio ZAP", valor: 3300, area: 60, finalidade: "locacao", fonte: "ZAP" },
+    ]);
+    expect(r.locacao.amostras).toBe(3);
+    expect(r.locacao.precoM2).toBe(50); // mediana de 50, 40, 55
+    expect(r.locacao.sugerido).toBe(4000);
+    expect(r.venda.sugerido).toBe(640000);
+    expect(progressoChecklist({ matricula: true, iptu: true }).feitos).toBe(2);
+    expect(sugerirCodigo(["AP-009", "AP-012", "CA-1"])).toBe("AP-013");
+    expect(sugerirCodigo([], "casa")).toBe("CA-001");
+  });
+});
+
+describe("captação: desempenho", () => {
+  const base = { corretor_id: "a", origem: "placa", exclusivo: false, motivo_nao_captado: null };
+  const lista = [
+    { ...base, status: "captado", etapa_max: 5, exclusivo: true },
+    { ...base, status: "nao_captado", etapa_max: 3 },
+    { ...base, status: "contato", etapa_max: 1, corretor_id: "b" },
+  ];
+  it("agrupa por corretor com taxa de captação", () => {
+    const r = resumoCaptacoes(lista, (c) => c.corretor_id ?? "");
+    expect(r[0]).toMatchObject({ chave: "a", total: 2, captados: 1, naoCaptados: 1, exclusivos: 1, taxa: 50 });
+    expect(r[1]).toMatchObject({ chave: "b", abertos: 1, taxa: null });
+  });
+  it("conta quantos chegaram a cada etapa", () => {
+    const f = funilCaptacao(lista);
+    expect(f.map((x) => x.chegaram)).toEqual([3, 3, 2, 2, 1, 1]);
   });
 });

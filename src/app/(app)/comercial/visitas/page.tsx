@@ -22,6 +22,7 @@ type V = {
   lead: { id: string; nome: string; telefone: string | null } | null;
   imovel: { id: string; codigo: string; logradouro: string | null; numero: string | null } | null;
   corretor: { nome: string } | null;
+  captacao: { id: string; proprietario_nome: string; logradouro: string | null; numero_end: string | null } | null;
 };
 
 /** Data local (Brasília) de um timestamp. */
@@ -37,7 +38,7 @@ export default async function VisitasPage({ searchParams }: PageProps<"/comercia
   const [{ data }, opcoes] = await Promise.all([
     supabase
       .from("visitas")
-      .select("id, data_hora, status, observacoes, lead:leads(id, nome, telefone), imovel:imoveis(id, codigo, logradouro, numero), corretor:pessoas(nome)")
+      .select("id, data_hora, status, observacoes, lead:leads(id, nome, telefone), imovel:imoveis(id, codigo, logradouro, numero), corretor:pessoas(nome), captacao:captacoes(id, proprietario_nome, logradouro, numero_end)")
       .gte("data_hora", `${somarDias(hoje, -30)}T00:00:00-03:00`)
       .order("data_hora"),
     carregarOpcoes(supabase),
@@ -95,7 +96,11 @@ export default async function VisitasPage({ searchParams }: PageProps<"/comercia
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-texto">
-                          {v.lead ? (
+                          {v.captacao ? (
+                            <Link href={`/captacao/${v.captacao.id}`} className="hover:underline">
+                              Avaliação para captação · {v.captacao.proprietario_nome}
+                            </Link>
+                          ) : v.lead ? (
                             <Link href={`/comercial/leads/${v.lead.id}`} className="hover:underline">
                               {v.lead.nome}
                             </Link>
@@ -108,6 +113,8 @@ export default async function VisitasPage({ searchParams }: PageProps<"/comercia
                             <Link href={`/imoveis/${v.imovel.id}`} className="hover:underline">
                               {rotuloImovel(v.imovel)}
                             </Link>
+                          ) : v.captacao ? (
+                            [v.captacao.logradouro, v.captacao.numero_end].filter(Boolean).join(", ") || "Endereço a confirmar"
                           ) : (
                             "Imóvel não informado"
                           )}

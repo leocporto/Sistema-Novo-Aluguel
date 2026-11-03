@@ -1,8 +1,9 @@
 /** Regras puras do CRM de leads: funis, conversão, tempo de atendimento e reativação. */
 import type { PerfilInteresse } from "./pessoas";
 
-export const FUNIS = ["locacao", "venda", "captacao"] as const;
-export type Funil = (typeof FUNIS)[number];
+/** Funis de leads (quem quer alugar ou comprar). Proprietário que quer anunciar vai para a Captação de imóveis. */
+export const FUNIS = ["locacao", "venda"] as const;
+export type Funil = (typeof FUNIS)[number] | "captacao";
 export const ROTULO_FUNIL: Record<Funil, string> = { locacao: "Locação", venda: "Venda", captacao: "Captação" };
 
 /** Etapas abertas, na ordem do funil (ganho e perdido são o fim). */

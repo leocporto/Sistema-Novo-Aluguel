@@ -61,7 +61,7 @@ function TabelaResumo({ titulo, linhas, nome }: { titulo: string; linhas: Return
 
 export default async function ConversaoPage({ searchParams }: PageProps<"/comercial/conversao">) {
   const sp = await searchParams;
-  const funil: Funil = FUNIS.includes(sp.funil as Funil) ? (sp.funil as Funil) : "locacao";
+  const funil: Funil = (FUNIS as readonly string[]).includes(sp.funil as string) ? (sp.funil as Funil) : "locacao";
   const periodo = typeof sp.periodo === "string" && PERIODOS[sp.periodo] ? sp.periodo : "90";
   const { supabase } = await obterContexto();
   let q = supabase.from("leads").select("id, status, etapa_max, corretor_id, origem, funil, created_at, atendido_em, motivo_perda").eq("funil", funil).limit(10000);

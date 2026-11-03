@@ -35,6 +35,7 @@ import {
   Target,
   TrendingDown,
   UserPlus,
+  HousePlus,
   type LucideIcon,
 } from "lucide-react";
 import { AbasSegmentadas, type ItemAba } from "./abas-segmentadas";
@@ -67,6 +68,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     titulo: "Comercial",
     itens: [
       { href: "/comercial", rotulo: "Leads", icone: UserPlus },
+      { href: "/captacao", rotulo: "Captação de imóveis", icone: HousePlus },
       { href: "/comercial/visitas", rotulo: "Visitas", icone: CalendarDays },
       { href: "/comercial/propostas", rotulo: "Propostas", icone: Handshake },
       { href: "/comercial/tarefas", rotulo: "Tarefas", icone: ListTodo },
