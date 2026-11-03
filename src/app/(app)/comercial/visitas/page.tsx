@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarPlus, Check, MessageCircle, X } from "lucide-react";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { JanelaCadastro } from "@/components/janela-cadastro";
 import { Cabecalho, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -150,11 +151,9 @@ export default async function VisitasPage({ searchParams }: PageProps<"/comercia
                             </form>
                           </>
                         ) : (
-                          <form action={excluirVisita}>
-                            <input type="hidden" name="id" value={v.id} />
-                            <button className="text-xs text-mudo hover:text-ruim hover:underline">excluir</button>
-                          </form>
+                          null
                         )}
+                        <BotaoExcluir acao={excluirVisita} id={v.id} rotulo="Excluir visita" confirmar="Excluir esta visita?" />
                       </div>
                     </li>
                   ))}

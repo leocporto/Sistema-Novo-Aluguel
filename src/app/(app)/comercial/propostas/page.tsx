@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BadgeDollarSign, CircleCheck, Handshake, Wallet } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoEnviar } from "@/components/formulario";
 import { JanelaCadastro } from "@/components/janela-cadastro";
 import { Cabecalho, Celula, Indicador, LinhaVazia, Selo, Tabela, classeBotao } from "@/components/ui";
@@ -166,12 +167,16 @@ export default async function PropostasPage({ searchParams }: PageProps<"/comerc
                     Criar contrato
                   </Link>
                 )}
-                {p.status !== "aceita" && p.status !== "em_negociacao" && (
-                  <form action={excluirProposta}>
-                    <input type="hidden" name="id" value={p.id} />
-                    <button className="text-xs text-mudo hover:text-ruim hover:underline">excluir</button>
-                  </form>
-                )}
+                <BotaoExcluir
+                  acao={excluirProposta}
+                  id={p.id}
+                  rotulo="Excluir proposta"
+                  confirmar={
+                    p.status === "aceita"
+                      ? "Excluir esta proposta aceita? A comissão ainda não paga sai junto. A situação do imóvel não muda."
+                      : "Excluir esta proposta?"
+                  }
+                />
               </div>
             </Celula>
           </tr>

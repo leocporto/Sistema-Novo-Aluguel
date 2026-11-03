@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarCheck, Handshake, Inbox, MessageCircle, Phone, UserPlus, Users } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { Formulario } from "@/components/formulario";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { JanelaCadastro } from "@/components/janela-cadastro";
@@ -10,7 +11,7 @@ import { obterContexto } from "@/lib/contexto";
 import { agoraMs, hojeISO } from "@/lib/dominio/datas";
 import { ROTULO_INTERESSE, ROTULO_ORIGEM_LEAD, ROTULO_STATUS_LEAD, type Lead, type StatusLead } from "@/lib/tipos";
 import { linkWhatsapp } from "@/lib/whatsapp";
-import { criarLead, mudarStatusLead } from "./actions";
+import { criarLead, excluirLead, mudarStatusLead } from "./actions";
 import { AbasComercial, CamposLead } from "./campos";
 import { carregarOpcoes } from "./dados";
 
@@ -141,6 +142,7 @@ export default async function LeadsPage({ searchParams }: PageProps<"/comercial"
                           ))}
                         </select>
                       </Formulario>
+                      <BotaoExcluir acao={excluirLead} id={l.id} rotulo={`Excluir ${l.nome}`} confirmar={`Excluir o lead "${l.nome}"?`} />
                       {l.telefone && (
                         <>
                           <a

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, ListTodo, Trash2 } from "lucide-react";
+import { Check, ListTodo } from "lucide-react";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { JanelaCadastro } from "@/components/janela-cadastro";
 import { Cabecalho, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -107,12 +108,7 @@ export default async function TarefasPage({ searchParams }: PageProps<"/comercia
                 <span className={`w-24 text-right text-sm tabular-nums ${vencida ? "font-semibold text-ruim" : "text-mudo"}`}>
                   {t.vencimento ? (t.vencimento === hoje ? "hoje" : formatarDataBR(t.vencimento)) : "sem data"}
                 </span>
-                <form action={excluirTarefa}>
-                  <input type="hidden" name="id" value={t.id} />
-                  <button title="Excluir tarefa" aria-label="Excluir tarefa" className="grid size-8 place-items-center rounded-[9px] text-mudo hover:bg-ruim-bg hover:text-ruim">
-                    <Trash2 className="size-4" />
-                  </button>
-                </form>
+                <BotaoExcluir acao={excluirTarefa} id={t.id} rotulo="Excluir tarefa" confirmar={`Excluir a tarefa "${t.titulo}"?`} />
               </li>
             );
           })}

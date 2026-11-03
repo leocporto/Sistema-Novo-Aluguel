@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarPlus, Handshake, ListTodo, MessageCircle } from "lucide-react";
-import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { BotaoExcluir } from "@/components/botao-excluir";
+import { Formulario } from "@/components/formulario";
 import { JanelaCadastro } from "@/components/janela-cadastro";
 import { Cabecalho, Campo, Cartao, Selecao, Selo, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -52,6 +53,14 @@ export default async function LeadPage({ params }: PageProps<"/comercial/leads/[
         descricao={`Lead desde ${formatarDataBR(lead.created_at.slice(0, 10))} · ${ROTULO_STATUS_LEAD[lead.status]}`}
         acoes={
           <>
+            <BotaoExcluir
+              acao={excluirLead}
+              id={lead.id}
+              variante="botao"
+              rotulo="Excluir"
+              confirmar="Excluir este lead? Visitas e propostas continuam salvas."
+              depois="/comercial"
+            />
             {lead.telefone && (
               <a href={linkWhatsapp(lead.telefone, `Olá ${lead.nome.split(" ")[0]}! Tudo bem?`)} target="_blank" rel="noreferrer" className={classeBotao("secundario")}>
                 <MessageCircle className="size-4" /> WhatsApp
@@ -141,12 +150,14 @@ export default async function LeadPage({ params }: PageProps<"/comercial/leads/[
               {!tarefas?.length && <li className="text-mudo">Nenhuma tarefa.</li>}
             </ul>
           </Cartao>
-          <form action={excluirLead}>
-            <input type="hidden" name="id" value={lead.id} />
-            <BotaoEnviar variante="fantasma" confirmar="Excluir este lead? Visitas e propostas continuam salvas.">
-              Excluir lead
-            </BotaoEnviar>
-          </form>
+          <BotaoExcluir
+            acao={excluirLead}
+            id={lead.id}
+            variante="botao"
+            rotulo="Excluir lead"
+            confirmar="Excluir este lead? Visitas e propostas continuam salvas."
+            depois="/comercial"
+          />
         </div>
       </div>
     </>

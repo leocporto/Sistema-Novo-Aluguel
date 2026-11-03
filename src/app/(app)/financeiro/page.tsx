@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { Cabecalho, Campo, Cartao, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -55,6 +56,20 @@ async function liquidar(fd: FormData) {
   revalidatePath("/financeiro");
 }
 
+async function excluirLancamento(id: string): Promise<{ ok: boolean; erro?: string }> {
+  "use server";
+  const { supabase } = await obterContexto();
+  const { data } = await supabase.from("lancamentos").select("fatura_id").eq("id", id).maybeSingle();
+  if (data?.fatura_id)
+    return { ok: false, erro: "Este lançamento foi gerado pelo pagamento de um aluguel. Para tirar, desfaça o pagamento em Aluguéis do mês." };
+  const { error } = await supabase.from("lancamentos").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  revalidatePath("/financeiro");
+  revalidatePath("/despesas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export default async function FinanceiroPage({ searchParams }: PageProps<"/financeiro">) {
   const sp = await searchParams;
   const mes = typeof sp.mes === "string" && sp.mes ? sp.mes : hojeISO().slice(0, 7);
@@ -88,8 +103,8 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
           <FiltroAutomatico className="mb-4 flex gap-2">
             <Entrada type="month" name="mes" defaultValue={mes} className="w-44" />
           </FiltroAutomatico>
-          <Tabela colunas={["Vencimento", "Descrição", "Categoria", "Tipo", "Valor", "Situação"]}>
-            {lanc.length === 0 && <LinhaVazia colunas={6}>Nenhum lançamento no mês.</LinhaVazia>}
+          <Tabela colunas={["Vencimento", "Descrição", "Categoria", "Tipo", "Valor", "Situação", ""]}>
+            {lanc.length === 0 && <LinhaVazia colunas={7}>Nenhum lançamento no mês.</LinhaVazia>}
             {lanc.map((l) => (
               <tr key={l.id}>
                 <Celula>{formatarDataBR(l.vencimento)}</Celula>
@@ -108,6 +123,9 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
                       <button className="text-sm text-acento hover:underline">Liquidar</button>
                     </form>
                   )}
+                </Celula>
+                <Celula>
+                  <BotaoExcluir acao={excluirLancamento} id={l.id} rotulo="Excluir lançamento" confirmar={`Excluir "${l.descricao}"?`} />
                 </Celula>
               </tr>
             ))}

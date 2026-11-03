@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { Cabecalho, Campo, Cartao, Celula, Entrada, LinhaVazia, Selecao, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -50,17 +51,26 @@ async function importarIndices(_: EstadoAcao, fd: FormData): Promise<EstadoAcao>
   }
 }
 
+async function excluirIndice(id: string): Promise<{ ok: boolean; erro?: string }> {
+  "use server";
+  const { supabase } = await obterContexto();
+  const { error } = await supabase.from("indices_economicos").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  revalidatePath("/indices");
+  return { ok: true };
+}
+
 export default async function IndicesPage({ searchParams }: PageProps<"/indices">) {
   const sp = await searchParams;
   const indice = typeof sp.indice === "string" && sp.indice ? sp.indice : "IGPM";
   const { supabase } = await obterContexto();
   const { data } = await supabase
     .from("indices_economicos")
-    .select("competencia, variacao_pct")
+    .select("id, competencia, variacao_pct")
     .eq("indice", indice)
     .order("competencia", { ascending: false })
     .limit(36);
-  const linhas = (data ?? []) as { competencia: string; variacao_pct: number }[];
+  const linhas = (data ?? []) as { id: string; competencia: string; variacao_pct: number }[];
 
   return (
     <>
@@ -79,8 +89,8 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
               ))}
             </Selecao>
           </FiltroAutomatico>
-          <Tabela colunas={["Mês", "Variação do mês", "Acumulado 12 meses"]}>
-            {linhas.length === 0 && <LinhaVazia colunas={3}>Nenhum mês cadastrado para {indice}.</LinhaVazia>}
+          <Tabela colunas={["Mês", "Variação do mês", "Acumulado 12 meses", ""]}>
+            {linhas.length === 0 && <LinhaVazia colunas={4}>Nenhum mês cadastrado para {indice}.</LinhaVazia>}
             {linhas.map((l, i) => {
               const janela = linhas.slice(i, i + 12);
               return (
@@ -88,6 +98,9 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
                   <Celula>{formatarCompetencia(l.competencia)}</Celula>
                   <Celula>{Number(l.variacao_pct).toFixed(4)}%</Celula>
                   <Celula>{janela.length === 12 ? `${acumular(janela.map((j) => Number(j.variacao_pct))).toFixed(4)}%` : "—"}</Celula>
+                  <Celula>
+                    <BotaoExcluir acao={excluirIndice} id={l.id} rotulo="Excluir mês" confirmar={`Excluir ${indice} de ${formatarCompetencia(l.competencia)}?`} />
+                  </Celula>
                 </tr>
               );
             })}

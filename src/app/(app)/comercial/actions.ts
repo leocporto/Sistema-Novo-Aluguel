@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { obterContexto } from "@/lib/contexto";
 import { type EstadoAcao, ErroValidacao, booleano, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 import { TIPOS_META } from "@/lib/tipos";
@@ -74,11 +73,14 @@ export async function mudarStatusLead(_: EstadoAcao, fd: FormData): Promise<Esta
   return { ok: "Etapa atualizada." };
 }
 
-export async function excluirLead(fd: FormData) {
+type Resultado = { ok: boolean; erro?: string };
+
+export async function excluirLead(id: string): Promise<Resultado> {
   const { supabase } = await obterContexto();
-  await supabase.from("leads").delete().eq("id", String(fd.get("id")));
+  const { error } = await supabase.from("leads").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
   revalidarTudo();
-  redirect("/comercial");
+  return { ok: true };
 }
 
 /** Avança o lead no funil sem voltar etapas (ex.: agendou visita → "visita"). */
@@ -127,10 +129,12 @@ export async function mudarStatusVisita(fd: FormData) {
   revalidarTudo();
 }
 
-export async function excluirVisita(fd: FormData) {
+export async function excluirVisita(id: string): Promise<Resultado> {
   const { supabase } = await obterContexto();
-  await supabase.from("visitas").delete().eq("id", String(fd.get("id")));
+  const { error } = await supabase.from("visitas").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
   revalidarTudo();
+  return { ok: true };
 }
 
 // Propostas -----------------------------------------------------------------
@@ -181,10 +185,17 @@ export async function recusarProposta(fd: FormData) {
   revalidarTudo();
 }
 
-export async function excluirProposta(fd: FormData) {
+/** Exclui a proposta; se ela tinha gerado comissão ainda não paga, a comissão sai junto. */
+export async function excluirProposta(id: string): Promise<Resultado> {
   const { supabase } = await obterContexto();
-  await supabase.from("propostas").delete().eq("id", String(fd.get("id"))).neq("status", "aceita");
+  const { error: e1 } = await supabase.from("lancamentos").delete().eq("proposta_id", id).eq("status", "aberto");
+  if (e1) return { ok: false, erro: mensagemErro(e1) };
+  const { error } = await supabase.from("propostas").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
   revalidarTudo();
+  revalidatePath("/despesas");
+  revalidatePath("/financeiro");
+  return { ok: true };
 }
 
 // Tarefas -------------------------------------------------------------------
@@ -217,10 +228,12 @@ export async function alternarTarefa(fd: FormData) {
   revalidarTudo();
 }
 
-export async function excluirTarefa(fd: FormData) {
+export async function excluirTarefa(id: string): Promise<Resultado> {
   const { supabase } = await obterContexto();
-  await supabase.from("tarefas").delete().eq("id", String(fd.get("id")));
+  const { error } = await supabase.from("tarefas").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
   revalidarTudo();
+  return { ok: true };
 }
 
 // Metas ---------------------------------------------------------------------

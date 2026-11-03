@@ -7,6 +7,8 @@ import { PAPEIS_SO_IMOBILIARIA } from "@/lib/modos";
 import { ROTULO_PAPEL, type Pessoa } from "@/lib/tipos";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
 import { LinhaLink } from "@/components/linha-link";
+import { BotaoExcluir } from "@/components/botao-excluir";
+import { excluirPessoa } from "./actions";
 
 export const metadata: Metadata = { title: "Pessoas" };
 
@@ -42,8 +44,8 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
           ))}
         </Selecao>
       </FiltroAutomatico>
-      <Tabela colunas={["Nome", "Documento", "Contato", "Papéis"]}>
-        {pessoas.length === 0 && <LinhaVazia colunas={4}>Nenhuma pessoa encontrada.</LinhaVazia>}
+      <Tabela colunas={["Nome", "Documento", "Contato", "Papéis", ""]}>
+        {pessoas.length === 0 && <LinhaVazia colunas={5}>Nenhuma pessoa encontrada.</LinhaVazia>}
         {pessoas.map((p) => (
           <LinhaLink href={`/pessoas/${p.id}`} key={p.id} className="hover:bg-card-hover">
             <Celula>
@@ -65,6 +67,9 @@ export default async function PessoasPage({ searchParams }: PageProps<"/pessoas"
                   </Selo>
                 ))}
               </div>
+            </Celula>
+            <Celula>
+              <BotaoExcluir acao={excluirPessoa} id={p.id} rotulo={`Excluir ${p.nome}`} confirmar={`Excluir o cadastro de ${p.nome}?`} />
             </Celula>
           </LinhaLink>
         ))}

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BotaoEnviar } from "@/components/formulario";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoLink, Cabecalho, Cartao, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { ROTULO_PAPEL, type Pessoa } from "@/lib/tipos";
@@ -85,12 +85,7 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
               {!vinculos?.length && <li className="text-mudo">Nenhum.</li>}
             </ul>
           </Cartao>
-          <form action={excluirPessoa}>
-            <input type="hidden" name="id" value={pessoa.id} />
-            <BotaoEnviar variante="fantasma" confirmar="Excluir este cadastro?">
-              Excluir cadastro
-            </BotaoEnviar>
-          </form>
+          <BotaoExcluir acao={excluirPessoa} id={pessoa.id} variante="botao" rotulo="Excluir cadastro" confirmar={`Excluir o cadastro de ${pessoa.nome}?`} depois="/pessoas" />
         </div>
       </div>
     </>

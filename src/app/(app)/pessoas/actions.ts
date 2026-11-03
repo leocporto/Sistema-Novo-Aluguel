@@ -121,14 +121,19 @@ async function sincronizarImoveis(supabase: Supabase, pessoaId: string, marcados
   return avisos;
 }
 
-export async function excluirPessoa(fd: FormData) {
+export async function excluirPessoa(id: string): Promise<{ ok: boolean; erro?: string }> {
   const { supabase } = await obterContexto();
-  const id = texto(fd, "id");
-  if (!id) return;
   const { error } = await supabase.from("pessoas").delete().eq("id", id);
-  if (error) throw new Error("Não é possível excluir: a pessoa está vinculada a imóveis ou contratos.");
+  if (error)
+    return {
+      ok: false,
+      erro: error.message.includes("foreign key")
+        ? "Não dá para excluir: esta pessoa faz parte de um contrato. Tire-a do contrato antes (ou exclua o contrato)."
+        : mensagemErro(error),
+    };
   revalidatePath("/pessoas");
-  redirect("/pessoas");
+  revalidatePath("/imoveis", "layout");
+  return { ok: true };
 }
 
 /**

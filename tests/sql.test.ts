@@ -336,3 +336,22 @@ describe("cadastro completo de imóveis", () => {
     expect(visto).toEqual({ emp: 0, midias: 0, anuncios: 0, precos: 0 });
   });
 });
+
+describe("contrato único por imóvel", () => {
+  const USER_G = "00000000-0000-0000-0000-000000000010";
+  it("bloqueia dois contratos ativos no mesmo período, mas aceita renovação depois", async () => {
+    await comoUsuario(USER_G, () => db.query(`select public.criar_organizacao('Imob G')`));
+    await comoUsuario(USER_G, async () => {
+      const im = (await db.query<{ id: string }>(`insert into imoveis (codigo) values ('UNI-1') returning id`)).rows[0].id;
+      const ins = (ini: string, fim: string) =>
+        db.query(
+          `insert into contratos (imovel_id, data_inicio, prazo_meses, data_fim, valor_aluguel, dia_vencimento, data_base_reajuste)
+           values ($1, $2, 12, $3, 1000, 10, $2)`,
+          [im, ini, fim],
+        );
+      await ins("2026-01-01", "2026-12-31");
+      await expect(ins("2026-06-01", "2027-05-31")).rejects.toThrow(/já tem o contrato ativo/);
+      await ins("2027-01-01", "2027-12-31"); // renovação, sem sobrepor
+    });
+  });
+});

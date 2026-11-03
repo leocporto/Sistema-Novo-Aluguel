@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { Cabecalho, Campo, Cartao, Celula, Entrada, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -49,6 +50,25 @@ async function devolver(fd: FormData) {
   revalidatePath("/chaves");
 }
 
+async function excluirChave(id: string): Promise<{ ok: boolean; erro?: string }> {
+  "use server";
+  const { supabase } = await obterContexto();
+  const { error } = await supabase.from("chaves").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  revalidatePath("/chaves");
+  return { ok: true };
+}
+
+/** Apaga um registro de retirada feito por engano. */
+async function excluirMovimentacao(id: string): Promise<{ ok: boolean; erro?: string }> {
+  "use server";
+  const { supabase } = await obterContexto();
+  const { error } = await supabase.from("chave_movimentacoes").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  revalidatePath("/chaves");
+  return { ok: true };
+}
+
 const fmt = (s: string | null) => (s ? new Date(s).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
 
 export default async function ChavesPage() {
@@ -77,7 +97,16 @@ export default async function ChavesPage() {
                 <Celula>
                   {aberta ? (
                     <>
-                      <Selo cor={atrasada ? "vermelho" : "amarelo"}>{atrasada ? "devolução atrasada" : "retirada"}</Selo>
+                      <span className="flex items-center gap-1">
+                        <Selo cor={atrasada ? "vermelho" : "amarelo"}>{atrasada ? "devolução atrasada" : "retirada"}</Selo>
+                        <BotaoExcluir
+                          acao={excluirMovimentacao}
+                          id={aberta.id}
+                          variante="texto"
+                          rotulo="Apagar retirada"
+                          confirmar="Apagar este registro de retirada (lançado por engano)? A chave volta a ficar disponível."
+                        />
+                      </span>
                       <div className="mt-1 text-xs text-mudo">
                         {aberta.retirada_por} · {fmt(aberta.retirada_em)}
                         {aberta.motivo && ` · ${aberta.motivo}`}
@@ -89,6 +118,8 @@ export default async function ChavesPage() {
                   )}
                 </Celula>
                 <Celula>
+                  <div className="flex items-start gap-2">
+                  <div className="flex-1">
                   {aberta ? (
                     <form action={devolver}>
                       <input type="hidden" name="mov_id" value={aberta.id} />
@@ -103,6 +134,9 @@ export default async function ChavesPage() {
                       <BotaoEnviar variante="secundario">Registrar retirada</BotaoEnviar>
                     </Formulario>
                   )}
+                  </div>
+                  <BotaoExcluir acao={excluirChave} id={c.id} rotulo="Excluir chave" confirmar={`Excluir a chave "${c.identificacao}" e todo o histórico de retiradas?`} />
+                  </div>
                 </Celula>
               </tr>
             );

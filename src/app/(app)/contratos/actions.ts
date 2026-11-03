@@ -315,3 +315,28 @@ export async function encerrarContrato(_: EstadoAcao, fd: FormData): Promise<Est
   revalidatePath("/contratos");
   return { ok: "Contrato encerrado e imóvel marcado como desalugado." };
 }
+
+/**
+ * Exclui um contrato lançado por engano. Só se nenhum aluguel ou repasse foi
+ * pago — com pagamento, o certo é encerrar (o histórico financeiro fica).
+ */
+export async function excluirContrato(id: string): Promise<{ ok: boolean; erro?: string }> {
+  const { supabase } = await obterContexto();
+  const [{ count: pagas }, { count: repassesPagos }, { data: c }] = await Promise.all([
+    supabase.from("faturas").select("id", { count: "exact", head: true }).eq("contrato_id", id).eq("status", "paga"),
+    supabase.from("repasses").select("id", { count: "exact", head: true }).eq("contrato_id", id).eq("status", "pago"),
+    supabase.from("contratos").select("imovel_id").eq("id", id).maybeSingle(),
+  ]);
+  if (!c) return { ok: false, erro: "Contrato não encontrado." };
+  if (pagas || repassesPagos)
+    return { ok: false, erro: "Este contrato já tem aluguel ou repasse pago. Para manter o histórico, encerre o contrato em vez de excluir." };
+  const { error } = await supabase.from("contratos").delete().eq("id", id);
+  if (error) return { ok: false, erro: mensagemErro(error) };
+  const { count: outros } = await supabase.from("contratos").select("id", { count: "exact", head: true }).eq("imovel_id", c.imovel_id).eq("status", "ativo");
+  if (!outros) await supabase.from("imoveis").update({ status: "disponivel" }).eq("id", c.imovel_id).eq("status", "alugado");
+  revalidatePath("/contratos");
+  revalidatePath("/faturas");
+  revalidatePath("/imoveis", "layout");
+  revalidatePath("/");
+  return { ok: true };
+}

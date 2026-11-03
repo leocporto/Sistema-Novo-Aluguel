@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
 import {
   AreaTexto,
@@ -33,6 +34,7 @@ import {
   aplicarReajuste,
   atualizarContrato,
   encerrarContrato,
+  excluirContrato,
   gerarFaturaManual,
   removerEncargo,
   removerParte,
@@ -495,6 +497,14 @@ export default async function ContratoPage({ params, searchParams }: PageProps<"
               </div>
             )}
           </Cartao>
+          <BotaoExcluir
+            acao={excluirContrato}
+            id={id}
+            variante="botao"
+            rotulo="Excluir contrato"
+            confirmar="Excluir este contrato lançado por engano? Faturas em aberto, partes e encargos saem junto. (Se já houve pagamento, o sistema não deixa — encerre o contrato.)"
+            depois="/contratos"
+          />
         </div>
       </div>
     </>
