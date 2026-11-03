@@ -252,7 +252,7 @@ export function FormImovel({
           <input type="hidden" name="_publicar_site" value="1" />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="publicar_site" defaultChecked={i?.publicar_site} />
-            Publicar no site e portais (quando a integração estiver ativa)
+            Publicar no site (e nos portais configurados em Site e portais)
           </label>
         </div>
       </Cartao>

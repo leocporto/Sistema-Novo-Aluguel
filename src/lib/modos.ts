@@ -8,7 +8,7 @@
 export type ModoUso = "imobiliaria" | "pessoal";
 
 /** Telas que só existem no modo imobiliária (e tudo abaixo delas). */
-export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/captacao", "/vendas", "/empreendimentos", "/comissoes"] as const;
+export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/captacao", "/vendas", "/empreendimentos", "/comissoes", "/site"] as const;
 
 /** Partes de telas compartilhadas que só existem na imobiliária (ex.: aba Comercialização do imóvel). */
 const SUBROTAS_SO_IMOBILIARIA = [
@@ -37,6 +37,8 @@ export const QUADROS_SO_IMOBILIARIA = [
   "repasses",
   "comissoes",
   "metas",
+  "site_contatos",
+  "portais_falhas",
 ] as const;
 
 export function quadroPermitido(id: string, modo: ModoUso | null | undefined): boolean {

@@ -13,6 +13,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   FileClock,
+  Globe,
   Handshake,
   Home,
   Inbox,
@@ -106,7 +107,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN, siteContatosR, portaisFalhaR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -163,6 +164,10 @@ export default async function PainelPage() {
       supabase.from("chamados").select("id, numero, titulo, status, origem, prazo_atendimento").in("status", STATUS_EM_ANDAMENTO),
       supabase.from("chamados").select("id", { count: "exact", head: true }).in("status", ["concluido", "avaliado"]).gte("garantia_ate", hoje).lte("garantia_ate", somarDias(hoje, 30)),
       numerosAnalisePainel(supabase, hoje),
+      pessoal
+        ? Promise.resolve({ count: 0 })
+        : supabase.from("site_solicitacoes").select("id", { count: "exact", head: true }).neq("tipo", "portal").gte("created_at", `${somarDias(hoje, -30)}T00:00:00-03:00`),
+      pessoal ? Promise.resolve({ count: 0 }) : supabase.from("portal_imoveis").select("id", { count: "exact", head: true }).eq("ultimo_status", "falha"),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -684,6 +689,35 @@ export default async function PainelPage() {
           detalhe={analiseN.garantiasVencidas ? `${analiseN.garantiasVencidas} já vencida(s)` : "nenhuma vencida"}
           tom={analiseN.garantiasVencidas ? "perigo" : analiseN.garantiasVencendo ? "alerta" : "sucesso"}
           href={analiseN.garantiasVencidas ? "/analise/garantias?filtro=vencida" : "/analise/garantias?filtro=30"}
+        />
+      ),
+    },
+    !pessoal && {
+      id: "site_contatos",
+      titulo: "Contatos pelo site",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Contatos pelo site (30 dias)"
+          icone={<Globe />}
+          valor={<Contador valor={siteContatosR.count ?? 0} />}
+          detalhe="contato, visita, anuncie e lançamentos"
+          href="/site/contatos"
+        />
+      ),
+    },
+    !pessoal && {
+      id: "portais_falhas",
+      titulo: "Falhas nos portais",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Imóveis com falha nos portais"
+          icone={<Globe />}
+          valor={<Contador valor={portaisFalhaR.count ?? 0} />}
+          detalhe={portaisFalhaR.count ? "corrija o cadastro para voltar ao portal" : "nenhuma falha"}
+          tom={portaisFalhaR.count ? "perigo" : "sucesso"}
+          href="/site/portais/imoveis?filtro=falha"
         />
       ),
     },

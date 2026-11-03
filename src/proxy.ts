@@ -1,14 +1,21 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseConfig } from "@/lib/supabase/config";
+import { reescreverDominioProprio } from "@/lib/servicos/site-dominio";
 
-const ROTAS_PUBLICAS = ["/login", "/l", "/api/leads", "/api/agenda", "/assinar", "/pagar", "/contestar", "/chamado", "/ficha"];
+const ROTAS_PUBLICAS = ["/login", "/l", "/api/leads", "/api/agenda", "/assinar", "/pagar", "/contestar", "/chamado", "/ficha", "/s", "/api/portais"];
 
 /**
  * Renova a sessão do Supabase a cada requisição e redireciona visitantes não
  * autenticados para /login.
  */
 export async function proxy(request: NextRequest) {
+  // Domínio próprio de imobiliária → site público dela (/s/<slug>), sem login.
+  const site = await reescreverDominioProprio(request);
+  if (site) return site;
+  // Nos endereços do sistema, ninguém de fora manda este cabeçalho.
+  request.headers.delete("x-site-dominio");
+
   let response = NextResponse.next({ request });
   const { url, key } = supabaseConfig();
 
