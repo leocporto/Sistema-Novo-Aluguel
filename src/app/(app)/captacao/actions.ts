@@ -271,7 +271,7 @@ export async function agendarAvaliacao(_: EstadoAcao, fd: FormData): Promise<Est
     return { erro: mensagemErro(e) };
   }
   revalidarTudo();
-  revalidatePath("/comercial/visitas");
+  revalidatePath("/agenda", "layout");
   return { ok: "Avaliação agendada." };
 }
 

@@ -468,3 +468,49 @@ describe("captação de imóveis", () => {
     expect(v.segunda).toContain("já virou imóvel");
   });
 });
+
+describe("agenda e chaves", () => {
+  const USER_L = "00000000-0000-0000-0000-000000000015";
+  const USER_M = "00000000-0000-0000-0000-000000000016";
+  it("feed da agenda pelo token, chave com uma retirada aberta e isolamento", async () => {
+    const org = await comoUsuario(USER_L, async () => (await db.query<{ id: string }>(`select public.criar_organizacao('Imob L') as id`)).rows[0].id);
+    await comoUsuario(USER_M, () => db.query(`select public.criar_organizacao('Imob M')`));
+    const r = await comoUsuario(USER_L, async () => {
+      const im = (await db.query<{ id: string }>(`insert into imoveis (codigo, tipo, logradouro, numero, cidade) values ('AG-1','casa','Rua A','5','Santos') returning id`)).rows[0].id;
+      const p = (await db.query<{ id: string }>(`insert into pessoas (nome, telefone) values ('Ana Interessada','13999990000') returning id`)).rows[0].id;
+      const v = (await db.query<{ id: string; responsavel_id: string }>(
+        `insert into visitas (imovel_id, pessoa_id, data_hora, tipo, duracao_min) values ($1, $2, now() + interval '1 day', 'visita', 45) returning id, responsavel_id`,
+        [im, p],
+      )).rows[0];
+      await db.query(`insert into visitas (imovel_id, data_hora, status) values ($1, now() + interval '2 day', 'cancelada')`, [im]);
+      const ch = (await db.query<{ id: string }>(`insert into chaves (imovel_id, identificacao, codigo) values ($1, 'Portão', 'CH-010') returning id`, [im])).rows[0].id;
+      await db.query(`insert into chave_movimentacoes (chave_id, retirada_por, visita_id) values ($1, 'Ana', $2)`, [ch, v.id]);
+      let dupla = "";
+      try {
+        await db.query(`insert into chave_movimentacoes (chave_id, retirada_por) values ($1, 'Outro')`, [ch]);
+      } catch (e) {
+        dupla = String(e);
+      }
+      const token = (await db.query<{ t: string }>(`select agenda_token as t from organizacoes where id = $1`, [org])).rows[0].t;
+      return { v, dupla, token };
+    });
+    expect(r.v.responsavel_id).toBe(USER_L);
+    expect(r.dupla).toMatch(/duplicate|unique|único/i);
+    await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
+    const feed = (await db.query<{ cliente: string; imovel: string; endereco: string; duracao_min: number }>(`select * from public.agenda_feed($1)`, [r.token])).rows;
+    const errado = (await db.query(`select * from public.agenda_feed($1)`, ["00000000-0000-0000-0000-000000000000"])).rows;
+    let direto = "";
+    try {
+      await db.query(`select * from visitas`);
+    } catch (e) {
+      direto = String(e);
+    }
+    await db.exec(`reset role;`);
+    expect(feed).toHaveLength(1);
+    expect(feed[0]).toMatchObject({ cliente: "Ana Interessada", imovel: "AG-1", endereco: "Rua A, 5, Santos", duracao_min: 45 });
+    expect(errado).toHaveLength(0);
+    expect(direto).toMatch(/permission|denied/i);
+    const deM = await comoUsuario(USER_M, async () => (await db.query(`select * from chaves`)).rows.length);
+    expect(deM).toBe(0);
+  });
+});

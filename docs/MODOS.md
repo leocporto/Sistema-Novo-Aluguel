@@ -28,7 +28,7 @@ não ser que o Leo peça para o modo pessoal também.
 | Contratos | ✅ | ✅ | No pessoal: sem taxa de administração/intermediação e sem repasse; no contrato impresso a conta é o LOCADOR |
 | Aluguéis do mês (baixa) | ✅ | ✅ | No pessoal o aluguel inteiro entra como receita no Financeiro |
 | **Repasses** (e extrato) | ✅ | ❌ | `/repasses` redireciona para `/` no pessoal |
-| **Comercial**: Leads, Visitas, Propostas, Tarefas, Metas | ✅ | ❌ | `/comercial/*` — o `comercial/layout.tsx` redireciona para `/` no pessoal |
+| **Comercial**: Leads, Propostas, Tarefas, Metas (as visitas foram para a Agenda) | ✅ | ❌ | `/comercial/*` — o `comercial/layout.tsx` redireciona para `/` no pessoal |
 | **CRM**: funis de locação/venda (Kanban arrastável), corretor e rodízio, prioridade, etiquetas, perfil de busca, vários imóveis por lead, sugestões, histórico de contatos, follow-up, motivo de perda, transferência, Reativar, Conversão, Captação de leads | ✅ | ❌ | Tudo dentro de `/comercial`. Entrada pública: `/l/[token]` (formulário) e `POST /api/leads/[token]` (API) — RPC `receber_lead` recusa organização no modo pessoal |
 | **Captação de imóveis**: oportunidades (Kanban), proprietário em potencial, cadastro preliminar do imóvel, histórico de contatos/negociação, visita de avaliação, avaliação de mercado com comparativos (R$/m²), proposta de administração/intermediação para imprimir, exclusividade, autorização de anúncio, fotos, checklist de documentos, captações por corretor, metas, não captados, conversão em imóvel ativo | ✅ | ❌ | `/captacao/*` — `captacao/layout.tsx` redireciona no pessoal; formulário público “Anunciar meu imóvel” cai aqui |
 | Comissões de corretor | ✅ | ❌ | Nascem ao aceitar proposta |
@@ -45,7 +45,10 @@ não ser que o Leo peça para o modo pessoal também.
 | Imposto do proprietário (PF/PJ) | ✅ | ❌ | Configurações e cadastro da pessoa |
 | Relatórios: DIMOB e informe de rendimentos | ✅ | ❌ | |
 | Inadimplência (régua, WhatsApp) | ✅ | ✅ | |
-| Reajustes, Chaves, Índices | ✅ | ✅ | |
+| Reajustes, Índices | ✅ | ✅ | |
+| **Agenda** (`/agenda`): calendário mês/semana/dia/lista, minha agenda × compartilhada, visitas/vistorias/reuniões/entrega de chaves/lembretes, conflito de horário, confirmação por WhatsApp (cliente e proprietário), reagendar/cancelar com histórico, presencial/virtual, participantes, check-in/out, feedback pós-visita, `.ics` e Google Agenda, calendário assinável (`/api/agenda/[token]`) | ✅ | ✅ | No pessoal: sem corretor, sem lead, sem “avaliação de captação”; o interessado vem de Pessoas ou é digitado. Confirmação do proprietário só aparece na imobiliária |
+| **Chaves** (`/chaves`): código, quantidade, local, quem guarda, retirada por pessoa/visita, previsão, devolução, histórico (`/chaves/[id]`), alertas de chave não devolvida no Painel | ✅ | ✅ | |
+| Imóvel — **Disponibilidade para visitas** (horário e períodos bloqueados) | ✅ | ✅ | Quadro na aba Dados do imóvel |
 | Configurações | ✅ | ✅ | No pessoal somem CRECI, taxas e imposto (valores ficam guardados em campos escondidos) |
 
 ### Quadros do Painel só da imobiliária

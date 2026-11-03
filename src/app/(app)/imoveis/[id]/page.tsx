@@ -2,6 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Formulario } from "@/components/formulario";
+import { BotaoExcluir } from "@/components/botao-excluir";
+import { JanelaCadastro } from "@/components/janela-cadastro";
+import { CalendarX } from "lucide-react";
+import { ROTULO_TIPO_COMPROMISSO, diaLocal, horaLocal } from "@/lib/dominio/agenda";
+import { formatarDataBR, hojeISO } from "@/lib/dominio/datas";
+import { adicionarIndisponibilidade, excluirIndisponibilidade, salvarHorarioVisitas } from "../../agenda/actions";
 import { BotaoEnviar } from "@/components/formulario";
 import { Campo, Cartao, Entrada, Selecao, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -16,13 +22,15 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
   const { id } = await params;
   const { supabase, organizacao } = await obterContexto();
   const pessoal = organizacao.modo === "pessoal";
-  const [{ data }, { data: props }, { data: pessoas }, { data: contratos }, { data: chaves }, { data: emps }] = await Promise.all([
+  const [{ data }, { data: props }, { data: pessoas }, { data: contratos }, { data: chaves }, { data: emps }, { data: bloqueios }, { data: proximas }] = await Promise.all([
     supabase.from("imoveis").select("*").eq("id", id).maybeSingle(),
     supabase.from("imovel_proprietarios").select("percentual, pessoa:pessoas(id, nome)").eq("imovel_id", id),
     supabase.from("pessoas").select("id, nome").order("nome"),
     supabase.from("contratos").select("id, numero, status, data_inicio, valor_aluguel").eq("imovel_id", id).order("data_inicio", { ascending: false }),
-    supabase.from("chaves").select("id, identificacao, local").eq("imovel_id", id),
+    supabase.from("chaves").select("id, codigo, identificacao, local, chave_movimentacoes(retirada_por, devolvida_em)").eq("imovel_id", id).order("codigo"),
     pessoal ? Promise.resolve({ data: [] }) : supabase.from("empreendimentos").select("id, nome").order("nome"),
+    supabase.from("imovel_indisponibilidades").select("id, inicio, fim, motivo").eq("imovel_id", id).gte("fim", new Date().toISOString()).order("inicio"),
+    supabase.from("visitas").select("id, tipo, titulo, data_hora").eq("imovel_id", id).eq("status", "agendada").gte("data_hora", new Date().toISOString()).order("data_hora").limit(5),
   ]);
   if (!data) notFound();
   const imovel = data as Imovel;
@@ -114,13 +122,82 @@ export default async function ImovelPage({ params }: PageProps<"/imoveis/[id]">)
           </ul>
         </Cartao>
 
-        <Cartao titulo="Chaves" acoes={<Link href="/chaves" className="text-xs text-acento">gerenciar</Link>}>
-          <ul className="space-y-1 text-sm">
-            {(chaves ?? []).map((c) => (
-              <li key={c.id}>
-                {c.identificacao} <span className="text-mudo">— {c.local ?? "sem local"}</span>
+        <Cartao
+          titulo="Disponibilidade para visitas"
+          acoes={
+            <Link href={`/agenda?novo=1&imovel_novo=${id}`} className="text-xs text-acento hover:underline">
+              + agendar
+            </Link>
+          }
+        >
+          <Formulario acao={salvarHorarioVisitas} automatico className="mb-4">
+            <input type="hidden" name="imovel_id" value={id} />
+            <Campo rotulo="Horário para visitas">
+              <Entrada name="horario_visitas" defaultValue={imovel.horario_visitas ?? ""} placeholder="Seg a sex, 9h–18h; sáb até 12h" />
+            </Campo>
+          </Formulario>
+          <h4 className="mb-1.5 text-sm font-semibold text-texto">Períodos sem visita</h4>
+          <ul className="mb-3 space-y-1.5 text-sm">
+            {(bloqueios ?? []).map((b) => (
+              <li key={b.id} className="flex items-center justify-between gap-2">
+                <span>
+                  {formatarDataBR(diaLocal(b.inicio))} {horaLocal(b.inicio)} → {formatarDataBR(diaLocal(b.fim))} {horaLocal(b.fim)}
+                  {b.motivo && <span className="text-mudo"> · {b.motivo}</span>}
+                </span>
+                <BotaoExcluir acao={excluirIndisponibilidade} id={b.id} rotulo="Liberar período" confirmar="Liberar este período para visitas?" />
               </li>
             ))}
+            {!bloqueios?.length && <li className="text-mudo">Nenhum bloqueio.</li>}
+          </ul>
+          <JanelaCadastro rotuloBotao={<><CalendarX className="size-3.5" /> Bloquear período</>} variante="secundario" tamanho="sm" titulo="Bloquear visitas" acao={adicionarIndisponibilidade} rotuloSalvar="Bloquear" icone={<CalendarX />}>
+            <input type="hidden" name="imovel_id" value={id} />
+            <div className="grid grid-cols-2 gap-3">
+              <Campo rotulo="De">
+                <Entrada type="date" name="inicio_data" required defaultValue={hojeISO()} />
+              </Campo>
+              <Campo rotulo="Hora">
+                <Entrada type="time" name="inicio_hora" defaultValue="00:00" />
+              </Campo>
+              <Campo rotulo="Até">
+                <Entrada type="date" name="fim_data" required defaultValue={hojeISO()} />
+              </Campo>
+              <Campo rotulo="Hora">
+                <Entrada type="time" name="fim_hora" defaultValue="23:59" />
+              </Campo>
+            </div>
+            <Campo rotulo="Motivo">
+              <Entrada name="motivo" placeholder="Pintura, inquilino viajando…" />
+            </Campo>
+          </JanelaCadastro>
+          {(proximas ?? []).length > 0 && (
+            <>
+              <h4 className="mb-1.5 mt-4 text-sm font-semibold text-texto">Próximos compromissos</h4>
+              <ul className="space-y-1 text-sm">
+                {(proximas ?? []).map((v) => (
+                  <li key={v.id}>
+                    <Link href={`/agenda/${v.id}`} className="text-acento hover:underline">
+                      {formatarDataBR(diaLocal(v.data_hora))} {horaLocal(v.data_hora)} · {v.titulo ?? ROTULO_TIPO_COMPROMISSO[v.tipo]}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Cartao>
+
+        <Cartao titulo="Chaves" acoes={<Link href="/chaves" className="text-xs text-acento">gerenciar</Link>}>
+          <ul className="space-y-1.5 text-sm">
+            {((chaves ?? []) as { id: string; codigo: string | null; identificacao: string; local: string | null; chave_movimentacoes: { retirada_por: string; devolvida_em: string | null }[] }[]).map((c) => {
+              const fora = c.chave_movimentacoes.find((m) => !m.devolvida_em);
+              return (
+                <li key={c.id} className="flex items-center justify-between gap-2">
+                  <Link href={`/chaves/${c.id}`} className="hover:underline">
+                    {c.codigo} · {c.identificacao} <span className="text-mudo">— {c.local ?? "sem local"}</span>
+                  </Link>
+                  {fora ? <Selo cor="amarelo">com {fora.retirada_por.split(" ")[0]}</Selo> : <Selo cor="verde">no lugar</Selo>}
+                </li>
+              );
+            })}
             {!chaves?.length && <li className="text-mudo">Nenhuma chave cadastrada.</li>}
           </ul>
         </Cartao>

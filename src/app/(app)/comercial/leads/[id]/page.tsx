@@ -34,7 +34,6 @@ import {
   atualizarLead,
   criarProposta,
   criarTarefa,
-  criarVisita,
   desassociarImovelLead,
   excluirEventoLead,
   excluirLead,
@@ -42,7 +41,9 @@ import {
   transferirLead,
 } from "../../actions";
 import { AdicionarImovelLead, AssociarSugestao, BotaoReativar } from "../../botoes-lead";
-import { AbasComercial, CamposLead, CamposProposta, CamposTarefa, CamposVisita, rotuloImovel } from "../../campos";
+import { AbasComercial, CamposLead, CamposProposta, CamposTarefa, rotuloImovel } from "../../campos";
+import { criarCompromisso } from "../../../agenda/actions";
+import { CamposCompromisso } from "../../../agenda/campos";
 import { carregarOpcoes } from "../../dados";
 
 export const metadata: Metadata = { title: "Lead" };
@@ -149,8 +150,9 @@ export default async function LeadPage({ params }: PageProps<"/comercial/leads/[
               <MessageCircle className="size-4" /> WhatsApp
             </a>
           )}
-          <JanelaCadastro rotuloBotao={<><CalendarPlus className="size-4" /> Agendar visita</>} variante="secundario" titulo="Agendar visita" acao={criarVisita} rotuloSalvar="Agendar" icone={<CalendarPlus />}>
-            <CamposVisita imoveis={opcoes.imoveis} leads={leads} corretores={opcoes.corretores} leadId={lead.id} imovelId={imoveisLead[0]?.id} hoje={hoje} />
+          <JanelaCadastro rotuloBotao={<><CalendarPlus className="size-4" /> Agendar visita</>} variante="secundario" titulo="Agendar visita" acao={criarCompromisso} rotuloSalvar="Agendar" icone={<CalendarPlus />} larguraMax="max-w-2xl">
+            <input type="hidden" name="voltar" value="1" />
+            <CamposCompromisso opcoes={{ ...opcoes, leads, pessoas: [] }} pessoal={false} hoje={hoje} padrao={{ leadId: lead.id, imovelId: imoveisLead[0]?.id }} />
           </JanelaCadastro>
           <JanelaCadastro rotuloBotao={<><Handshake className="size-4" /> Proposta</>} titulo="Nova proposta" acao={criarProposta} rotuloSalvar="Registrar" icone={<Handshake />}>
             <CamposProposta imoveis={opcoes.imoveis} leads={leads} corretores={opcoes.corretores} leadId={lead.id} imovelId={imoveisLead[0]?.id} tipo={funil === "venda" ? "venda" : "locacao"} pessoal={false} />
@@ -367,10 +369,10 @@ export default async function LeadPage({ params }: PageProps<"/comercial/leads/[
             <ul className="space-y-2 text-sm">
               {((visitas ?? []) as unknown as V[]).map((v) => (
                 <li key={v.id} className="flex items-center justify-between gap-2">
-                  <span>
+                  <Link href={`/agenda/${v.id}`} className="hover:underline">
                     {dataHora(v.data_hora)}
                     {v.imovel ? ` · ${v.imovel.codigo}` : ""}
-                  </span>
+                  </Link>
                   <Selo cor={v.status === "realizada" ? "verde" : v.status === "cancelada" ? "cinza" : "azul"}>{ROTULO_STATUS_VISITA[v.status]}</Selo>
                 </li>
               ))}

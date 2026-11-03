@@ -29,7 +29,6 @@ export const QUADROS_SO_IMOBILIARIA = [
   "captados",
   "leads_mes",
   "leads_aguardando",
-  "visitas",
   "propostas",
   "repasses",
   "comissoes",

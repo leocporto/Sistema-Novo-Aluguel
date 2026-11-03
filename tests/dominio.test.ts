@@ -355,6 +355,8 @@ describe("modos de uso", () => {
     expect(rotaPermitida("/comercial/leads/1", "pessoal")).toBe(false);
     expect(rotaPermitida("/captacao/abc", "pessoal")).toBe(false);
     expect(rotaPermitida("/captacao", "imobiliaria")).toBe(true);
+    expect(rotaPermitida("/agenda/abc", "pessoal")).toBe(true);
+    expect(rotaPermitida("/chaves", "pessoal")).toBe(true);
     expect(rotaPermitida("/repasses/extrato", "pessoal")).toBe(false);
     expect(rotaPermitida("/despesas", "pessoal")).toBe(true);
     expect(rotaPermitida("/comercial", "imobiliaria")).toBe(true);
@@ -601,5 +603,49 @@ describe("captação: desempenho", () => {
   it("conta quantos chegaram a cada etapa", () => {
     const f = funilCaptacao(lista);
     expect(f.map((x) => x.chegaram)).toEqual([3, 3, 2, 2, 1, 1]);
+  });
+});
+
+import { conflitos, diaLocal, gerarICS, gradeMes, gradeSemana, horaLocal, instante, linkGoogleAgenda, situacaoChave, sugerirCodigoChave } from "@/lib/dominio/agenda";
+
+describe("agenda", () => {
+  it("converte horário de Brasília", () => {
+    const i = instante("2026-11-04", "09:30");
+    expect(i).toBe("2026-11-04T12:30:00.000Z");
+    expect(diaLocal("2026-11-05T01:00:00Z")).toBe("2026-11-04");
+    expect(horaLocal(i)).toBe("09:30");
+  });
+  it("monta a grade do mês e da semana (domingo a sábado)", () => {
+    const g = gradeMes("2026-11-10");
+    expect(g[0][0]).toEqual({ data: "2026-11-01", doMes: true }); // 01/11/2026 é domingo
+    expect(g.at(-1)!.at(-1)!.data).toBe("2026-12-05");
+    expect(gradeSemana("2026-11-04")).toEqual(["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"]);
+  });
+  it("acusa conflito de imóvel, corretor e indisponibilidade", () => {
+    const novo = { id: "n", data_hora: instante("2026-11-04", "10:00"), duracao_min: 60, status: "agendada", imovel_id: "i1", corretor_id: "c1" };
+    const ex = [
+      { id: "a", data_hora: instante("2026-11-04", "10:30"), duracao_min: 30, status: "agendada", imovel_id: "i1", corretor_id: null },
+      { id: "b", data_hora: instante("2026-11-04", "10:45"), duracao_min: 30, status: "agendada", imovel_id: "i2", corretor_id: "c1" },
+      { id: "c", data_hora: instante("2026-11-04", "11:00"), duracao_min: 30, status: "agendada", imovel_id: "i1", corretor_id: "c1" },
+      { id: "d", data_hora: instante("2026-11-04", "10:00"), duracao_min: 30, status: "cancelada", imovel_id: "i1", corretor_id: "c1" },
+    ];
+    const bl = [{ imovel_id: "i1", inicio: instante("2026-11-04", "08:00"), fim: instante("2026-11-04", "10:15"), motivo: "pintura" }];
+    const r = conflitos(novo, ex, bl);
+    expect(r).toHaveLength(3);
+    expect(r[2]).toContain("pintura");
+  });
+  it("gera .ics com alarme e link do Google", () => {
+    const e = { id: "x1", titulo: "Visita AP-1; Ana", inicio: "2026-11-04T12:30:00.000Z", duracao_min: 45, local: "Rua A, 5", lembrete_min: 60 };
+    const ics = gerarICS([e], "Agenda", "2026-11-01T00:00:00.000Z");
+    expect(ics).toContain("DTSTART:20261104T123000Z");
+    expect(ics).toContain("DTEND:20261104T131500Z");
+    expect(ics).toContain(String.raw`SUMMARY:Visita AP-1\; Ana`);
+    expect(ics).toContain("TRIGGER:-PT60M");
+    expect(linkGoogleAgenda(e)).toContain("dates=20261104T123000Z%2F20261104T131500Z");
+  });
+  it("situação e código de chave", () => {
+    expect(situacaoChave([], "2026-11-04T00:00:00Z").situacao).toBe("disponivel");
+    expect(situacaoChave([{ retirada_em: "2026-11-01", previsao_devolucao: "2026-11-02T00:00:00Z", devolvida_em: null }], "2026-11-04T00:00:00Z").situacao).toBe("atrasada");
+    expect(sugerirCodigoChave(["CH-001", "ch-004", null])).toBe("CH-005");
   });
 });

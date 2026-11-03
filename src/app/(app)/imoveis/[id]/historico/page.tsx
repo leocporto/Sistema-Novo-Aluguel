@@ -164,7 +164,7 @@ export default async function HistoricoImovelPage({ params }: PageProps<"/imovei
             </ul>
           </Cartao>
 
-          <Cartao titulo="Visitas" acoes={<Link href="/comercial/visitas?novo=1" className="text-xs text-acento hover:underline">+ agendar</Link>}>
+          <Cartao titulo="Visitas" acoes={<Link href={`/agenda?novo=1&imovel_novo=${id}`} className="text-xs text-acento hover:underline">+ agendar</Link>}>
             <ul className="space-y-2 text-sm">
               {((visitas ?? []) as unknown as V[]).map((v) => (
                 <li key={v.id} className="flex items-center justify-between gap-2">

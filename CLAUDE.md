@@ -23,6 +23,7 @@ existe em cada um está em **`docs/MODOS.md`** — consulte antes de criar ou mu
 - Nos dois modos (pessoas): documentos, relacionamento/anotações, contatos vinculados, comunicação (LGPD),
   alertas de documentação, Prestador de serviço, importar/exportar/juntar repetidos.
 - **Despesas** existe nos dois, mas muda: imobiliária = escritório; pessoal = despesas dos imóveis.
+- **Agenda e Chaves** existem nos dois (`/agenda`, `/chaves`); no pessoal sem corretor/lead/avaliação de captação.
 - Regra no código: `src/lib/modos.ts` (`rotaPermitida`, `quadroPermitido`, `PAPEIS_SO_IMOBILIARIA`).
   Tela só da imobiliária também precisa ser bloqueada no servidor (layout/página com `redirect("/")`).
 
@@ -32,7 +33,7 @@ existe em cada um está em **`docs/MODOS.md`** — consulte antes de criar ou mu
 - `tests/sql.test.ts` roda todas as migrações num Postgres embutido (PGlite).
 
 ## Rotas públicas (sem login)
-- `/login`, `/l/[token]` (formulário de captação de leads) e `/api/leads/[token]` (API de leads) — lista em `ROTAS_PUBLICAS` de `src/proxy.ts`.
+- `/login`, `/l/[token]` (formulário de captação de leads), `/api/leads/[token]` (API de leads) e `/api/agenda/[token]` (calendário .ics assinável) — lista em `ROTAS_PUBLICAS` de `src/proxy.ts`.
 - Escrita pública só por RPC `SECURITY DEFINER` validando o token (`receber_lead`), usando `clienteAnonimo()`.
 
 ## ⚠️ Padrões visuais — siga sempre (docs/DESIGN.md)

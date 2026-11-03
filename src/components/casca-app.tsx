@@ -61,6 +61,12 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/pessoas", rotulo: "Pessoas", icone: Users },
       { href: "/empreendimentos", rotulo: "Empreendimentos", icone: Building },
+    ],
+  },
+  {
+    titulo: "Agenda",
+    itens: [
+      { href: "/agenda", rotulo: "Agenda", icone: CalendarDays },
       { href: "/chaves", rotulo: "Chaves", icone: KeyRound },
     ],
   },
@@ -69,7 +75,6 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/comercial", rotulo: "Leads", icone: UserPlus },
       { href: "/captacao", rotulo: "Captação de imóveis", icone: HousePlus },
-      { href: "/comercial/visitas", rotulo: "Visitas", icone: CalendarDays },
       { href: "/comercial/propostas", rotulo: "Propostas", icone: Handshake },
       { href: "/comercial/tarefas", rotulo: "Tarefas", icone: ListTodo },
       { href: "/comercial/metas", rotulo: "Metas", icone: Target },

@@ -117,7 +117,7 @@ export default async function CaptacaoPage({ searchParams }: PageProps<"/captaca
           icone={<CalendarClock />}
           valor={<Contador valor={avaliacoes?.length ?? 0} />}
           detalhe="visitas de avaliação a fazer"
-          href="/comercial/visitas"
+          href="/agenda?vista=lista&tipo=avaliacao"
           tom={avaliacoes?.length ? "alerta" : "neutro"}
         />
       </div>

@@ -66,6 +66,7 @@ export interface Pessoa {
 }
 
 export interface Imovel {
+  horario_visitas?: string | null;
   id: string;
   codigo: string;
   finalidades: string[];

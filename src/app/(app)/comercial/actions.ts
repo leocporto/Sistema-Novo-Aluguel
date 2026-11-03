@@ -305,48 +305,6 @@ async function avancarLead(supabase: Supabase, leadId: string | null, para: "vis
   await aplicarEtapa(supabase, leadId, para);
 }
 
-// Visitas -------------------------------------------------------------------
-export async function criarVisita(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
-  const { supabase } = await obterContexto();
-  try {
-    const data = textoObrigatorio(fd, "data", "a data");
-    const hora = texto(fd, "hora") ?? "09:00";
-    const leadId = texto(fd, "lead_id");
-    const imovelId = texto(fd, "imovel_id");
-    if (!leadId && !imovelId) throw new ErroValidacao("Escolha o cliente (lead) ou o imóvel da visita.");
-    const { error } = await supabase.from("visitas").insert({
-      lead_id: leadId,
-      imovel_id: imovelId,
-      corretor_id: texto(fd, "corretor_id"),
-      // Horário de Brasília
-      data_hora: `${data}T${hora}:00-03:00`,
-      observacoes: texto(fd, "observacoes"),
-    });
-    if (error) throw error;
-    await avancarLead(supabase, leadId, "visita");
-  } catch (e) {
-    return { erro: mensagemErro(e) };
-  }
-  revalidarTudo();
-  return { ok: "Visita agendada." };
-}
-
-export async function mudarStatusVisita(fd: FormData) {
-  const { supabase } = await obterContexto();
-  const status = String(fd.get("status"));
-  if (!["agendada", "realizada", "cancelada"].includes(status)) return;
-  await supabase.from("visitas").update({ status }).eq("id", String(fd.get("id")));
-  revalidarTudo();
-}
-
-export async function excluirVisita(id: string): Promise<Resultado> {
-  const { supabase } = await obterContexto();
-  const { error } = await supabase.from("visitas").delete().eq("id", id);
-  if (error) return { ok: false, erro: mensagemErro(error) };
-  revalidarTudo();
-  return { ok: true };
-}
-
 // Propostas -----------------------------------------------------------------
 export async function criarProposta(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   const { supabase } = await obterContexto();

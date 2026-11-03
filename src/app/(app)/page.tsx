@@ -16,6 +16,7 @@ import {
   Home,
   Inbox,
   KeyRound,
+  MessageSquareWarning,
   ListTodo,
   Scale,
   Target,
@@ -36,6 +37,7 @@ import { proximoReajuste } from "@/lib/dominio/reajuste";
 import { ROTULO_META, ROTULO_STATUS_IMOVEL, TIPOS_META, type TipoMeta } from "@/lib/tipos";
 import { quadroPermitido } from "@/lib/modos";
 import { pendencias } from "@/lib/dominio/pessoas";
+import { ROTULO_TIPO_COMPROMISSO } from "@/lib/dominio/agenda";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -97,7 +99,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -115,11 +117,11 @@ export default async function PainelPage() {
       supabase.from("leads").select("status, created_at, proximo_contato"),
       supabase
         .from("visitas")
-        .select("id, data_hora, lead:leads(id, nome), imovel:imoveis(codigo)")
+        .select("id, tipo, titulo, data_hora, contato_nome, lead:leads(id, nome), pessoa:pessoas!visitas_pessoa_id_fkey(nome), imovel:imoveis(codigo)")
         .eq("status", "agendada")
         .gte("data_hora", `${hoje}T00:00:00-03:00`)
         .order("data_hora")
-        .limit(6),
+        .limit(8),
       supabase.from("propostas").select("valor, tipo, status, fechada_em").or(`status.eq.em_negociacao,fechada_em.gte.${iniMes}`),
       supabase.from("tarefas").select("id, titulo, vencimento, prioridade").eq("concluida", false),
       supabase.from("metas").select("tipo, valor").eq("competencia", iniMes),
@@ -129,6 +131,19 @@ export default async function PainelPage() {
         .select("id, nome, tipo_pessoa, documento, email, telefone, papeis, banco, conta, pix_chave")
         .overlaps("papeis", ["locatario", "fiador", "proprietario"]),
       supabase.from("pessoa_arquivos").select("pessoa_id, categoria"),
+      supabase
+        .from("chave_movimentacoes")
+        .select("id, retirada_por, previsao_devolucao, chave:chaves(id, codigo)")
+        .is("devolvida_em", null)
+        .lt("previsao_devolucao", new Date().toISOString()),
+      supabase
+        .from("visitas")
+        .select("id", { count: "exact", head: true })
+        .eq("tipo", "visita")
+        .neq("status", "cancelada")
+        .is("feedback_interesse", null)
+        .lt("data_hora", `${hoje}T00:00:00-03:00`)
+        .gte("data_hora", `${somarDias(hoje, -30)}T00:00:00-03:00`),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -183,7 +198,8 @@ export default async function PainelPage() {
   const novos = leads.filter((l) => l.status === "novo");
   const agora = agoraMs();
   const novosAntigos = novos.filter((l) => agora - new Date(l.created_at).getTime() > 86_400_000);
-  type Vis = { id: string; data_hora: string; lead: { id: string; nome: string } | null; imovel: { codigo: string } | null };
+  type Vis = { id: string; tipo: string; titulo: string | null; data_hora: string; contato_nome: string | null; lead: { id: string; nome: string } | null; pessoa: { nome: string } | null; imovel: { codigo: string } | null };
+  const nomeVisita = (v: Vis) => v.lead?.nome ?? v.pessoa?.nome ?? v.contato_nome ?? null;
   const visitas = (visitasR.data ?? []) as unknown as Vis[];
   const visitasHoje = visitas.filter((v) => diaLocal(v.data_hora) === hoje);
   const propostas = propostasR.data ?? [];
@@ -226,8 +242,18 @@ export default async function PainelPage() {
     avisos.push({ texto: `${retornos} lead(s) para retornar hoje (follow-up)`, href: "/comercial", tom: "alerta", icone: <AlarmClock /> });
   if (!pessoal && novosAntigos.length)
     avisos.push({ texto: `${novosAntigos.length} lead(s) esperando atendimento há mais de 1 dia`, href: "/comercial", tom: "alerta", icone: <Inbox /> });
-  for (const v of pessoal ? [] : visitasHoje)
-    avisos.push({ texto: `Visita hoje às ${horaLocal(v.data_hora)}${v.lead ? ` com ${v.lead.nome}` : ""}${v.imovel ? ` (${v.imovel.codigo})` : ""}`, href: "/comercial/visitas", tom: "info", icone: <CalendarDays /> });
+  for (const v of visitasHoje)
+    avisos.push({
+      texto: `${v.titulo ?? ROTULO_TIPO_COMPROMISSO[v.tipo] ?? "Compromisso"} hoje às ${horaLocal(v.data_hora)}${nomeVisita(v) ? ` com ${nomeVisita(v)}` : ""}${v.imovel ? ` (${v.imovel.codigo})` : ""}`,
+      href: `/agenda/${v.id}`,
+      tom: "info",
+      icone: <CalendarDays />,
+    });
+  type ChAtr = { id: string; retirada_por: string; previsao_devolucao: string; chave: { id: string; codigo: string | null } | null };
+  for (const m of (chavesAtrasR.data ?? []) as unknown as ChAtr[])
+    avisos.push({ texto: `Chave ${m.chave?.codigo ?? ""} não devolvida por ${m.retirada_por}`, href: m.chave ? `/chaves/${m.chave.id}` : "/chaves", data: diaLocal(m.previsao_devolucao), tom: "ruim", icone: <KeyRound /> });
+  if (semRetornoR.count)
+    avisos.push({ texto: `${semRetornoR.count} visita(s) sem retorno do cliente (feedback)`, href: "/agenda?vista=lista&tipo=visita", tom: "alerta", icone: <MessageSquareWarning /> });
   if (!pessoal && repHoje.length)
     avisos.push({ texto: `${repHoje.length} repasse(s) para pagar até hoje`, href: "/repasses", tom: "alerta", icone: <ArrowLeftRight /> });
   for (const c of ativos) {
@@ -492,13 +518,13 @@ export default async function PainelPage() {
     },
     {
       id: "visitas",
-      titulo: "Visitas agendadas",
+      titulo: "Próximos compromissos",
       largura: 2,
       conteudo: (
         <Cartao
-          titulo={`Visitas agendadas (${visitas.length})`}
+          titulo={`Próximos compromissos (${visitas.length})`}
           acoes={
-            <Link href="/comercial/visitas?novo=1" className="text-xs text-acento hover:underline">
+            <Link href="/agenda?novo=1" className="text-xs text-acento hover:underline">
               + agendar
             </Link>
           }
@@ -507,16 +533,16 @@ export default async function PainelPage() {
           <ul className="divide-y divide-borda-suave text-sm">
             {visitas.slice(0, 5).map((v) => (
               <li key={v.id} className="flex items-center justify-between gap-2 py-2">
-                <span className="min-w-0 truncate">
-                  <span className="font-medium text-texto">{v.lead?.nome ?? "Sem cliente"}</span>
+                <Link href={`/agenda/${v.id}`} className="min-w-0 truncate hover:underline">
+                  <span className="font-medium text-texto">{v.titulo ?? nomeVisita(v) ?? ROTULO_TIPO_COMPROMISSO[v.tipo]}</span>
                   <span className="text-mudo">{v.imovel ? ` · ${v.imovel.codigo}` : ""}</span>
-                </span>
+                </Link>
                 <span className={`whitespace-nowrap text-xs ${diaLocal(v.data_hora) === hoje ? "font-semibold text-acento-hot" : "text-mudo"}`}>
                   {diaLocal(v.data_hora) === hoje ? "hoje" : formatarDataBR(diaLocal(v.data_hora))} {horaLocal(v.data_hora)}
                 </span>
               </li>
             ))}
-            {visitas.length === 0 && <li className="py-2 text-mudo">Nenhuma visita marcada.</li>}
+            {visitas.length === 0 && <li className="py-2 text-mudo">Nada marcado.</li>}
           </ul>
         </Cartao>
       ),

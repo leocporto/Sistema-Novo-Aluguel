@@ -196,48 +196,6 @@ export function CamposLead({
   );
 }
 
-export function CamposVisita({
-  imoveis,
-  leads,
-  corretores,
-  leadId,
-  imovelId,
-  hoje,
-}: {
-  imoveis: OpcaoImovel[];
-  leads: OpcaoNome[];
-  corretores: OpcaoNome[];
-  leadId?: string | null;
-  imovelId?: string | null;
-  hoje: string;
-}) {
-  return (
-    <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo rotulo="Data">
-          <Entrada type="date" name="data" required defaultValue={hoje} />
-        </Campo>
-        <Campo rotulo="Hora">
-          <Entrada type="time" name="hora" required defaultValue="10:00" />
-        </Campo>
-      </div>
-      <Campo rotulo="Cliente (lead)">
-        <SelNome name="lead_id" opcoes={leads} padrao={leadId} />
-      </Campo>
-      <Campo rotulo="Imóvel">
-        <SelImovel imoveis={imoveis} padrao={imovelId} />
-      </Campo>
-      <Campo rotulo="Corretor">
-        <SelNome name="corretor_id" opcoes={corretores} />
-      </Campo>
-      {corretores.length === 0 && <SemCorretor />}
-      <Campo rotulo="Observações">
-        <AreaTexto name="observacoes" rows={2} />
-      </Campo>
-    </>
-  );
-}
-
 export function CamposProposta({
   imoveis,
   leads,
