@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { classeBotao } from "./ui";
 
 export type ResultadoExclusao = { ok: boolean; erro?: string };
@@ -58,9 +58,9 @@ export function BotaoExcluir({
       disabled={rodando}
       title={rotulo}
       aria-label={rotulo}
-      className="grid size-8 shrink-0 place-items-center rounded-[9px] text-mudo transition hover:bg-ruim-bg hover:text-ruim disabled:opacity-50"
+      className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-borda bg-card text-texto-2 transition hover:border-ruim-bd hover:bg-ruim-bg hover:text-ruim disabled:opacity-50"
     >
-      <Trash2 className="size-4" />
+      <X className="size-4" />
     </button>
   );
 }
