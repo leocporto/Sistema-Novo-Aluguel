@@ -33,7 +33,13 @@ não ser que o Leo peça para o modo pessoal também.
 | Papel **Corretor** em Pessoas | ✅ | ❌ | Escondido no cadastro e no filtro (a não ser que a pessoa já tenha) |
 | **Despesas** | ✅ escritório | ✅ imóveis | Mesma tela `/despesas`, conteúdo muda: imobiliária = despesas do **escritório**; pessoal = despesas **dos imóveis** (imóvel obrigatório, filtro por imóvel) |
 | Financeiro | ✅ | ✅ | Card de repasses só na imobiliária |
-| Pessoas | ✅ | ✅ | No pessoal some o vínculo "imóveis como proprietário" e o imposto do proprietário |
+| Pessoas — cadastro, dados bancários/Pix, endereço | ✅ | ✅ | No pessoal some o vínculo "imóveis como proprietário" e o imposto do proprietário |
+| Pessoas — abas Documentos, Relacionamento (linha do tempo + anotações), Contatos vinculados, Comunicação (LGPD) | ✅ | ✅ | Bucket privado `pessoas`; consentimentos gravados em `pessoa_consentimentos` |
+| Pessoas — alertas de documentação pendente (ficha, lista, Painel) | ✅ | ✅ | `pendencias()` em `src/lib/dominio/pessoas.ts`; no pessoal não cobra dados bancários do proprietário |
+| Pessoas — importar, exportar, juntar repetidos | ✅ | ✅ | RPC `juntar_pessoas` |
+| Pessoas — papel Prestador de serviço (+ especialidade) | ✅ | ✅ | |
+| Pessoas — papéis Comprador, Investidor, Corretor, Parceiro | ✅ | ❌ | `PAPEIS_SO_IMOBILIARIA` |
+| Pessoas — aba **Interesse** (perfil + imóveis que combinam) | ✅ | ❌ | `/pessoas/[id]/interesse` em `SUBROTAS_SO_IMOBILIARIA` |
 | Imposto do proprietário (PF/PJ) | ✅ | ❌ | Configurações e cadastro da pessoa |
 | Relatórios: DIMOB e informe de rendimentos | ✅ | ❌ | |
 | Inadimplência (régua, WhatsApp) | ✅ | ✅ | |

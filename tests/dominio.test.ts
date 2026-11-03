@@ -429,3 +429,73 @@ describe("multa manual na baixa", () => {
     expect(com.itensExtras).toEqual([{ descricao: "Multa por atraso", tipo: "multa", valor: 15000, destino: "proprietario" }]);
   });
 });
+
+import { acharPessoasRepetidas, interpretarPlanilhaPessoas, pendencias, pessoaRepetidaDe, pessoasParaCSV } from "@/lib/dominio/pessoas";
+
+describe("cadastro de pessoas", () => {
+  it("lista a documentação pendente conforme o papel e o modo", () => {
+    const loc = { nome: "Ana", papeis: ["locatario"], telefone: "11" };
+    expect(pendencias(loc, [])).toEqual(["Sem CPF", "Falta RG ou CNH", "Falta comprovante de residência", "Falta comprovante de renda"]);
+    expect(pendencias({ ...loc, documento: "52998224725" }, ["RG ou CNH", "Comprovante de residência", "Comprovante de renda"])).toEqual([]);
+    const dono = { nome: "Beto", papeis: ["proprietario"], documento: "52998224725", email: "b@b.com" };
+    expect(pendencias(dono, ["RG ou CNH"])).toEqual(["Sem dados bancários ou Pix para o repasse"]);
+    expect(pendencias(dono, ["RG ou CNH"], "pessoal")).toEqual([]);
+    expect(pendencias({ nome: "X Ltda", tipo_pessoa: "PJ", papeis: ["proprietario"], documento: "11222333000181", pix_chave: "x", email: "x@x.com" }, [])).toEqual(["Falta o contrato social"]);
+  });
+
+  it("acha cadastros repetidos e um repetido para importação", () => {
+    const lista = [
+      { id: "1", nome: "Maria Silva", documento: "529.982.247-25", telefone: "(11) 98888-7777" },
+      { id: "2", nome: "Maria S.", documento: "52998224725" },
+      { id: "3", nome: "João Souza", telefone: "11988887777" },
+      { id: "4", nome: "joão souza" },
+    ];
+    const g = acharPessoasRepetidas(lista);
+    expect(g.map((x) => [x.motivo, x.itens.map((i) => i.id)])).toEqual([
+      ["documento", ["1", "2"]],
+      ["telefone", ["1", "3"]],
+      ["nome", ["3", "4"]],
+    ]);
+    expect(pessoaRepetidaDe({ nome: "Outra", email: "", telefone: "988887777" }, lista)?.item.id).toBe("1");
+  });
+
+  it("lê planilha de pessoas e exporta CSV", () => {
+    const { itens } = interpretarPlanilhaPessoas([
+      ["Nome", "CPF", "Telefone", "Papel"],
+      ["Carla", "529.982.247-25", "11 9999", "inquilino e fiador"],
+      ["", "123", "", ""],
+    ]);
+    expect(itens[0].dados).toMatchObject({ nome: "Carla", documento: "52998224725", tipo_pessoa: "PF", papeis: ["locatario", "fiador"] });
+    expect(itens[0].erros).toEqual([]);
+    expect(itens[1].erros).toEqual(["Falta o nome", "CPF inválido"]);
+    const saida = pessoasParaCSV([{ nome: 'Ana "A"', papeis: ["locatario"] }], { locatario: "Locatário" });
+    expect(saida.split("\n")[1].startsWith('"Ana ""A"""')).toBe(true);
+    expect(saida).toContain("Locatário");
+  });
+});
+
+import { imoveisQueCombinam } from "@/lib/dominio/pessoas";
+
+describe("imóveis que combinam com o perfil", () => {
+  it("filtra por finalidade, tipo, região, quartos e faixa de valor", () => {
+    const base = { tipo: "apartamento", finalidades: ["locacao"], status: "disponivel", bairro: "Gonzaga", cidade: "Santos", quartos: 2, valor_aluguel: 2500, valor_venda: null };
+    const lista = [
+      { ...base, id: "a" },
+      { ...base, id: "b", valor_aluguel: 5000 },
+      { ...base, id: "c", bairro: "Centro", cidade: "São Paulo" },
+      { ...base, id: "d", status: "alugado" },
+      { ...base, id: "e", finalidades: ["venda"], valor_aluguel: null, valor_venda: 400000 },
+    ];
+    const perfil = { interesse: ["alugar"], pref_tipos: ["Apartamento"], pref_regioes: "gonzaga, boqueirão", pref_valor_min: null, pref_valor_max: 3000, pref_quartos_min: 2 };
+    expect(imoveisQueCombinam(perfil, lista).map((i) => i.id)).toEqual(["a"]);
+    expect(imoveisQueCombinam({ ...perfil, interesse: ["comprar"], pref_valor_max: 500000 }, lista).map((i) => i.id)).toEqual(["e"]);
+  });
+});
+
+describe("modos: pessoas", () => {
+  it("aba Interesse só na imobiliária", () => {
+    expect(rotaPermitida("/pessoas/x/interesse", "pessoal")).toBe(false);
+    expect(rotaPermitida("/pessoas/x/documentos", "pessoal")).toBe(true);
+    expect(rotaPermitida("/pessoas/x/interesse", "imobiliaria")).toBe(true);
+  });
+});

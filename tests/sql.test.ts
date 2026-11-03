@@ -355,3 +355,44 @@ describe("contrato único por imóvel", () => {
     });
   });
 });
+
+describe("juntar cadastros de pessoas", () => {
+  const USER_H = "00000000-0000-0000-0000-000000000011";
+  const USER_I = "00000000-0000-0000-0000-000000000012";
+  it("move imóveis, contratos e dados para quem fica e apaga o repetido", async () => {
+    await comoUsuario(USER_H, () => db.query(`select public.criar_organizacao('Imob H')`));
+    await comoUsuario(USER_I, () => db.query(`select public.criar_organizacao('Imob I')`));
+    const r = await comoUsuario(USER_H, async () => {
+      const um = async (sql: string, p: unknown[] = []) => (await db.query<{ id: string }>(sql, p)).rows[0].id;
+      const a = await um(`insert into pessoas (nome, papeis, telefone) values ('Maria Silva','{proprietario}','11999') returning id`);
+      const b = await um(`insert into pessoas (nome, papeis, documento, email) values ('Maria da Silva','{locatario}','12345678909','m@x.com') returning id`);
+      const outro = await um(`insert into pessoas (nome) values ('Joana') returning id`);
+      const im1 = await um(`insert into imoveis (codigo) values ('J-1') returning id`);
+      const im2 = await um(`insert into imoveis (codigo) values ('J-2') returning id`);
+      await db.query(`insert into imovel_proprietarios (imovel_id, pessoa_id, percentual) values ($1,$2,50), ($1,$3,50), ($4,$3,100)`, [im1, a, b, im2]);
+      const ct = await um(
+        `insert into contratos (imovel_id, data_inicio, prazo_meses, data_fim, valor_aluguel, dia_vencimento, data_base_reajuste)
+         values ($1,'2026-01-01',12,'2026-12-31',1000,10,'2026-01-01') returning id`,
+        [im2],
+      );
+      await db.query(`insert into contrato_partes (contrato_id, pessoa_id, papel) values ($1,$2,'locatario')`, [ct, b]);
+      await db.query(`insert into pessoa_vinculos (pessoa_id, vinculado_id, tipo) values ($1,$2,'conjuge')`, [b, outro]);
+      await db.query(`insert into pessoa_interacoes (pessoa_id, descricao) values ($1,'ligou')`, [b]);
+      await db.query(`select public.juntar_pessoas($1, $2)`, [a, b]);
+      const pessoa = (await db.query<{ papeis: string[]; documento: string; email: string; telefone: string }>(`select papeis, documento, email, telefone from pessoas where id = $1`, [a])).rows[0];
+      const props = (await db.query<{ imovel_id: string; percentual: string }>(`select imovel_id, percentual from imovel_proprietarios where pessoa_id = $1 order by percentual`, [a])).rows;
+      const partes = (await db.query(`select * from contrato_partes where pessoa_id = $1`, [a])).rows.length;
+      const vinc = (await db.query(`select * from pessoa_vinculos where pessoa_id = $1`, [a])).rows.length;
+      const sobrou = (await db.query(`select * from pessoas where id = $1`, [b])).rows.length;
+      return { pessoa, props, partes, vinc, sobrou };
+    });
+    expect(r.pessoa.papeis.sort()).toEqual(["locatario", "proprietario"]);
+    expect(r.pessoa).toMatchObject({ documento: "12345678909", email: "m@x.com", telefone: "11999" });
+    expect(r.props.map((p) => Number(p.percentual))).toEqual([100, 100]);
+    expect(r.partes).toBe(1);
+    expect(r.vinc).toBe(1);
+    expect(r.sobrou).toBe(0);
+    const visto = await comoUsuario(USER_I, async () => (await db.query(`select * from pessoa_interacoes`)).rows.length);
+    expect(visto).toBe(0);
+  });
+});

@@ -11,7 +11,7 @@ export type ModoUso = "imobiliaria" | "pessoal";
 export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/empreendimentos"] as const;
 
 /** Partes de telas compartilhadas que só existem na imobiliária (ex.: aba Comercialização do imóvel). */
-const SUBROTAS_SO_IMOBILIARIA = [/^\/imoveis\/[^/]+\/comercializacao(\/|$)/];
+const SUBROTAS_SO_IMOBILIARIA = [/^\/imoveis\/[^/]+\/comercializacao(\/|$)/, /^\/pessoas\/[^/]+\/interesse(\/|$)/];
 
 /** A rota pode ser aberta neste modo? */
 export function rotaPermitida(caminho: string, modo: ModoUso | null | undefined): boolean {
@@ -21,7 +21,7 @@ export function rotaPermitida(caminho: string, modo: ModoUso | null | undefined)
 }
 
 /** Papéis de pessoa que só fazem sentido no modo imobiliária. */
-export const PAPEIS_SO_IMOBILIARIA = ["corretor"] as const;
+export const PAPEIS_SO_IMOBILIARIA = ["corretor", "comprador", "investidor", "parceiro"] as const;
 
 /** Quadros do Painel que só aparecem no modo imobiliária. */
 export const QUADROS_SO_IMOBILIARIA = [

@@ -34,6 +34,7 @@ import { contarPorMes, mesAnoAnterior, mesesAte, progressoMeta, somarPorMes, var
 import { proximoReajuste } from "@/lib/dominio/reajuste";
 import { ROTULO_META, ROTULO_STATUS_IMOVEL, TIPOS_META, type TipoMeta } from "@/lib/tipos";
 import { quadroPermitido } from "@/lib/modos";
+import { pendencias } from "@/lib/dominio/pessoas";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -95,7 +96,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -122,6 +123,11 @@ export default async function PainelPage() {
       supabase.from("tarefas").select("id, titulo, vencimento, prioridade").eq("concluida", false),
       supabase.from("metas").select("tipo, valor").eq("competencia", iniMes),
       supabase.from("painel_preferencias").select("widgets").eq("user_id", usuario.id).eq("organizacao_id", organizacao.id).maybeSingle(),
+      supabase
+        .from("pessoas")
+        .select("id, nome, tipo_pessoa, documento, email, telefone, papeis, banco, conta, pix_chave")
+        .overlaps("papeis", ["locatario", "fiador", "proprietario"]),
+      supabase.from("pessoa_arquivos").select("pessoa_id, categoria"),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -206,6 +212,12 @@ export default async function PainelPage() {
   }
   if (atrasadas.length)
     avisos.push({ texto: `${atrasadas.length} aluguel(is) em atraso — ${formatarReais(valorAtraso)}`, href: "/regua", tom: "ruim", icone: <AlertTriangle /> });
+  // Cadastros de inquilinos, fiadores e proprietários com documentação faltando.
+  const docsPorPessoa = new Map<string, string[]>();
+  for (const a of arquivosR.data ?? []) docsPorPessoa.set(a.pessoa_id as string, [...(docsPorPessoa.get(a.pessoa_id as string) ?? []), a.categoria as string]);
+  const comPendencia = (pessoasDocR.data ?? []).filter((p) => pendencias(p, docsPorPessoa.get(p.id) ?? [], organizacao.modo).length > 0).length;
+  if (comPendencia)
+    avisos.push({ texto: `${comPendencia} cadastro(s) com documentação pendente`, href: "/pessoas?pendencia=1", tom: "alerta", icone: <FileClock /> });
   if (despesasVencidas.length)
     avisos.push({ texto: `${despesasVencidas.length} despesa(s) vencida(s) sem pagamento`, href: "/despesas", tom: "ruim", icone: <Wallet /> });
   if (!pessoal && novosAntigos.length)

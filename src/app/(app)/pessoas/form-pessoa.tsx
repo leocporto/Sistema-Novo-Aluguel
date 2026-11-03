@@ -60,6 +60,9 @@ export function FormPessoa({
             <Campo rotulo="Profissão">
               <Entrada name="profissao" defaultValue={p?.profissao ?? ""} />
             </Campo>
+            <Campo rotulo="Especialidade (prestador)">
+              <Entrada name="especialidade" defaultValue={p?.especialidade ?? ""} placeholder="Encanador, eletricista, pintor…" />
+            </Campo>
             <Campo rotulo="E-mail">
               <Entrada type="email" name="email" defaultValue={p?.email ?? ""} />
             </Campo>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BotaoExcluir } from "@/components/botao-excluir";
-import { BotaoLink, Cabecalho, Cartao, Selo } from "@/components/ui";
+import { Cartao, Selo } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { ROTULO_PAPEL, type Pessoa } from "@/lib/tipos";
 import { excluirPessoa } from "../actions";
@@ -38,17 +38,6 @@ export default async function PessoaPage({ params }: PageProps<"/pessoas/[id]">)
 
   return (
     <>
-      <Cabecalho
-        titulo={pessoa.nome}
-        descricao={pessoa.papeis.map((p) => ROTULO_PAPEL[p] ?? p).join(" · ")}
-        acoes={
-          pessoa.papeis.includes("proprietario") && organizacao.modo !== "pessoal" ? (
-            <BotaoLink variante="secundario" href={`/repasses/extrato?pessoa=${pessoa.id}`}>
-              Extrato de repasses
-            </BotaoLink>
-          ) : undefined
-        }
-      />
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
         <FormPessoa
           pessoal={organizacao.modo === "pessoal"}

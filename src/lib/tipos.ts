@@ -48,6 +48,21 @@ export interface Pessoa {
   observacoes: string | null;
   /** % de imposto descontado no repasse; null = padrão da imobiliária. */
   imposto_pct: Num | null;
+  aceita_whatsapp: boolean;
+  aceita_email: boolean;
+  aceita_sms: boolean;
+  aceita_marketing: boolean;
+  canal_preferido: string | null;
+  consentimento_em: string | null;
+  consentimento_origem: string | null;
+  interesse: string[];
+  pref_tipos: string[];
+  pref_regioes: string | null;
+  pref_valor_min: Num | null;
+  pref_valor_max: Num | null;
+  pref_quartos_min: number | null;
+  especialidade: string | null;
+  created_at?: string;
 }
 
 export interface Imovel {
@@ -232,9 +247,13 @@ export const ROTULO_REPASSE: Record<string, string> = {
 export const ROTULO_PAPEL: Record<string, string> = {
   proprietario: "Proprietário",
   locatario: "Locatário",
-  fiador: "Fiador",
-  cliente: "Cliente",
+  fiador: "Fiador / garantidor",
+  comprador: "Comprador",
+  investidor: "Investidor",
   corretor: "Corretor",
+  parceiro: "Parceiro",
+  prestador: "Prestador de serviço",
+  cliente: "Cliente",
 };
 
 export const TIPOS_IMOVEL = [
@@ -335,3 +354,45 @@ export const COMODIDADES: { grupo: string; itens: string[] }[] = [
 
 export const CATEGORIAS_DOCUMENTO_IMOVEL = ["Matrícula", "Escritura", "IPTU", "Habite-se", "Planta aprovada", "Laudo de vistoria", "Outro"];
 export const PORTAIS_ANUNCIO = ["ZAP Imóveis", "VivaReal", "OLX", "Imovelweb", "Chaves na Mão", "Site próprio", "Instagram", "Facebook", "Outro"];
+
+// -----------------------------------------------------------------------------
+// Pessoas: vínculos, relacionamento, documentos e comunicação
+// -----------------------------------------------------------------------------
+export const TIPOS_VINCULO: Record<string, string> = {
+  conjuge: "Cônjuge / companheiro(a)",
+  representante: "Representante legal",
+  procurador: "Procurador",
+  socio: "Sócio",
+  herdeiro: "Herdeiro",
+  contato: "Contato",
+  outro: "Outro",
+};
+
+export const TIPOS_INTERACAO: Record<string, string> = {
+  nota: "Anotação interna",
+  ligacao: "Ligação",
+  whatsapp: "WhatsApp",
+  email: "E-mail",
+  reuniao: "Reunião",
+  visita: "Visita",
+};
+
+export const CATEGORIAS_DOCUMENTO_PESSOA = [
+  "RG ou CNH",
+  "CPF/CNPJ",
+  "Comprovante de residência",
+  "Comprovante de renda",
+  "Certidão de casamento",
+  "Contrato social",
+  "Procuração",
+  "Outro",
+];
+
+export const CANAIS_COMUNICACAO: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  email: "E-mail",
+  sms: "SMS",
+  marketing: "Ofertas e novidades",
+};
+
+export const INTERESSES_PESSOA: Record<string, string> = { alugar: "Alugar", comprar: "Comprar", investir: "Investir" };
