@@ -135,7 +135,7 @@ export default async function LeadPage({ params }: PageProps<"/comercial/leads/[
           <h1 className="mt-1.5 text-[clamp(28px,3vw,38px)] font-semibold leading-[1.05] tracking-[-0.025em] text-texto">{lead.nome}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[13.5px] text-texto-2">
             <Selo cor={lead.status === "ganho" ? "verde" : lead.status === "perdido" ? "cinza" : "azul"}>{rotuloEtapa(funil, lead.status)}</Selo>
-            {lead.prioridade === "quente" && <Selo cor="vermelho">🔥 quente</Selo>}
+            {lead.prioridade === "quente" && <Selo cor="vermelho">Prioridade alta</Selo>}
             {lead.etiquetas?.map((t) => (
               <Selo key={t}>#{t}</Selo>
             ))}

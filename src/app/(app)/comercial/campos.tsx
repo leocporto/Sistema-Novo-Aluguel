@@ -118,9 +118,9 @@ export function CamposLead({
         </Campo>
         <Campo rotulo="Prioridade">
           <Selecao name="prioridade" defaultValue={lead?.prioridade ?? "morno"}>
-            <option value="quente">🔥 Quente</option>
-            <option value="morno">Morno</option>
-            <option value="frio">Frio</option>
+            <option value="quente">Alta</option>
+            <option value="morno">Média</option>
+            <option value="frio">Baixa</option>
           </Selecao>
         </Campo>
       </div>

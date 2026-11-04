@@ -47,7 +47,7 @@ export const MOTIVOS_PERDA = [
   "Outro",
 ];
 
-export const ROTULO_PRIORIDADE: Record<string, string> = { quente: "Quente", morno: "Morno", frio: "Frio" };
+export const ROTULO_PRIORIDADE: Record<string, string> = { quente: "Alta", morno: "Média", frio: "Baixa" };
 
 /** Horas entre a chegada do lead e o primeiro atendimento (null = ainda não atendido). */
 export function horasAtePrimeiroAtendimento(criado: string, atendido: string | null): number | null {

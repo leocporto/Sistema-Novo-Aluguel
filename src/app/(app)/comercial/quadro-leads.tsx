@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AlarmClock, Building2, MessageCircle, Phone } from "lucide-react";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { classeBotao } from "@/components/ui";
-import { MOTIVOS_PERDA, TODAS_ETAPAS, rotuloEtapa } from "@/lib/dominio/crm";
+import { MOTIVOS_PERDA, ROTULO_PRIORIDADE, TODAS_ETAPAS, rotuloEtapa } from "@/lib/dominio/crm";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_ORIGEM_LEAD } from "@/lib/tipos";
 import { linkWhatsapp } from "@/lib/whatsapp";
@@ -129,7 +129,7 @@ export function QuadroLeads({ funil, leads, hoje }: { funil: string; leads: Cart
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-semibold text-texto">{l.nome}</span>
                         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${COR_PRIORIDADE[l.prioridade] ?? COR_PRIORIDADE.morno}`}>
-                          {l.prioridade === "quente" ? "🔥 quente" : l.prioridade}
+                          {ROTULO_PRIORIDADE[l.prioridade] ?? l.prioridade}
                         </span>
                       </div>
                       <div className="mt-1 text-xs text-texto-2">

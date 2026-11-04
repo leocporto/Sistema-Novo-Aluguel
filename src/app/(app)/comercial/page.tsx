@@ -158,9 +158,9 @@ export default async function LeadsPage({ searchParams }: PageProps<"/comercial"
         </Selecao>
         <Selecao name="prioridade" defaultValue={f.prioridade} className="w-40">
           <option value="">Toda prioridade</option>
-          <option value="quente">🔥 Quente</option>
-          <option value="morno">Morno</option>
-          <option value="frio">Frio</option>
+          <option value="quente">Alta</option>
+          <option value="morno">Média</option>
+          <option value="frio">Baixa</option>
         </Selecao>
         <Selecao name="tipo" defaultValue={f.tipo} className="w-44 capitalize">
           <option value="">Todo tipo de imóvel</option>
