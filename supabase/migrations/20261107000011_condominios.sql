@@ -28,7 +28,9 @@
 -- Portal do condômino: /condominio/[token] (mesmo desenho do portal de
 -- clientes: confirmação de 4 números, sessão com hash), tabelas próprias
 -- cond_portal_*. Escrita pública só por funções que conferem token + sessão,
--- com limite por link e por condomínio.
+-- com limite por link e por condomínio. As RPCs cond_portal_* só valem para
+-- anon (o servidor chama sempre por clienteAnonimo()); a exceção é
+-- cond_portal_pode_enviar, usada na policy do Storage (morador logado ou não).
 --
 -- Sem DROP: tabelas/índices "if not exists", funções e gatilhos "create or
 -- replace", policies criadas só se ainda não existirem.
@@ -752,6 +754,28 @@ create table if not exists public.cond_portal_envios (
   created_at timestamptz not null default now()
 );
 
+-- Índices nas chaves estrangeiras usadas nas buscas: reservas da unidade (geração de cotas e
+-- portal), parcelas e cotas de um acordo (baixa e cancelamento do acordo) e as que apontam para
+-- pessoas — sem eles, cada exclusão de pessoa e cada "juntar repetidos" varreria estas tabelas
+-- inteiras. Parcial (só os preenchidos) onde a coluna pode ficar vazia.
+create index if not exists cond_reservas_unidade_idx on public.cond_reservas (unidade_id, status);
+create index if not exists cond_cotas_acordo_parcela_idx on public.cond_cotas (acordo_parcela_de) where acordo_parcela_de is not null;
+create index if not exists cond_cotas_acordo_idx on public.cond_cotas (acordo_id) where acordo_id is not null;
+create index if not exists cond_condominios_sindico_idx on public.cond_condominios (sindico_id) where sindico_id is not null;
+create index if not exists cond_lancamentos_fornecedor_idx on public.cond_lancamentos (fornecedor_id) where fornecedor_id is not null;
+create index if not exists cond_contratos_fornecedor_idx on public.cond_contratos_fornecedores (fornecedor_id) where fornecedor_id is not null;
+create index if not exists cond_comunicado_leituras_pessoa_idx on public.cond_comunicado_leituras (pessoa_id);
+create index if not exists cond_portal_acessos_pessoa_fk_idx on public.cond_portal_acessos (pessoa_id);
+create index if not exists cond_reservas_pessoa_idx on public.cond_reservas (pessoa_id) where pessoa_id is not null;
+create index if not exists cond_acordos_pessoa_idx on public.cond_acordos (pessoa_id) where pessoa_id is not null;
+create index if not exists cond_ocorrencias_pessoa_idx on public.cond_ocorrencias (pessoa_id) where pessoa_id is not null;
+create index if not exists cond_ocorrencia_respostas_pessoa_idx on public.cond_ocorrencia_respostas (pessoa_id) where pessoa_id is not null;
+create index if not exists cond_assembleia_presencas_pessoa_idx on public.cond_assembleia_presencas (pessoa_id) where pessoa_id is not null;
+create index if not exists cond_votos_pessoa_idx on public.cond_votos (pessoa_id) where pessoa_id is not null;
+-- Registro do portal: sem FK (sobrevive à exclusão da pessoa), mas o "juntar repetidos" troca a
+-- pessoa_id — é a tabela que mais cresce (uma linha por entrada, erro e bloqueio).
+create index if not exists cond_portal_eventos_pessoa_idx on public.cond_portal_eventos (pessoa_id) where pessoa_id is not null;
+
 -- -----------------------------------------------------------------------------
 -- 3. Apoio: rateio sem perder centavo, datas, nomes e registro
 -- -----------------------------------------------------------------------------
@@ -1049,7 +1073,7 @@ begin
   end loop;
 end $$;
 
-/** Condomínio: responsável da equipe precisa ser membro; ao criar, já nascem a conta corrente e o fundo de reserva. */
+/** Condomínio: responsável escolhido precisa ser da equipe; ao criar, já nascem a conta corrente e o fundo de reserva. */
 create or replace function privado.cond_condominios_antes()
 returns trigger
 language plpgsql
@@ -1059,7 +1083,10 @@ as $$
 begin
   if coalesce(btrim(new.nome), '') = '' then raise exception 'Informe o nome do condomínio.'; end if;
   new.nome := left(btrim(new.nome), 160);
+  -- Confere só quando o responsável é escolhido ou trocado: se ele sair da equipe depois,
+  -- o resto (síndico novo, respostas, portal, juntar repetidos, excluir pessoa) continua gravando.
   if new.responsavel_user_id is not null
+     and (tg_op = 'INSERT' or new.responsavel_user_id is distinct from old.responsavel_user_id)
      and not exists (select 1 from public.membros where organizacao_id = new.organizacao_id and user_id = new.responsavel_user_id) then
     raise exception 'O responsável precisa ser alguém da equipe.';
   end if;
@@ -1414,7 +1441,7 @@ $$;
 create or replace trigger cond_reservas_antes_trg before insert or update on public.cond_reservas
   for each row execute function privado.cond_reservas_antes();
 
-/** Ocorrência: resolvida/cancelada guarda a data. */
+/** Ocorrência: resolvida/cancelada guarda a data; responsável escolhido precisa ser da equipe. */
 create or replace function privado.cond_ocorrencias_antes()
 returns trigger
 language plpgsql
@@ -1430,7 +1457,10 @@ begin
   else
     new.resolvida_em := null;
   end if;
+  -- Confere só quando o responsável é escolhido ou trocado: se ele sair da equipe depois,
+  -- o resto (síndico novo, respostas, portal, juntar repetidos, excluir pessoa) continua gravando.
   if new.responsavel_user_id is not null
+     and (tg_op = 'INSERT' or new.responsavel_user_id is distinct from old.responsavel_user_id)
      and not exists (select 1 from public.membros where organizacao_id = new.organizacao_id and user_id = new.responsavel_user_id) then
     raise exception 'O responsável precisa ser alguém da equipe.';
   end if;
@@ -1441,7 +1471,12 @@ $$;
 create or replace trigger cond_ocorrencias_antes_trg before insert or update on public.cond_ocorrencias
   for each row execute function privado.cond_ocorrencias_antes();
 
-/** Resposta: autor e data são do banco (equipe logada ou morador pelo portal); a equipe respondendo põe a ocorrência em andamento. */
+/**
+ * Resposta: autor e data são do banco; a equipe respondendo põe a ocorrência em andamento.
+ * "Equipe" só quando quem grava é membro da organização E a gravação não veio do portal
+ * (cond_portal_responder_ocorrencia marca 'cond.portal'): sem isso, um morador logado em
+ * qualquer conta chamaria a RPC do portal e a resposta sairia como "Administradora".
+ */
 create or replace function privado.cond_respostas_antes()
 returns trigger
 language plpgsql
@@ -1452,7 +1487,9 @@ begin
   if coalesce(btrim(new.texto), '') = '' then raise exception 'Escreva a resposta.'; end if;
   new.texto := left(btrim(new.texto), 2000);
   new.created_at := now();
-  if auth.uid() is not null then
+  if coalesce(current_setting('cond.portal', true), '') <> 'sim'
+     and auth.uid() is not null
+     and exists (select 1 from public.membros m where m.organizacao_id = new.organizacao_id and m.user_id = auth.uid()) then
     new.autor := 'equipe';
     new.usuario_id := auth.uid();
     new.pessoa_id := null;
@@ -1822,11 +1859,21 @@ declare
 begin
   foreach t in array array['cond_condominios','cond_blocos','cond_unidades','cond_pessoas_unidade','cond_contas','cond_lancamentos',
                            'cond_orcamentos','cond_rateios','cond_contratos_fornecedores','cond_assembleias','cond_areas',
-                           'cond_documentos','cond_portal_acessos','cond_fechamentos','cond_acordos','cond_taxas_admin'] loop
+                           'cond_documentos','cond_fechamentos','cond_acordos','cond_taxas_admin'] loop
     execute format('create or replace trigger %I after insert or update or delete on public.%I
       for each row execute function privado.auditar()', t || '_auditoria_trg', t);
   end loop;
 end $$;
+
+-- Link do portal: gerar, desativar/reativar, validade e excluir ficam no histórico; as entradas e
+-- tentativas do condômino (acessos, último acesso, falhas, bloqueio) não — já estão em
+-- cond_portal_eventos. O gatilho de insert/delete tem o MESMO nome do laço genérico (substitui).
+create or replace trigger cond_portal_acessos_auditoria_trg after insert or delete on public.cond_portal_acessos
+  for each row execute function privado.auditar();
+create or replace trigger cond_portal_acessos_auditoria_upd_trg after update on public.cond_portal_acessos
+  for each row when ((to_jsonb(old) - array['acessos','ultimo_acesso','falhas','bloqueado_ate','updated_at'])
+                     is distinct from (to_jsonb(new) - array['acessos','ultimo_acesso','falhas','bloqueado_ate','updated_at']))
+  execute function privado.auditar();
 
 -- -----------------------------------------------------------------------------
 -- 6. Frações ideais, cotas, baixa, acordos e inadimplência
@@ -3095,8 +3142,8 @@ begin
   );
 end;
 $$;
-revoke execute on function public.cond_portal_inicio(uuid, text) from public;
-grant execute on function public.cond_portal_inicio(uuid, text) to anon, authenticated;
+revoke execute on function public.cond_portal_inicio(uuid, text) from public, authenticated;
+grant execute on function public.cond_portal_inicio(uuid, text) to anon;
 
 /** Confirma a identidade (4 números) e abre sessão de 12 horas. Erro de número não usa exception (o contador não pode ser desfeito). */
 create or replace function public.cond_portal_entrar(p_token uuid, p_codigo text, p_ip text default null, p_ua text default null)
@@ -3150,8 +3197,8 @@ begin
   return jsonb_build_object('ok', true, 'sessao', v_sessao, 'expira_em', v_expira);
 end;
 $$;
-revoke execute on function public.cond_portal_entrar(uuid, text, text, text) from public;
-grant execute on function public.cond_portal_entrar(uuid, text, text, text) to anon, authenticated;
+revoke execute on function public.cond_portal_entrar(uuid, text, text, text) from public, authenticated;
+grant execute on function public.cond_portal_entrar(uuid, text, text, text) to anon;
 
 create or replace function public.cond_portal_sair(p_token uuid, p_sessao text)
 returns void
@@ -3168,8 +3215,8 @@ begin
   perform privado.cond_portal_evento(a, 'saida', 'Saiu do portal');
 end;
 $$;
-revoke execute on function public.cond_portal_sair(uuid, text) from public;
-grant execute on function public.cond_portal_sair(uuid, text) to anon, authenticated;
+revoke execute on function public.cond_portal_sair(uuid, text) from public, authenticated;
+grant execute on function public.cond_portal_sair(uuid, text) to anon;
 
 /** Cota vista pelo portal (com itens, recebimentos e a situação de hoje). */
 create or replace function privado.cond_portal_cota_json(p_cota uuid)
@@ -3339,8 +3386,8 @@ begin
   return null;
 end;
 $$;
-revoke execute on function public.cond_portal_dados(uuid, text, text, jsonb) from public;
-grant execute on function public.cond_portal_dados(uuid, text, text, jsonb) to anon, authenticated;
+revoke execute on function public.cond_portal_dados(uuid, text, text, jsonb) from public, authenticated;
+grant execute on function public.cond_portal_dados(uuid, text, text, jsonb) to anon;
 
 /** Confirma a leitura de um comunicado. */
 create or replace function public.cond_portal_ler_comunicado(p_token uuid, p_sessao text, p_comunicado uuid)
@@ -3359,8 +3406,8 @@ begin
   on conflict (comunicado_id, pessoa_id) do nothing;
 end;
 $$;
-revoke execute on function public.cond_portal_ler_comunicado(uuid, text, uuid) from public;
-grant execute on function public.cond_portal_ler_comunicado(uuid, text, uuid) to anon, authenticated;
+revoke execute on function public.cond_portal_ler_comunicado(uuid, text, uuid) from public, authenticated;
+grant execute on function public.cond_portal_ler_comunicado(uuid, text, uuid) to anon;
 
 /**
  * Pede uma reserva (a administradora confirma). Regras da área: antecedência
@@ -3402,8 +3449,8 @@ begin
   return v_id;
 end;
 $$;
-revoke execute on function public.cond_portal_reservar(uuid, text, uuid, uuid, timestamptz, timestamptz, text) from public;
-grant execute on function public.cond_portal_reservar(uuid, text, uuid, uuid, timestamptz, timestamptz, text) to anon, authenticated;
+revoke execute on function public.cond_portal_reservar(uuid, text, uuid, uuid, timestamptz, timestamptz, text) from public, authenticated;
+grant execute on function public.cond_portal_reservar(uuid, text, uuid, uuid, timestamptz, timestamptz, text) to anon;
 
 create or replace function public.cond_portal_cancelar_reserva(p_token uuid, p_sessao text, p_reserva uuid)
 returns void
@@ -3423,8 +3470,8 @@ begin
   perform privado.cond_portal_evento(a, 'reserva_cancelada', 'Cancelou a reserva de ' || to_char(r.inicio at time zone 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI'));
 end;
 $$;
-revoke execute on function public.cond_portal_cancelar_reserva(uuid, text, uuid) from public;
-grant execute on function public.cond_portal_cancelar_reserva(uuid, text, uuid) to anon, authenticated;
+revoke execute on function public.cond_portal_cancelar_reserva(uuid, text, uuid) from public, authenticated;
+grant execute on function public.cond_portal_cancelar_reserva(uuid, text, uuid) to anon;
 
 /** Abre ocorrência pelo portal; devolve a pasta liberada (2 horas) para as fotos. */
 create or replace function public.cond_portal_abrir_ocorrencia(p_token uuid, p_sessao text, p_unidade uuid, p_tipo text, p_titulo text, p_descricao text)
@@ -3452,8 +3499,8 @@ begin
   return jsonb_build_object('id', v_id, 'numero', v_numero, 'envio', v_envio, 'pasta', a.organizacao_id::text || '/portal/' || v_envio::text);
 end;
 $$;
-revoke execute on function public.cond_portal_abrir_ocorrencia(uuid, text, uuid, text, text, text) from public;
-grant execute on function public.cond_portal_abrir_ocorrencia(uuid, text, uuid, text, text, text) to anon, authenticated;
+revoke execute on function public.cond_portal_abrir_ocorrencia(uuid, text, uuid, text, text, text) from public, authenticated;
+grant execute on function public.cond_portal_abrir_ocorrencia(uuid, text, uuid, text, text, text) to anon;
 
 create or replace function public.cond_portal_responder_ocorrencia(p_token uuid, p_sessao text, p_ocorrencia uuid, p_texto text)
 returns void
@@ -3471,13 +3518,16 @@ begin
      and (pessoa_id = a.pessoa_id or unidade_id in (select privado.cond_unidades_da_pessoa(a)));
   if not found then raise exception 'Ocorrência não encontrada.'; end if;
   if o.status = 'cancelada' then raise exception 'Esta ocorrência foi encerrada.'; end if;
+  -- Marca a gravação como vinda do portal: o gatilho grava sempre como morador.
+  perform set_config('cond.portal', 'sim', true);
   insert into public.cond_ocorrencia_respostas (organizacao_id, condominio_id, ocorrencia_id, texto, pessoa_id)
   values (a.organizacao_id, a.condominio_id, o.id, p_texto, a.pessoa_id);
+  perform set_config('cond.portal', '', true);
   perform privado.cond_portal_evento(a, 'resposta', 'Respondeu na ocorrência nº ' || o.numero);
 end;
 $$;
-revoke execute on function public.cond_portal_responder_ocorrencia(uuid, text, uuid, text) from public;
-grant execute on function public.cond_portal_responder_ocorrencia(uuid, text, uuid, text) to anon, authenticated;
+revoke execute on function public.cond_portal_responder_ocorrencia(uuid, text, uuid, text) from public, authenticated;
+grant execute on function public.cond_portal_responder_ocorrencia(uuid, text, uuid, text) to anon;
 
 /**
  * Storage (morador, logado ou não): só GRAVA em <org>/portal/<envio>/ de pasta
@@ -3544,8 +3594,8 @@ begin
   update public.cond_ocorrencias set fotos = array_append(fotos, p_path) where id = e.ocorrencia_id;
 end;
 $$;
-revoke execute on function public.cond_portal_registrar_foto(uuid, text, uuid, text) from public;
-grant execute on function public.cond_portal_registrar_foto(uuid, text, uuid, text) to anon, authenticated;
+revoke execute on function public.cond_portal_registrar_foto(uuid, text, uuid, text) from public, authenticated;
+grant execute on function public.cond_portal_registrar_foto(uuid, text, uuid, text) to anon;
 
 /** Voto pelo portal: só se a assembleia permitir, com a votação aberta, uma vez por unidade (do condômino). */
 create or replace function public.cond_portal_votar(p_token uuid, p_sessao text, p_item uuid, p_unidade uuid, p_opcao text)
@@ -3581,8 +3631,8 @@ begin
   perform privado.cond_portal_evento(a, 'voto', 'Votou "' || p_opcao || '" no item ' || it.ordem || ' da assembleia (' || privado.cond_unidade_nome(p_unidade) || ')');
 end;
 $$;
-revoke execute on function public.cond_portal_votar(uuid, text, uuid, uuid, text) from public;
-grant execute on function public.cond_portal_votar(uuid, text, uuid, uuid, text) to anon, authenticated;
+revoke execute on function public.cond_portal_votar(uuid, text, uuid, uuid, text) from public, authenticated;
+grant execute on function public.cond_portal_votar(uuid, text, uuid, uuid, text) to anon;
 
 -- -----------------------------------------------------------------------------
 -- 10. Storage: bucket privado "condominios"
