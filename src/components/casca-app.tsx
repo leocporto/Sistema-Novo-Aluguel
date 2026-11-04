@@ -45,6 +45,8 @@ import {
   UsersRound,
   Gavel,
   PlugZap,
+  Sparkles,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 import { AbasSegmentadas, type ItemAba } from "./abas-segmentadas";
@@ -126,7 +128,9 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/financeiro", rotulo: "Financeiro", icone: Wallet },
       { href: "/despesas", rotulo: "Despesas", icone: TrendingDown },
+      { href: "/condominios", rotulo: "Condomínios", icone: Landmark },
       { href: "/relatorios", rotulo: "Relatórios e BI", icone: BarChart3 },
+      { href: "/inteligencia", rotulo: "Assistente e automações", icone: Sparkles },
       { href: "/equipe/aprovacoes", rotulo: "Aprovações", icone: Gavel, seNaoVer: "/equipe" },
       { href: "/integracoes", rotulo: "Integrações e API", icone: PlugZap },
     ],

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MessageCircle, UserCheck, UserPlus } from "lucide-react";
+import { MessageCircle, Sparkles, UserCheck, UserPlus } from "lucide-react";
 import { BotaoAcao } from "@/components/botao-acao";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
@@ -78,6 +78,10 @@ export default async function ConversaPage({ params }: PageProps<"/marketing/con
               <MessageCircle className="size-4" /> Abrir no WhatsApp
             </a>
           )}
+          {/* Assistente e automações (etapa 22): resposta sugerida (qualificação) e resumo da conversa. */}
+          <Link href={`/inteligencia/atendimento?conversa=${id}`} className={classeBotao("secundario")}>
+            <Sparkles className="size-4" /> Resposta sugerida
+          </Link>
           {c.responsavel_id !== usuario.id && (
             <BotaoAcao acao={assumirConversa} id={id}>
               <UserCheck className="size-4" /> Assumir

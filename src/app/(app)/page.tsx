@@ -36,6 +36,8 @@ import {
   Gavel,
   Mail,
   Hammer,
+  Sparkles,
+  Landmark,
 } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
 import { BarraProgresso } from "@/components/barra-progresso";
@@ -53,6 +55,7 @@ import { ROTULO_TIPO_COMPROMISSO } from "@/lib/dominio/agenda";
 import { STATUS_EM_ANDAMENTO, situacaoPrazo } from "@/lib/dominio/manutencao";
 import { numerosAnalisePainel } from "./analise/painel";
 import { numerosEquipePainel } from "./equipe/painel";
+import { moduloCondominios } from "./condominios/dados";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -114,7 +117,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN, siteContatosR, portaisFalhaR, mktConversasR, mktFilaR, portalPedidosR, portalConclusoesR, equipeN] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN, siteContatosR, portaisFalhaR, mktConversasR, mktFilaR, portalPedidosR, portalConclusoesR, equipeN, iaAcoesR, condVencidasR] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -182,6 +185,12 @@ export default async function PainelPage() {
       supabase.from("portal_solicitacoes").select("id", { count: "exact", head: true }).eq("status", "nova"),
       supabase.from("chamados").select("id", { count: "exact", head: true }).eq("status", "em_execucao").not("prestador_concluiu_em", "is", null),
       pessoal ? Promise.resolve(null) : numerosEquipePainel(supabase, hoje, usuario.id).catch(() => null),
+      // Assistente e automações: ações sugeridas esperando decisão (a RLS mostra só o que a pessoa vê).
+      supabase.from("ia_acoes").select("id", { count: "exact", head: true }).eq("status", "pendente"),
+      // Condomínios (módulo opcional): cotas vencidas sem pagamento.
+      moduloCondominios(organizacao)
+        ? supabase.from("cond_cotas").select("id", { count: "exact", head: true }).eq("status", "aberta").lt("vencimento", hoje)
+        : Promise.resolve({ count: null }),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -762,6 +771,36 @@ export default async function PainelPage() {
           detalhe="campanhas e automações"
           tom={mktFilaR.count ? "alerta" : "neutro"}
           href="/marketing/fila"
+        />
+      ),
+    },
+    {
+      id: "ia_acoes",
+      titulo: "Ações para aprovar",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Sugestões esperando aprovação"
+          icone={<Sparkles />}
+          valor={<Contador valor={iaAcoesR.count ?? 0} />}
+          detalhe="da IA e das automações"
+          tom={iaAcoesR.count ? "alerta" : "sucesso"}
+          href="/inteligencia/acoes"
+        />
+      ),
+    },
+    moduloCondominios(organizacao) && {
+      id: "cond_cotas_vencidas",
+      titulo: "Cotas de condomínio vencidas",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Cotas de condomínio vencidas"
+          icone={<Landmark />}
+          valor={<Contador valor={condVencidasR.count ?? 0} />}
+          detalhe="sem pagamento"
+          tom={condVencidasR.count ? "perigo" : "sucesso"}
+          href="/condominios"
         />
       ),
     },

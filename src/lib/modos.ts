@@ -8,7 +8,7 @@
 export type ModoUso = "imobiliaria" | "pessoal";
 
 /** Telas que só existem no modo imobiliária (e tudo abaixo delas). */
-export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/captacao", "/vendas", "/empreendimentos", "/comissoes", "/site", "/marketing", "/corretor", "/equipe"] as const;
+export const ROTAS_SO_IMOBILIARIA = ["/repasses", "/comercial", "/captacao", "/vendas", "/empreendimentos", "/comissoes", "/site", "/marketing", "/corretor", "/equipe", "/condominios"] as const;
 
 /** Partes de telas compartilhadas que só existem na imobiliária (ex.: aba Comercialização do imóvel). */
 const SUBROTAS_SO_IMOBILIARIA = [
@@ -17,6 +17,8 @@ const SUBROTAS_SO_IMOBILIARIA = [
   /^\/financeiro\/(proprietarios|notas)(\/|$)/,
   /^\/portais\/informes(\/|$)/,
   /^\/relatorios\/(comercial|equipe|obrigacoes|dimob)(\/|$)/,
+  /^\/inteligencia\/(prioridades|atendimento)(\/|$)/,
+  /^\/configuracoes\/condominios(\/|$)/,
 ];
 
 /** A rota pode ser aberta neste modo? */
@@ -43,6 +45,7 @@ export const QUADROS_SO_IMOBILIARIA = [
   "portais_falhas",
   "mkt_conversas",
   "mkt_fila",
+  "cond_cotas_vencidas",
   "equipe_creci",
   "equipe_documentos",
   "equipe_aprovacoes",

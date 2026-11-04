@@ -17,6 +17,8 @@ export interface Organizacao {
   imposto_pj_pct: Num;
   /** imobiliaria = administra imóveis de terceiros; pessoal = imóveis próprios (sem taxa nem repasse). */
   modo: "imobiliaria" | "pessoal";
+  /** Gestão de condomínios (módulo opcional da imobiliária, ligado pelo administrador). */
+  modulo_condominios?: boolean;
 }
 
 export const ehPessoal = (o: Pick<Organizacao, "modo"> | null | undefined) => o?.modo === "pessoal";

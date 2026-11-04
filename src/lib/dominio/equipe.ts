@@ -71,7 +71,7 @@ const T4 = ["ver", "criar", "editar", "excluir"] as const;
 /** Lista de módulos (mesma ordem e operações de privado.modulos_equipe no banco). */
 export const MODULOS: readonly DefModulo[] = [
   { id: "painel", rotulo: "Painel", grupo: "Geral", rotas: ["/"], operacoes: ["ver"] },
-  { id: "imoveis", rotulo: "Imóveis e empreendimentos", grupo: "Cadastros", rotas: ["/imoveis", "/empreendimentos"], operacoes: T4 },
+  { id: "imoveis", rotulo: "Imóveis e empreendimentos", grupo: "Cadastros", rotas: ["/imoveis", "/empreendimentos", "/condominios"], operacoes: T4 },
   { id: "pessoas", rotulo: "Pessoas", grupo: "Cadastros", rotas: ["/pessoas"], operacoes: T4 },
   { id: "documentos", rotulo: "Documentos", grupo: "Cadastros", rotas: ["/documentos"], operacoes: T5 },
   { id: "contratos", rotulo: "Contratos, reajustes e índices", grupo: "Locação", rotas: ["/contratos", "/reajustes", "/indices"], operacoes: T5 },

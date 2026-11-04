@@ -14,6 +14,7 @@ import {
   MessageSquarePlus,
   Phone,
   RotateCcw,
+  Sparkles,
   StickyNote,
   UserPlus,
   Users,
@@ -150,6 +151,10 @@ export default async function LeadPage({ params }: PageProps<"/comercial/leads/[
               <MessageCircle className="size-4" /> WhatsApp
             </a>
           )}
+          {/* Assistente e automações (etapa 22): nota, intenção, próximo contato e resposta sugerida. */}
+          <Link href={`/inteligencia/prioridades/${lead.id}`} className={classeBotao("secundario")}>
+            <Sparkles className="size-4" /> Nota e próximo contato
+          </Link>
           <JanelaCadastro rotuloBotao={<><CalendarPlus className="size-4" /> Agendar visita</>} variante="secundario" titulo="Agendar visita" acao={criarCompromisso} rotuloSalvar="Agendar" icone={<CalendarPlus />} larguraMax="max-w-2xl">
             <input type="hidden" name="voltar" value="1" />
             <CamposCompromisso opcoes={{ ...opcoes, leads, pessoas: [] }} pessoal={false} hoje={hoje} padrao={{ leadId: lead.id, imovelId: imoveisLead[0]?.id }} />

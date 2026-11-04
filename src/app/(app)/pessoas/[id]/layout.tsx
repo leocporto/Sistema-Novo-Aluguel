@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, MessageCircle } from "lucide-react";
+import { AlertTriangle, MessageCircle, Sparkles } from "lucide-react";
 import { SubAbas } from "@/components/sub-abas";
 import { BotaoLink, Cabecalho, Selo, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
@@ -73,6 +73,10 @@ export default async function PessoaLayout({ children, params }: LayoutProps<"/p
                 Serviços e avaliação
               </BotaoLink>
             )}
+            {/* Assistente e automações (etapa 22): resumo das anotações e contatos. */}
+            <BotaoLink variante="secundario" href={`/inteligencia/resumo?fonte=pessoa&id=${p.id}`}>
+              <Sparkles className="size-4" /> Resumir
+            </BotaoLink>
           </>
         }
       />

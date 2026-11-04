@@ -6,6 +6,8 @@ import { sair } from "../login/actions";
 import { agendarAutomacoesMarketing } from "./marketing/agendar";
 import { agendarRelatorios } from "./relatorios/agendar";
 import { agendarWebhooks } from "./integracoes/agendar";
+import { agendarAutomacoesIA } from "./inteligencia/agendar";
+import { equipeCondominio, moduloCondominios } from "./condominios/dados";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, organizacao, usuario, papel } = await obterContexto();
@@ -17,6 +19,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .lt("vencimento", hojeISO());
   // Automações de marketing (imobiliária) rodam depois de responder a tela, sem atrasar nada.
   await agendarAutomacoesMarketing();
+  // Automações por regras do Assistente (nos dois modos; o banco roda no máximo a cada 10 min).
+  await agendarAutomacoesIA();
   // Envios programados de relatórios e entregas de webhooks (também em segundo plano).
   await agendarRelatorios();
   await agendarWebhooks();
@@ -30,7 +34,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       emAtraso={count ?? 0}
       modo={organizacao.modo}
       permissoes={permissoes}
-      ocultar={papel === "admin" || papel === "gestor" ? [] : ["/integracoes"]}
+      ocultar={[
+        ...(papel === "admin" || papel === "gestor" ? [] : ["/integracoes"]),
+        // Condomínios: módulo opcional (ligado pelo admin) e só para administração/financeiro.
+        ...(moduloCondominios(organizacao) && equipeCondominio(papel) ? [] : ["/condominios"]),
+      ]}
     >
       {children}
     </CascaApp>

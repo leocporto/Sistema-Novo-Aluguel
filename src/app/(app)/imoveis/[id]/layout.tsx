@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClipboardCheck, Copy, ImageIcon, Megaphone, Wrench } from "lucide-react";
+import { ClipboardCheck, Copy, ImageIcon, Megaphone, Sparkles, Wrench } from "lucide-react";
 import { BotaoEnviar } from "@/components/formulario";
 import { SubAbas } from "@/components/sub-abas";
 import { BotaoLink, Cabecalho, Selo } from "@/components/ui";
@@ -87,6 +87,10 @@ export default async function ImovelLayout({ children, params }: LayoutProps<"/i
                 </form>
                 <BotaoLink href={`/vistorias?imovel=${id}`} variante="secundario">
                   <ClipboardCheck className="size-4" /> Vistorias
+                </BotaoLink>
+                {/* Assistente e automações (etapa 22): descrição do anúncio (só grava quando o usuário aceita). */}
+                <BotaoLink href={`/inteligencia/anuncio?imovel=${id}`} variante="secundario">
+                  <Sparkles className="size-4" /> Gerar descrição
                 </BotaoLink>
                 <BotaoLink href={`/manutencao/historico?imovel=${id}`} variante="secundario">
                   <Wrench className="size-4" /> Reparos
