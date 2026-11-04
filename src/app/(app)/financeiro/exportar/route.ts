@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     const data = await todas<unknown>(() =>
       supabase
         .from("lancamentos")
-        .select("*, pessoa:pessoas(nome, documento), plano:plano_contas(codigo, nome), conta:contas_financeiras(nome), centro:centros_custo(nome)")
+        .select("*, pessoa:pessoas!lancamentos_pessoa_id_fkey(nome, documento), plano:plano_contas(codigo, nome), conta:contas_financeiras(nome), centro:centros_custo(nome)")
         .gte("vencimento", de)
         .lte("vencimento", ate)
         .order("vencimento")

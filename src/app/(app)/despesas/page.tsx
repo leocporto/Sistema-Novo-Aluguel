@@ -61,7 +61,7 @@ export default async function DespesasPage({ searchParams }: PageProps<"/despesa
 
   let consulta = supabase
     .from("lancamentos")
-    .select("id, descricao, categoria, valor, vencimento, status, liquidado_em, imovel_id, serie_id, comprovante_path, imovel:imoveis(codigo), pessoa:pessoas(nome)")
+    .select("id, descricao, categoria, valor, vencimento, status, liquidado_em, imovel_id, serie_id, comprovante_path, imovel:imoveis(codigo), pessoa:pessoas!lancamentos_pessoa_id_fkey(nome)")
     .eq("tipo", "pagar")
     .neq("status", "cancelado")
     .gte("vencimento", ini)

@@ -45,7 +45,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
 
   // Vencidos e "a aprovar" mostram tudo, de qualquer mês.
   const todosOsMeses = filtro === "vencidos" || filtro === "aprovar";
-  let q = supabase.from("lancamentos").select("*, pessoa:pessoas(nome), plano:plano_contas(codigo, nome), conta:contas_financeiras(nome)").order("vencimento").limit(1000);
+  let q = supabase.from("lancamentos").select("*, pessoa:pessoas!lancamentos_pessoa_id_fkey(nome), plano:plano_contas(codigo, nome), conta:contas_financeiras(nome)").order("vencimento").limit(1000);
   if (!todosOsMeses) q = q.gte("vencimento", de).lte("vencimento", ate);
   if (filtro === "pagar" || filtro === "receber") q = q.eq("tipo", filtro).neq("status", "cancelado");
   if (filtro === "vencidos") q = q.eq("status", "aberto").lt("vencimento", hoje);

@@ -16,6 +16,7 @@ const SUBROTAS_SO_IMOBILIARIA = [
   /^\/pessoas\/[^/]+\/interesse(\/|$)/,
   /^\/financeiro\/(proprietarios|notas)(\/|$)/,
   /^\/portais\/informes(\/|$)/,
+  /^\/relatorios\/(comercial|equipe|obrigacoes|dimob)(\/|$)/,
 ];
 
 /** A rota pode ser aberta neste modo? */

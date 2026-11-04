@@ -44,6 +44,7 @@ import {
   IdCard,
   UsersRound,
   Gavel,
+  PlugZap,
   type LucideIcon,
 } from "lucide-react";
 import { AbasSegmentadas, type ItemAba } from "./abas-segmentadas";
@@ -125,8 +126,9 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/financeiro", rotulo: "Financeiro", icone: Wallet },
       { href: "/despesas", rotulo: "Despesas", icone: TrendingDown },
-      { href: "/relatorios", rotulo: "Relatórios e DIMOB", icone: BarChart3 },
+      { href: "/relatorios", rotulo: "Relatórios e BI", icone: BarChart3 },
       { href: "/equipe/aprovacoes", rotulo: "Aprovações", icone: Gavel, seNaoVer: "/equipe" },
+      { href: "/integracoes", rotulo: "Integrações e API", icone: PlugZap },
     ],
   },
 ];
@@ -202,6 +204,7 @@ export function CascaApp({
   emAtraso = 0,
   modo = "imobiliaria",
   permissoes,
+  ocultar,
   children,
 }: {
   nomeOrganizacao: string;
@@ -213,13 +216,16 @@ export function CascaApp({
   modo?: "imobiliaria" | "pessoal";
   /** Perfil de acesso do usuário (Equipe → Perfis): esconde do menu o que ele não pode ver. */
   permissoes?: Permissoes;
+  /** Telas que este usuário não vê no menu (ex.: Integrações só para admin e gestor). */
+  ocultar?: string[];
   children: ReactNode;
 }) {
   // Cada modo só mostra as telas que existem nele (regras em src/lib/modos.ts)
   // e cada perfil só as que pode ver (src/lib/dominio/equipe.ts).
   const mostrar = useCallback(
-    (href: string) => rotaPermitida(href, modo) && (!permissoes || rotaVisivel(href, permissoes)),
-    [modo, permissoes],
+    (href: string) =>
+      rotaPermitida(href, modo) && (!permissoes || rotaVisivel(href, permissoes)) && !(ocultar ?? []).includes(href),
+    [modo, permissoes, ocultar],
   );
   const topo = useMemo(() => TOPO.filter((i) => mostrar(i.href)), [mostrar]);
   const lateral = useMemo(

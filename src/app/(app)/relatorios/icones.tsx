@@ -1,0 +1,62 @@
+import type { ReactNode } from "react";
+import {
+  ArrowLeftRight,
+  BadgeDollarSign,
+  Building2,
+  DoorOpen,
+  FileSignature,
+  HandCoins,
+  Handshake,
+  House,
+  Inbox,
+  KeyRound,
+  Receipt,
+  Target,
+  Timer,
+  TrendingDown,
+  TrendingUp,
+  TriangleAlert,
+  Wallet,
+} from "lucide-react";
+
+/** Ícone (lucide) de cada indicador dos relatórios. */
+export const ICONE_KPI: Record<string, ReactNode> = {
+  receita_imobiliaria: <Wallet />,
+  taxa_administracao: <Building2 />,
+  intermediacao: <Handshake />,
+  aluguel_recebido: <HandCoins />,
+  faturado: <Receipt />,
+  resultado: <TrendingUp />,
+  despesas: <TrendingDown />,
+  repasses_pagos: <ArrowLeftRight />,
+  inadimplencia: <TriangleAlert />,
+  ocupacao: <House />,
+  vacancia: <DoorOpen />,
+  tempo_alugar: <KeyRound />,
+  contratos_novos: <FileSignature />,
+  leads: <Inbox />,
+  conversao: <Target />,
+  vendas: <BadgeDollarSign />,
+  tempo_vender: <Timer />,
+};
+
+/** Onde cada indicador "leva" (aba com o detalhe). */
+export const DESTINO_KPI: Record<string, string> = {
+  receita_imobiliaria: "/relatorios/financeiro",
+  taxa_administracao: "/relatorios/financeiro",
+  intermediacao: "/relatorios/financeiro",
+  aluguel_recebido: "/relatorios/financeiro",
+  faturado: "/relatorios/financeiro",
+  resultado: "/relatorios/financeiro",
+  despesas: "/relatorios/financeiro",
+  repasses_pagos: "/relatorios/financeiro",
+  inadimplencia: "/relatorios/financeiro",
+  ocupacao: "/relatorios/imoveis",
+  vacancia: "/relatorios/imoveis",
+  tempo_alugar: "/relatorios/imoveis",
+  contratos_novos: "/relatorios/imoveis",
+  leads: "/relatorios/comercial",
+  conversao: "/relatorios/comercial",
+  vendas: "/relatorios/comercial",
+  tempo_vender: "/relatorios/imoveis",
+};

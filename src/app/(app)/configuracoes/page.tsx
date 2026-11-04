@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { Formulario } from "@/components/formulario";
-import { Building, Check, House, Users } from "lucide-react";
+import { Building, Check, House, PlugZap, Users } from "lucide-react";
 import { BotaoLink, Cabecalho, Campo, Cartao, Entrada, Grade } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { type EstadoAcao, inteiro, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
@@ -41,7 +41,7 @@ async function salvar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
 }
 
 export default async function ConfiguracoesPage() {
-  const { organizacao: o } = await obterContexto();
+  const { organizacao: o, papel } = await obterContexto();
   const pessoal = o.modo === "pessoal";
   const opcoes = [
     {
@@ -63,11 +63,18 @@ export default async function ConfiguracoesPage() {
         titulo="Configurações"
         descricao="Modo de uso, dados e padrões para novos contratos."
         acoes={
-          !pessoal && (
-            <BotaoLink href="/equipe" variante="secundario">
-              <Users className="size-4" /> Equipe e acessos
-            </BotaoLink>
-          )
+          <>
+            {(papel === "admin" || papel === "gestor") && (
+              <BotaoLink href="/integracoes" variante="secundario">
+                <PlugZap className="size-4" /> Integrações e API
+              </BotaoLink>
+            )}
+            {!pessoal && (
+              <BotaoLink href="/equipe" variante="secundario">
+                <Users className="size-4" /> Equipe e acessos
+              </BotaoLink>
+            )}
+          </>
         }
       />
       <Formulario acao={salvar} automatico>

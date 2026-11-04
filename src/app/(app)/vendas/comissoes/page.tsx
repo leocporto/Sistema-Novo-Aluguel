@@ -25,7 +25,7 @@ export default async function ComissoesVendas({ searchParams }: PageProps<"/vend
       .not("status", "in", "(cancelada,concluida)"),
     supabase
       .from("lancamentos")
-      .select("tipo, valor, status, vencimento, categoria, pessoa:pessoas(id, nome)")
+      .select("tipo, valor, status, vencimento, categoria, pessoa:pessoas!lancamentos_pessoa_id_fkey(id, nome)")
       .not("venda_id", "is", null)
       .gte("vencimento", `${ano}-01-01`)
       .lte("vencimento", `${ano}-12-31`),
