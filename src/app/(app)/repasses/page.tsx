@@ -131,19 +131,21 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
         <Indicador rotulo="Pagos neste mês" icone={<CheckCircle2 />} valor={<Contador valor={soma(pagosMes ?? [])} formato="moeda" />} detalhe={`${(pagosMes ?? []).length} repasse(s)`} tom="sucesso" href={url("pagos")} />
       </div>
 
-      <PilulasLink className="mb-4" rotulo="Situação dos repasses" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        <input type="hidden" name="f" value={filtro} />
-        <Selecao name="pessoa" defaultValue={pessoa} className="max-w-xs" aria-label="Proprietário">
-          <option value="">Todos os proprietários</option>
-          {(donos ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-            </option>
-          ))}
-        </Selecao>
-        <Entrada type="month" name="mes" defaultValue={mes} className="w-44" aria-label="Competência" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação dos repasses" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          <input type="hidden" name="f" value={filtro} />
+          <Selecao name="pessoa" defaultValue={pessoa} className="max-w-xs" aria-label="Proprietário">
+            <option value="">Todos os proprietários</option>
+            {(donos ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </Selecao>
+          <Entrada type="month" name="mes" defaultValue={mes} className="w-44" aria-label="Competência" />
+        </FiltroAutomatico>
+      </div>
 
       <Formulario acao={acaoEmLote} className="space-y-4">
         <Tabela colunas={[pode ? "Marcar" : "", "Pagar em", "Proprietário", "Contrato", "Competência", "Bruto", "Taxas", "Impostos", "Descontos", "Líquido", "Situação"]}>

@@ -122,28 +122,30 @@ export default async function VistoriasPage({ searchParams }: PageProps<"/vistor
 
       {f.imovel && <HistoricoVistoriasImovel imovelId={f.imovel} className="mb-6" />}
 
-      <PilulasLink className="mb-4" rotulo="Situação" ativo={url(f.situacao)} itens={Object.entries(FILTROS).map(([k, v]) => ({ href: url(k), rotulo: v.rotulo }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        {f.situacao && <input type="hidden" name="situacao" value={f.situacao} />}
-        <Entrada name="busca" aria-label="Buscar vistorias" defaultValue={f.busca} placeholder="Buscar imóvel, nº, vistoriador…" className="max-w-72" />
-        <Selecao name="tipo" aria-label="Filtrar por tipo" defaultValue={f.tipo} className="w-44">
-          <option value="">Todos os tipos</option>
-          {Object.entries(ROTULO_TIPO_VISTORIA).map(([k, r]) => (
-            <option key={k} value={k}>
-              {r}
-            </option>
-          ))}
-        </Selecao>
-        <Selecao name="imovel" aria-label="Filtrar por imóvel (histórico)" defaultValue={f.imovel} className="w-56">
-          <option value="">Todos os imóveis</option>
-          {opcoes.imoveis.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.codigo}
-            </option>
-          ))}
-        </Selecao>
-        {f.contrato && <input type="hidden" name="contrato" value={f.contrato} />}
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação" ativo={url(f.situacao)} itens={Object.entries(FILTROS).map(([k, v]) => ({ href: url(k), rotulo: v.rotulo }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {f.situacao && <input type="hidden" name="situacao" value={f.situacao} />}
+          <Entrada name="busca" aria-label="Buscar vistorias" defaultValue={f.busca} placeholder="Buscar imóvel, nº, vistoriador…" className="max-w-72" />
+          <Selecao name="tipo" aria-label="Filtrar por tipo" defaultValue={f.tipo} className="w-44">
+            <option value="">Todos os tipos</option>
+            {Object.entries(ROTULO_TIPO_VISTORIA).map(([k, r]) => (
+              <option key={k} value={k}>
+                {r}
+              </option>
+            ))}
+          </Selecao>
+          <Selecao name="imovel" aria-label="Filtrar por imóvel (histórico)" defaultValue={f.imovel} className="w-56">
+            <option value="">Todos os imóveis</option>
+            {opcoes.imoveis.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.codigo}
+              </option>
+            ))}
+          </Selecao>
+          {f.contrato && <input type="hidden" name="contrato" value={f.contrato} />}
+        </FiltroAutomatico>
+      </div>
 
       <Tabela colunas={["Nº", "Tipo", "Imóvel", "Contrato", "Data", pessoal ? "Feita por" : "Vistoriador", "Checklist", "Situação"]}>
         {vistorias.map((v) => {

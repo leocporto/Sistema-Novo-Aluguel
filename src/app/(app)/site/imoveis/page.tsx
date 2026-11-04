@@ -99,11 +99,13 @@ export default async function ImoveisNoSitePage({ searchParams }: PageProps<"/si
           </Aviso>
         </div>
       )}
-      <PilulasLink className="mb-4" rotulo="Filtro" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico>
-        {filtro && <input type="hidden" name="filtro" value={filtro} />}
-        <Entrada name="busca" aria-label="Buscar imóvel" defaultValue={busca} placeholder="Código, título, bairro…" className="max-w-72" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Filtro" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          <Entrada name="busca" aria-label="Buscar imóvel" defaultValue={busca} placeholder="Código, título, bairro…" className="max-w-72" />
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["No site", "Imóvel", "Situação", "Valor", "Fotos", "O que falta", ""]}>
         {lista.slice(0, 500).map((i) => (
           <LinhaLink key={i.id} href={`/imoveis/${i.id}`}>

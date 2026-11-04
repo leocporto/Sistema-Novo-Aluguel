@@ -74,11 +74,13 @@ export default async function PublicacaoPortaisPage({ searchParams }: PageProps<
         </Aviso>
       ) : (
         <>
-          <PilulasLink className="mb-4" rotulo="Filtro" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-          <FiltroAutomatico>
-            {filtro && <input type="hidden" name="filtro" value={filtro} />}
-            <Entrada name="busca" aria-label="Buscar imóvel" defaultValue={busca} placeholder="Código, título, bairro…" className="max-w-72" />
-          </FiltroAutomatico>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <PilulasLink rotulo="Filtro" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+            <FiltroAutomatico className="flex flex-wrap gap-2">
+              {filtro && <input type="hidden" name="filtro" value={filtro} />}
+              <Entrada name="busca" aria-label="Buscar imóvel" defaultValue={busca} placeholder="Código, título, bairro…" className="max-w-72" />
+            </FiltroAutomatico>
+          </div>
           <div className="entrar overflow-x-auto rounded-card border border-borda bg-card">
             <div className="min-w-max">
               <div className="grid border-b border-borda bg-elev font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-mudo" style={{ gridTemplateColumns: colunas }}>

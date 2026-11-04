@@ -83,19 +83,21 @@ export default async function FilaPage({ searchParams }: PageProps<"/marketing/f
           ferramenta (Mailchimp, Brevo, RD…), dispare e depois clique em “Marcar os e-mails do CSV como enviados”. Quando a integração for contratada, esta mesma fila passa a sair sozinha na hora agendada.
         </Aviso>
       </div>
-      <PilulasLink className="mb-4" rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico>
-        {filtro && <input type="hidden" name="situacao" value={filtro} />}
-        <Entrada name="busca" aria-label="Buscar na fila" defaultValue={busca} placeholder="Buscar nome, telefone, e-mail…" className="max-w-72" />
-        <Selecao name="canal" aria-label="Filtrar por canal" defaultValue={canal} className="w-44">
-          <option value="">Todos os canais</option>
-          {Object.entries(ROTULO_CANAL).map(([k, r]) => (
-            <option key={k} value={k}>
-              {r}
-            </option>
-          ))}
-        </Selecao>
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {filtro && <input type="hidden" name="situacao" value={filtro} />}
+          <Entrada name="busca" aria-label="Buscar na fila" defaultValue={busca} placeholder="Buscar nome, telefone, e-mail…" className="max-w-72" />
+          <Selecao name="canal" aria-label="Filtrar por canal" defaultValue={canal} className="w-44">
+            <option value="">Todos os canais</option>
+            {Object.entries(ROTULO_CANAL).map(([k, r]) => (
+              <option key={k} value={k}>
+                {r}
+              </option>
+            ))}
+          </Selecao>
+        </FiltroAutomatico>
+      </div>
       <TabelaEnvios envios={envios} vazio={filtro === "" ? "Nada para enviar agora." : "Nada aqui."} />
       {envios.length >= 500 && <p className="mt-3 text-sm text-alerta">Mostrando 500 por vez. Envie estes (ou exporte o CSV) para ver os próximos.</p>}
     </>

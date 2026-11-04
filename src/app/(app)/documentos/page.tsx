@@ -156,35 +156,37 @@ export default async function DocumentosPage({ searchParams }: PageProps<"/docum
         <Indicador rotulo="Vencendo" icone={<AlarmClock />} valor={<Contador valor={vencendo} />} detalhe="dentro do prazo de aviso" tom={vencendo ? "perigo" : "sucesso"} href={url("vencendo")} />
       </div>
 
-      <PilulasLink className="mb-4" rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        {filtro && <input type="hidden" name="filtro" value={filtro} />}
-        <Entrada name="busca" defaultValue={f.busca} placeholder="Buscar no título e no texto…" className="max-w-72" />
-        <Selecao name="tipo" defaultValue={f.tipo} className="w-52">
-          <option value="">Todos os tipos</option>
-          {[...tipos, "arquivo"].map((x) => (
-            <option key={x} value={x}>
-              {ROTULO_TIPO_DOCUMENTO[x]}
-            </option>
-          ))}
-        </Selecao>
-        <Selecao name="imovel" defaultValue={f.imovel} className="w-44">
-          <option value="">Todos os imóveis</option>
-          {op.imoveis.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.codigo}
-            </option>
-          ))}
-        </Selecao>
-        <Selecao name="pessoa" defaultValue={f.pessoa} className="w-52">
-          <option value="">Todos os clientes</option>
-          {op.pessoas.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-            </option>
-          ))}
-        </Selecao>
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          <Entrada name="busca" defaultValue={f.busca} placeholder="Buscar no título e no texto…" className="max-w-72" />
+          <Selecao name="tipo" defaultValue={f.tipo} className="w-52">
+            <option value="">Todos os tipos</option>
+            {[...tipos, "arquivo"].map((x) => (
+              <option key={x} value={x}>
+                {ROTULO_TIPO_DOCUMENTO[x]}
+              </option>
+            ))}
+          </Selecao>
+          <Selecao name="imovel" defaultValue={f.imovel} className="w-44">
+            <option value="">Todos os imóveis</option>
+            {op.imoveis.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.codigo}
+              </option>
+            ))}
+          </Selecao>
+          <Selecao name="pessoa" defaultValue={f.pessoa} className="w-52">
+            <option value="">Todos os clientes</option>
+            {op.pessoas.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </Selecao>
+        </FiltroAutomatico>
+      </div>
 
       <Tabela colunas={["Documento", "Tipo", "Vínculos", "Assinaturas", "Vence", "Situação", ""]}>
         {lista.map((d) => {

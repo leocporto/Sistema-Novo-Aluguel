@@ -9,7 +9,7 @@ export function AbasAnalise() {
         { href: "/analise", rotulo: "Candidatos" },
         { href: "/analise/garantidoras", rotulo: "Garantidoras" },
         { href: "/analise/garantias", rotulo: "Vencimentos e renovações" },
-        { href: "/analise/auditoria", rotulo: "Auditoria" },
+        { href: "/analise/auditoria", rotulo: "Histórico" },
         { href: "/analise/regras", rotulo: "Regras" },
       ]}
     />

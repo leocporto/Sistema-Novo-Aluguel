@@ -49,6 +49,7 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
   com borda de acento e anel suave.
 - `<select>` sempre sem a seta nativa, com a seta do sistema (definida no `globals.css`).
 - Filtros de lista se aplicam sozinhos (sem botão "Filtrar").
+- **Pílulas de filtro e busca na mesma linha**: `<div className="mb-4 flex flex-wrap items-center gap-3">` com `<PilulasLink>` e `<FiltroAutomatico className="flex flex-wrap gap-2">` dentro (sem `mb-4` nos dois). Em tela estreita a busca desce sozinha.
 
 ## Casca do sistema (`src/components/casca-app.tsx`)
 - **Barra do topo (76px)**: ☰ (só em telas < 1024px), marca (quadrado azul em gradiente +
@@ -61,7 +62,7 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
   gaveta (260px) aberta pelo ☰, com fundo desfocado, e recebe também os itens do topo.
 - **Uma seleção só no app**: se a tela é do topo, a pílula do menu some (encolhe até um ponto),
   e vice-versa.
-- **Menu lateral na ordem da operação**: Locação (Análise cadastral → Vistorias → Chaves →
+- **Menu lateral na ordem da operação**: Locação (Análise cadastral → Chaves → Vistorias →
   Cobranças → Reajustes e índices → Manutenção), Atendimento (Agenda, Documentos, Portal de
   clientes), Comercial (Leads e propostas, Captação, Vendas, Empreendimentos, Comissões, Meu portal),
   Divulgação (Site e portais, Marketing) e Gestão (Financeiro, Despesas, Relatórios e DIMOB).
