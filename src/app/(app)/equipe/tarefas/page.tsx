@@ -107,7 +107,7 @@ export default async function TarefasInternasPage({ searchParams }: PageProps<"/
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Filtro de tarefas" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           <input type="hidden" name="f" value={filtro} />
           <Entrada name="q" defaultValue={s("q")} placeholder="Buscar tarefa" aria-label="Buscar tarefa" className="max-w-xs" />
           <Selecao name="categoria" defaultValue={categoria} aria-label="Categoria" className="max-w-56">

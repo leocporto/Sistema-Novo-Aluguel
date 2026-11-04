@@ -53,7 +53,7 @@ export default async function PrecoPage({ searchParams }: PageProps<"/inteligenc
       />
       <AbasInteligencia modo={organizacao.modo} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           <input type="hidden" name="f" value={finalidade} />
           <Selecao name="imovel" defaultValue={id} aria-label="Escolha o imóvel" className="max-w-xl">
             <option value="">Escolha o imóvel…</option>

@@ -160,7 +160,7 @@ export default async function ComissoesPage({ searchParams }: PageProps<"/comiss
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação das comissões" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           <input type="hidden" name="f" value={filtro} />
           <Selecao name="corretor" defaultValue={corretor} className="max-w-xs" aria-label="Corretor">
             <option value="">Todos os corretores</option>

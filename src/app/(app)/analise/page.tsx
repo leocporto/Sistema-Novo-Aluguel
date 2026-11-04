@@ -141,7 +141,7 @@ export default async function AnalisePage({ searchParams }: PageProps<"/analise"
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           <Entrada name="busca" aria-label="Buscar candidato" defaultValue={busca} placeholder="Buscar nome, CPF, imóvel, nº…" className="max-w-80" />
         </FiltroAutomatico>

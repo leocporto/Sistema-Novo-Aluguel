@@ -85,7 +85,7 @@ export default async function FilaPage({ searchParams }: PageProps<"/marketing/f
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {filtro && <input type="hidden" name="situacao" value={filtro} />}
           <Entrada name="busca" aria-label="Buscar na fila" defaultValue={busca} placeholder="Buscar nome, telefone, e-mail…" className="max-w-72" />
           <Selecao name="canal" aria-label="Filtrar por canal" defaultValue={canal} className="w-44">

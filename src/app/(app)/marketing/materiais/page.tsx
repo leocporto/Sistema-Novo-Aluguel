@@ -39,7 +39,7 @@ export default async function MateriaisPage({ searchParams }: PageProps<"/market
             { href: "/marketing/materiais?todos=1", rotulo: "Todos" },
           ]}
         />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {todos && <input type="hidden" name="todos" value="1" />}
           <Entrada name="busca" aria-label="Buscar imóvel" defaultValue={busca} placeholder="Código, bairro, rua…" className="max-w-72" />
         </FiltroAutomatico>

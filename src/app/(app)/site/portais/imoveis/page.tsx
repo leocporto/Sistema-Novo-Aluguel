@@ -76,7 +76,7 @@ export default async function PublicacaoPortaisPage({ searchParams }: PageProps<
         <>
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <PilulasLink rotulo="Filtro" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-            <FiltroAutomatico className="flex flex-wrap gap-2">
+            <FiltroAutomatico className="filtros-linha">
               {filtro && <input type="hidden" name="filtro" value={filtro} />}
               <Entrada name="busca" aria-label="Buscar imóvel" defaultValue={busca} placeholder="Código, título, bairro…" className="max-w-72" />
             </FiltroAutomatico>

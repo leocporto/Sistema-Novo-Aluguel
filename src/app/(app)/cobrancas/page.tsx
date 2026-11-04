@@ -113,7 +113,7 @@ export default async function CobrancasPage({ searchParams }: PageProps<"/cobran
             ...ag.faixas.map((f) => ({ href: url(f.id), rotulo: `${f.rotulo} (${f.quantidade})`, titulo: formatarReais(reais(f.valor)) })),
           ]}
         />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {faixa && <input type="hidden" name="faixa" value={faixa} />}
           <Entrada name="busca" aria-label="Buscar locatário, imóvel ou contrato" defaultValue={busca} placeholder="Buscar locatário, imóvel, contrato…" className="w-72" />
         </FiltroAutomatico>

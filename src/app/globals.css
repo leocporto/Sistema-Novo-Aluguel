@@ -176,6 +176,50 @@ select[size]:not([size="1"]) option:checked {
   width: auto;
 }
 
+/*
+ * Pílulas de filtro + busca/seletores numa linha só (docs/DESIGN.md):
+ * <div className="mb-4 flex flex-wrap items-center gap-3"> com <PilulasLink> e
+ * <FiltroAutomatico className="filtros-linha">. Os campos ficam sempre juntos,
+ * lado a lado (nunca um deles desce sozinho): cabendo ao lado das pílulas
+ * (cada campo pode encolher até o mínimo), dividem o espaço que sobra; não
+ * cabendo, o grupo inteiro desce para a linha de baixo, ainda lado a lado.
+ * Como funciona: o grupo começa do zero (flex-basis 0) e o mínimo dele é a
+ * soma dos mínimos dos campos — cada campo tem width 0 (só para a conta do
+ * mínimo) e min-width; o tamanho de verdade vem do flex-basis.
+ */
+.filtros-linha {
+  display: flex;
+  flex: 1 1 0%;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: min-content;
+}
+.filtros-linha > :is(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select) {
+  flex: 1 1 13rem;
+  width: 0;
+  min-width: 8.5rem;
+  max-width: 15rem;
+}
+/* A busca encolhe primeiro (texto de exemplo cortado incomoda menos que a opção escolhida cortada). */
+.filtros-linha > input:is([type="search"], [type="text"], :not([type])) {
+  flex: 1 4 17rem;
+  min-width: 8rem;
+  max-width: 20rem;
+}
+.filtros-linha > :not(input, select) {
+  flex: none;
+}
+@media (max-width: 767px) {
+  .filtros-linha {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+  }
+  .filtros-linha > :is(input, select) {
+    max-width: none;
+  }
+}
+
 /* ═══ Casca do sistema (mesmo layout do Gueco) ═══════════════════════════ */
 .casca {
   display: flex;

@@ -124,7 +124,7 @@ export default async function VistoriasPage({ searchParams }: PageProps<"/vistor
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(f.situacao)} itens={Object.entries(FILTROS).map(([k, v]) => ({ href: url(k), rotulo: v.rotulo }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {f.situacao && <input type="hidden" name="situacao" value={f.situacao} />}
           <Entrada name="busca" aria-label="Buscar vistorias" defaultValue={f.busca} placeholder="Buscar imóvel, nº, vistoriador…" className="max-w-72" />
           <Selecao name="tipo" aria-label="Filtrar por tipo" defaultValue={f.tipo} className="w-44">

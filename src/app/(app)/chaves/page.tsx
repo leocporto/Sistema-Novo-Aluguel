@@ -95,7 +95,7 @@ export default async function ChavesPage({ searchParams }: PageProps<"/chaves">)
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           <Entrada name="busca" defaultValue={busca} placeholder="Buscar código, imóvel, local…" className="max-w-72" />
         </FiltroAutomatico>

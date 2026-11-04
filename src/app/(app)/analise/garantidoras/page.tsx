@@ -89,7 +89,7 @@ export default async function GarantidorasPage({ searchParams }: PageProps<"/ana
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, f]) => ({ href: url(k), rotulo: f.rotulo }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           <Entrada name="busca" aria-label="Buscar proposta" defaultValue={busca} placeholder="Buscar garantidora, proposta, candidato…" className="max-w-80" />
         </FiltroAutomatico>

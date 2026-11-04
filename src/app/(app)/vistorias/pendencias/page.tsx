@@ -74,7 +74,7 @@ export default async function PendenciasGerais({ searchParams }: PageProps<"/vis
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(situacao)} itens={Object.entries(FILTROS).map(([k, f]) => ({ href: url(k), rotulo: f.rotulo }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {situacao && <input type="hidden" name="situacao" value={situacao} />}
           <Selecao name="responsavel" aria-label="Filtrar por responsável" defaultValue={responsavel} className="w-60">
             <option value="">Todos os responsáveis</option>

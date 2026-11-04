@@ -46,7 +46,7 @@ export default async function SugestoesPage({ searchParams }: PageProps<"/market
             { href: url("pessoas"), rotulo: "Pessoas cadastradas" },
           ]}
         />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {quem === "pessoas" && <input type="hidden" name="quem" value="pessoas" />}
           <Entrada name="busca" aria-label="Buscar contato" defaultValue={busca} placeholder="Buscar nome, telefone…" className="max-w-72" />
         </FiltroAutomatico>

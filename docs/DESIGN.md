@@ -49,7 +49,7 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
   com borda de acento e anel suave.
 - `<select>` sempre sem a seta nativa, com a seta do sistema (definida no `globals.css`).
 - Filtros de lista se aplicam sozinhos (sem botão "Filtrar").
-- **Pílulas de filtro e busca na mesma linha**: `<div className="mb-4 flex flex-wrap items-center gap-3">` com `<PilulasLink>` e `<FiltroAutomatico className="flex flex-wrap gap-2">` dentro (sem `mb-4` nos dois). Em tela estreita a busca desce sozinha.
+- **Pílulas de filtro e busca na mesma linha**: `<div className="mb-4 flex flex-wrap items-center gap-3">` com `<PilulasLink>` e `<FiltroAutomatico className="filtros-linha">` dentro (sem `mb-4` nos dois). Busca e seletores ficam SEMPRE juntos, numa linha só (nunca um campo desce sozinho): em tela larga dividem o espaço ao lado das pílulas; em tela estreita o grupo inteiro desce, ainda lado a lado (`.filtros-linha` no `globals.css`).
 
 ## Casca do sistema (`src/components/casca-app.tsx`)
 - **Barra do topo (76px)**: ☰ (só em telas < 1024px), marca (quadrado azul em gradiente +

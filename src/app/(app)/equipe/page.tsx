@@ -230,7 +230,7 @@ export default async function EquipePage({ searchParams }: PageProps<"/equipe">)
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Filtro de colaboradores" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           <input type="hidden" name="f" value={filtro} />
           <Entrada name="q" defaultValue={s("q")} placeholder="Buscar por nome, e-mail ou CRECI" aria-label="Buscar colaborador" className="max-w-xs" />
           <Selecao name="filial" defaultValue={filialFiltro} aria-label="Filial" className="max-w-56">

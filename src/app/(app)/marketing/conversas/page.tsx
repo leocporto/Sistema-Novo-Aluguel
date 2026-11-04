@@ -79,7 +79,7 @@ export default async function ConversasPage({ searchParams }: PageProps<"/market
       <AbasMarketing />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Conversas" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           <Entrada name="busca" aria-label="Buscar conversas" defaultValue={busca} placeholder="Buscar nome, telefone ou mensagem…" className="max-w-80" />
         </FiltroAutomatico>

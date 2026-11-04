@@ -214,7 +214,7 @@ export default async function VencimentosPage({ searchParams }: PageProps<"/anal
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Vencimento" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           <Entrada name="busca" aria-label="Buscar garantia" defaultValue={busca} placeholder="Buscar imóvel, locatário, seguradora, apólice…" className="max-w-80" />
         </FiltroAutomatico>

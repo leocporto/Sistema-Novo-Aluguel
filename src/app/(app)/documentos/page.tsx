@@ -158,7 +158,7 @@ export default async function DocumentosPage({ searchParams }: PageProps<"/docum
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           <Entrada name="busca" defaultValue={f.busca} placeholder="Buscar no título e no texto…" className="max-w-72" />
           <Selecao name="tipo" defaultValue={f.tipo} className="w-52">

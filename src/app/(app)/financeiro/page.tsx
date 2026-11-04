@@ -222,7 +222,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           <input type="hidden" name="mes" value={mes} />
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           <Entrada name="busca" aria-label="Buscar lançamentos" defaultValue={f.busca} placeholder="Buscar descrição, categoria, nº…" className="max-w-72" />

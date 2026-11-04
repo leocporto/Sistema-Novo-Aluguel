@@ -133,7 +133,7 @@ export default async function RepassesPage({ searchParams }: PageProps<"/repasse
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PilulasLink rotulo="Situação dos repasses" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-        <FiltroAutomatico className="flex flex-wrap gap-2">
+        <FiltroAutomatico className="filtros-linha">
           <input type="hidden" name="f" value={filtro} />
           <Selecao name="pessoa" defaultValue={pessoa} className="max-w-xs" aria-label="Proprietário">
             <option value="">Todos os proprietários</option>
