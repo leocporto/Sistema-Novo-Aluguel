@@ -212,11 +212,13 @@ export default async function VencimentosPage({ searchParams }: PageProps<"/anal
         <Indicador rotulo="Em 31 a 60 dias" icone={<CalendarClock />} valor={<Contador valor={conta["60"]} />} tom={conta["60"] ? "alerta" : "neutro"} href={url("60")} />
         <Indicador rotulo="Em 61 a 90 dias" icone={<CalendarCheck2 />} valor={<Contador valor={conta["90"]} />} href={url("90")} detalhe={`${pendentes.size} pedido(s) de renovação em aberto`} />
       </div>
-      <PilulasLink className="mb-4" rotulo="Vencimento" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        {filtro && <input type="hidden" name="filtro" value={filtro} />}
-        <Entrada name="busca" aria-label="Buscar garantia" defaultValue={busca} placeholder="Buscar imóvel, locatário, seguradora, apólice…" className="max-w-80" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Vencimento" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          <Entrada name="busca" aria-label="Buscar garantia" defaultValue={busca} placeholder="Buscar imóvel, locatário, seguradora, apólice…" className="max-w-80" />
+        </FiltroAutomatico>
+      </div>
 
       {filtro === "renovacoes" ? (
         <Tabela colunas={["Pedido em", "Contrato", "O quê", "Para quem", "Vencimento", "Situação", ""]}>

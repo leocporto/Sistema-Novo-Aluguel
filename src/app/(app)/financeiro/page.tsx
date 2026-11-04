@@ -220,38 +220,40 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
           </BotaoLink>
         )}
       </div>
-      <PilulasLink className="mb-4" rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        <input type="hidden" name="mes" value={mes} />
-        {filtro && <input type="hidden" name="filtro" value={filtro} />}
-        <Entrada name="busca" aria-label="Buscar lançamentos" defaultValue={f.busca} placeholder="Buscar descrição, categoria, nº…" className="max-w-72" />
-        <Selecao name="conta" aria-label="Filtrar por conta" defaultValue={f.conta} className="w-48">
-          <option value="">Todas as contas</option>
-          {op.contas.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nome}
-            </option>
-          ))}
-        </Selecao>
-        <Selecao name="plano" aria-label="Filtrar por plano de contas" defaultValue={f.plano} className="w-56">
-          <option value="">Todo o plano de contas</option>
-          {op.planos.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.codigo} · {p.nome}
-            </option>
-          ))}
-        </Selecao>
-        {op.centros.length > 0 && (
-          <Selecao name="centro" aria-label="Filtrar por centro de custo" defaultValue={f.centro} className="w-44">
-            <option value="">Todos os centros</option>
-            {op.centros.map((c) => (
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          <input type="hidden" name="mes" value={mes} />
+          {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          <Entrada name="busca" aria-label="Buscar lançamentos" defaultValue={f.busca} placeholder="Buscar descrição, categoria, nº…" className="max-w-72" />
+          <Selecao name="conta" aria-label="Filtrar por conta" defaultValue={f.conta} className="w-48">
+            <option value="">Todas as contas</option>
+            {op.contas.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nome}
               </option>
             ))}
           </Selecao>
-        )}
-      </FiltroAutomatico>
+          <Selecao name="plano" aria-label="Filtrar por plano de contas" defaultValue={f.plano} className="w-56">
+            <option value="">Todo o plano de contas</option>
+            {op.planos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.codigo} · {p.nome}
+              </option>
+            ))}
+          </Selecao>
+          {op.centros.length > 0 && (
+            <Selecao name="centro" aria-label="Filtrar por centro de custo" defaultValue={f.centro} className="w-44">
+              <option value="">Todos os centros</option>
+              {op.centros.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </Selecao>
+          )}
+        </FiltroAutomatico>
+      </div>
 
       <Tabela colunas={["Vencimento", "Descrição", "Classificação", "Conta", "Valor", "Situação", ""]}>
         {lista.map((l) => {

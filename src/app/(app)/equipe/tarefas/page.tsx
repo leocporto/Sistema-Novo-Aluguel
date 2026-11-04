@@ -105,29 +105,31 @@ export default async function TarefasInternasPage({ searchParams }: PageProps<"/
         <Indicador rotulo="Aguardando alguém" icone={<Hourglass />} valor={<Contador valor={aguardando.count ?? 0} />} tom={aguardando.count ? "alerta" : "neutro"} href={url("abertas")} />
         <Indicador rotulo="Concluídas no mês" icone={<CheckCircle2 />} valor={<Contador valor={concluidasMes.count ?? 0} />} tom="sucesso" href={url("concluidas")} />
       </div>
-      <PilulasLink className="mb-4" rotulo="Filtro de tarefas" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        <input type="hidden" name="f" value={filtro} />
-        <Entrada name="q" defaultValue={s("q")} placeholder="Buscar tarefa" aria-label="Buscar tarefa" className="max-w-xs" />
-        <Selecao name="categoria" defaultValue={categoria} aria-label="Categoria" className="max-w-56">
-          <option value="">Todas as categorias</option>
-          {Object.entries(CATEGORIAS_TAREFA).map(([k, r]) => (
-            <option key={k} value={k}>
-              {r}
-            </option>
-          ))}
-        </Selecao>
-        {filtro !== "minhas" && (
-          <Selecao name="resp" defaultValue={responsavel} aria-label="Responsável" className="max-w-56">
-            <option value="">Qualquer responsável</option>
-            {opcoes.membros.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {nomeDoMembro(m)}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Filtro de tarefas" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          <input type="hidden" name="f" value={filtro} />
+          <Entrada name="q" defaultValue={s("q")} placeholder="Buscar tarefa" aria-label="Buscar tarefa" className="max-w-xs" />
+          <Selecao name="categoria" defaultValue={categoria} aria-label="Categoria" className="max-w-56">
+            <option value="">Todas as categorias</option>
+            {Object.entries(CATEGORIAS_TAREFA).map(([k, r]) => (
+              <option key={k} value={k}>
+                {r}
               </option>
             ))}
           </Selecao>
-        )}
-      </FiltroAutomatico>
+          {filtro !== "minhas" && (
+            <Selecao name="resp" defaultValue={responsavel} aria-label="Responsável" className="max-w-56">
+              <option value="">Qualquer responsável</option>
+              {opcoes.membros.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {nomeDoMembro(m)}
+                </option>
+              ))}
+            </Selecao>
+          )}
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["Tarefa", "Responsável", "Prazo", "Prioridade", "Situação", ""]}>
         {tarefas.length === 0 && <LinhaVazia colunas={6}>{filtro === "minhas" ? "Nada com você agora." : "Nenhuma tarefa nesta lista."}</LinhaVazia>}
         {tarefas.map((t) => {

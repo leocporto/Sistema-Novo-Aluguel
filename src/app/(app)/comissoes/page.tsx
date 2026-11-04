@@ -158,26 +158,28 @@ export default async function ComissoesPage({ searchParams }: PageProps<"/comiss
         <Indicador rotulo={`Pagas em ${ano}`} icone={<CircleCheck />} valor={<Contador valor={t.pagas} formato="moeda" />} tom="sucesso" href={url("paga")} />
         <Indicador rotulo={`Estornadas em ${ano}`} icone={<RotateCcw />} valor={<Contador valor={t.estornadas} formato="moeda" />} href={url("estornada")} />
       </div>
-      <PilulasLink className="mb-4" rotulo="Situação das comissões" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        <input type="hidden" name="f" value={filtro} />
-        <Selecao name="corretor" defaultValue={corretor} className="max-w-xs" aria-label="Corretor">
-          <option value="">Todos os corretores</option>
-          {base.corretores.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-            </option>
-          ))}
-        </Selecao>
-        <Selecao name="tipo" defaultValue={tipo} className="max-w-56" aria-label="Tipo de comissão">
-          <option value="">Todos os tipos</option>
-          {Object.entries(ROTULO_TIPO_COMISSAO).map(([k, r]) => (
-            <option key={k} value={k}>
-              {r}
-            </option>
-          ))}
-        </Selecao>
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação das comissões" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          <input type="hidden" name="f" value={filtro} />
+          <Selecao name="corretor" defaultValue={corretor} className="max-w-xs" aria-label="Corretor">
+            <option value="">Todos os corretores</option>
+            {base.corretores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </Selecao>
+          <Selecao name="tipo" defaultValue={tipo} className="max-w-56" aria-label="Tipo de comissão">
+            <option value="">Todos os tipos</option>
+            {Object.entries(ROTULO_TIPO_COMISSAO).map(([k, r]) => (
+              <option key={k} value={k}>
+                {r}
+              </option>
+            ))}
+          </Selecao>
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["Data", "Corretor", "Tipo", "Origem", "Base e %", "Valor", "Paga em / previsão", "Situação"]}>
         {lista.length === 0 && <LinhaVazia colunas={8}>Nenhuma comissão nesta lista.</LinhaVazia>}
         {lista.map((c) => {

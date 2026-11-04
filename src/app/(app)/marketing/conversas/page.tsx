@@ -77,11 +77,13 @@ export default async function ConversasPage({ searchParams }: PageProps<"/market
         }
       />
       <AbasMarketing />
-      <PilulasLink className="mb-4" rotulo="Conversas" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico>
-        {filtro && <input type="hidden" name="filtro" value={filtro} />}
-        <Entrada name="busca" aria-label="Buscar conversas" defaultValue={busca} placeholder="Buscar nome, telefone ou mensagem…" className="max-w-80" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Conversas" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          <Entrada name="busca" aria-label="Buscar conversas" defaultValue={busca} placeholder="Buscar nome, telefone ou mensagem…" className="max-w-80" />
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["Contato", "Última mensagem", "Responsável", "Situação", ""]}>
         {conversas.map((c) => (
           <LinhaLink key={c.id} href={`/marketing/conversas/${c.id}`}>

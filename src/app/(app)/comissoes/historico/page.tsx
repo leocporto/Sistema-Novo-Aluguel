@@ -54,12 +54,14 @@ export default async function HistoricoComissoesPage({ searchParams }: PageProps
     <>
       <Cabecalho titulo="Histórico de comissões" trilha="Comissões" descricao="Registro automático: quem criou, liberou, pagou, ajustou ou estornou cada comissão, com o motivo. Serve de auditoria e não pode ser apagado." />
       <AbasComissoes />
-      <PilulasLink className="mb-4" rotulo="Tipo de registro" ativo={url(tipo)} itens={[{ href: url(""), rotulo: "Tudo" }, ...Object.entries(TIPOS).map(([k, r]) => ({ href: url(k), rotulo: r }))]} />
-      <FiltroAutomatico className="mb-4 flex items-center gap-2">
-        {tipo && <input type="hidden" name="tipo" value={tipo} />}
-        <span className="text-sm text-texto-2">Desde</span>
-        <Entrada type="date" name="de" aria-label="Mostrar desde" defaultValue={de} className="w-44" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Tipo de registro" ativo={url(tipo)} itens={[{ href: url(""), rotulo: "Tudo" }, ...Object.entries(TIPOS).map(([k, r]) => ({ href: url(k), rotulo: r }))]} />
+        <FiltroAutomatico className="flex items-center gap-2">
+          {tipo && <input type="hidden" name="tipo" value={tipo} />}
+          <span className="text-sm text-texto-2">Desde</span>
+          <Entrada type="date" name="de" aria-label="Mostrar desde" defaultValue={de} className="w-44" />
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["Quando", "O que", "Corretor", "Detalhe", "Valor", "Quem"]}>
         {eventos.map((e) => (
           <tr key={e.id}>

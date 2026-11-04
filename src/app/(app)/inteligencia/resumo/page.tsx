@@ -52,18 +52,20 @@ export default async function ResumoPage({ searchParams }: PageProps<"/inteligen
       <AbasInteligencia modo={organizacao.modo} />
       <div className="space-y-5">
         <AvisoIA configurada={ia.configurada} ativa={ia.config.ativa} podeConfigurar={podeConfigurarIA(papel)} />
-        {fontes.length > 1 && <PilulasLink rotulo="O que resumir" ativo={`/inteligencia/resumo?fonte=${fonte}`} itens={fontes.map((f) => ({ href: `/inteligencia/resumo?fonte=${f}`, rotulo: ROTULO[f] }))} />}
-        <FiltroAutomatico>
-          <input type="hidden" name="fonte" value={fonte} />
-          <Selecao name="id" defaultValue={id} aria-label="Escolha o que resumir" className="max-w-xl">
-            <option value="">Escolha…</option>
-            {opcoes.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.rotulo}
-              </option>
-            ))}
-          </Selecao>
-        </FiltroAutomatico>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          {fontes.length > 1 && <PilulasLink rotulo="O que resumir" ativo={`/inteligencia/resumo?fonte=${fonte}`} itens={fontes.map((f) => ({ href: `/inteligencia/resumo?fonte=${f}`, rotulo: ROTULO[f] }))} />}
+          <FiltroAutomatico className="flex flex-wrap gap-2">
+            <input type="hidden" name="fonte" value={fonte} />
+            <Selecao name="id" defaultValue={id} aria-label="Escolha o que resumir" className="max-w-xl">
+              <option value="">Escolha…</option>
+              {opcoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.rotulo}
+                </option>
+              ))}
+            </Selecao>
+          </FiltroAutomatico>
+        </div>
         {!escolhido ? (
           <Aviso>{opcoes.length ? "Escolha na lista acima." : "Nada com histórico para resumir ainda."}</Aviso>
         ) : (

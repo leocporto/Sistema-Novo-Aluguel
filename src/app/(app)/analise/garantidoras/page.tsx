@@ -87,11 +87,13 @@ export default async function GarantidorasPage({ searchParams }: PageProps<"/ana
           tom="sucesso"
         />
       </div>
-      <PilulasLink className="mb-4" rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, f]) => ({ href: url(k), rotulo: f.rotulo }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        {filtro && <input type="hidden" name="filtro" value={filtro} />}
-        <Entrada name="busca" aria-label="Buscar proposta" defaultValue={busca} placeholder="Buscar garantidora, proposta, candidato…" className="max-w-80" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, f]) => ({ href: url(k), rotulo: f.rotulo }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          <Entrada name="busca" aria-label="Buscar proposta" defaultValue={busca} placeholder="Buscar garantidora, proposta, candidato…" className="max-w-80" />
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["Candidato", "Garantia", "Garantidora", "Valor / prêmio", "Pedida em", "Situação", "Resposta"]}>
         {lista.map((g) => {
           const espera = (g.status === "solicitada" || g.status === "em_analise") && g.solicitada_em ? diasEntre(g.solicitada_em, hoje) : null;

@@ -11,7 +11,7 @@ import { AbasAnalise } from "../abas";
 import { nomesEquipe, quando } from "../dados";
 import { COR_EVENTO, GRUPOS_EVENTO, ROTULO_EVENTO } from "../eventos";
 
-export const metadata: Metadata = { title: "Auditoria da análise cadastral" };
+export const metadata: Metadata = { title: "Histórico da análise cadastral" };
 
 /** Quem fez o quê e quando nas análises (decisões, exceções, documentos, crédito, garantias). Só leitura. */
 export default async function AuditoriaPage({ searchParams }: PageProps<"/analise/auditoria">) {
@@ -34,7 +34,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps<"/analis
   return (
     <>
       <Cabecalho
-        titulo="Auditoria"
+        titulo="Histórico da análise"
         trilha="Análise cadastral"
         descricao="Registro automático de decisões, exceções, documentos, consultas de crédito, garantias e renovações. Ninguém altera nem apaga — nem quando a análise é excluída."
       />

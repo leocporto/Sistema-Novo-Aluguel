@@ -62,12 +62,14 @@ export default async function HistoricoRepassesPage({ searchParams }: PageProps<
     <>
       <Cabecalho titulo="Histórico de repasses" trilha="Repasses" descricao="Registro automático de cada repasse: quando foi gerado, aprovado (e por quem), descontado, pago, desfeito ou cancelado. Serve de auditoria e não pode ser apagado." />
       <AbasRepasses />
-      <PilulasLink className="mb-4" rotulo="Tipo de registro" ativo={url(tipo)} itens={[{ href: url(""), rotulo: "Tudo" }, ...Object.entries(TIPOS).map(([k, r]) => ({ href: url(k), rotulo: r }))]} />
-      <FiltroAutomatico className="mb-4 flex items-center gap-2">
-        {tipo && <input type="hidden" name="tipo" value={tipo} />}
-        <span className="text-sm text-texto-2">Desde</span>
-        <Entrada type="date" name="de" aria-label="Mostrar desde" defaultValue={de} className="w-44" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Tipo de registro" ativo={url(tipo)} itens={[{ href: url(""), rotulo: "Tudo" }, ...Object.entries(TIPOS).map(([k, r]) => ({ href: url(k), rotulo: r }))]} />
+        <FiltroAutomatico className="flex items-center gap-2">
+          {tipo && <input type="hidden" name="tipo" value={tipo} />}
+          <span className="text-sm text-texto-2">Desde</span>
+          <Entrada type="date" name="de" aria-label="Mostrar desde" defaultValue={de} className="w-44" />
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["Quando", "O que", "Proprietário", "Detalhe", "Valor", "Quem"]}>
         {eventos.map((e) => (
           <tr key={e.id}>

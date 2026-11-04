@@ -139,11 +139,13 @@ export default async function AnalisePage({ searchParams }: PageProps<"/analise"
         />
       </div>
 
-      <PilulasLink className="mb-4" rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        {filtro && <input type="hidden" name="filtro" value={filtro} />}
-        <Entrada name="busca" aria-label="Buscar candidato" defaultValue={busca} placeholder="Buscar nome, CPF, imóvel, nº…" className="max-w-80" />
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          <Entrada name="busca" aria-label="Buscar candidato" defaultValue={busca} placeholder="Buscar nome, CPF, imóvel, nº…" className="max-w-80" />
+        </FiltroAutomatico>
+      </div>
 
       <Tabela colunas={["Nº", "Candidato", "Imóvel", "Aluguel + encargos", "Renda", "Documentos", "Garantia", "Situação", ""]}>
         {lista.map((a) => {

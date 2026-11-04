@@ -72,18 +72,20 @@ export default async function PendenciasGerais({ searchParams }: PageProps<"/vis
         <Indicador rotulo="Do locatário" icone={<User />} valor={<Contador valor={paraReais(t.porResponsavel.locatario)} formato="moeda" />} detalhe="cobrado no acerto de saída" />
         <Indicador rotulo={pessoal ? "Por minha conta" : "Do proprietário"} icone={<Hammer />} valor={<Contador valor={paraReais(t.porResponsavel.proprietario)} formato="moeda" />} detalhe="manutenção do imóvel" />
       </div>
-      <PilulasLink className="mb-4" rotulo="Situação" ativo={url(situacao)} itens={Object.entries(FILTROS).map(([k, f]) => ({ href: url(k), rotulo: f.rotulo }))} />
-      <FiltroAutomatico className="mb-4 flex flex-wrap gap-2">
-        {situacao && <input type="hidden" name="situacao" value={situacao} />}
-        <Selecao name="responsavel" aria-label="Filtrar por responsável" defaultValue={responsavel} className="w-60">
-          <option value="">Todos os responsáveis</option>
-          {responsaveis.map((r) => (
-            <option key={r.valor} value={r.valor}>
-              {r.rotulo}
-            </option>
-          ))}
-        </Selecao>
-      </FiltroAutomatico>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <PilulasLink rotulo="Situação" ativo={url(situacao)} itens={Object.entries(FILTROS).map(([k, f]) => ({ href: url(k), rotulo: f.rotulo }))} />
+        <FiltroAutomatico className="flex flex-wrap gap-2">
+          {situacao && <input type="hidden" name="situacao" value={situacao} />}
+          <Selecao name="responsavel" aria-label="Filtrar por responsável" defaultValue={responsavel} className="w-60">
+            <option value="">Todos os responsáveis</option>
+            {responsaveis.map((r) => (
+              <option key={r.valor} value={r.valor}>
+                {r.rotulo}
+              </option>
+            ))}
+          </Selecao>
+        </FiltroAutomatico>
+      </div>
       <Tabela colunas={["Pendência", "Imóvel", "Vistoria", "Responsável", "Prazo", "Valor", "Situação"]}>
         {lista.map((p) => (
           <LinhaLink key={p.id} href={p.vistoria ? `/vistorias/${p.vistoria.id}/pendencias` : "/vistorias"}>
