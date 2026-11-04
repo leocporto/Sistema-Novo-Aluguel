@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { Building2, Check } from "lucide-react";
 import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { Aviso, BotaoLink, Cabecalho, Cartao } from "@/components/ui";
+import { AvisoBancoPendente } from "@/components/aviso-banco-pendente";
+import { faltaNoBanco } from "@/lib/banco-pendente";
 import { obterContexto } from "@/lib/contexto";
 import { type EstadoAcao, mensagemErro } from "@/lib/form";
-import { moduloCondominios } from "../../condominios/dados";
+import { equipeCondominio, moduloCondominios } from "../../condominios/dados";
 
 export const metadata: Metadata = { title: "Gestão de condomínios" };
 
@@ -19,6 +21,7 @@ async function ligar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
     if (papel !== "admin") throw new Error("Só o administrador liga ou desliga o módulo de condomínios.");
     if (organizacao.modo !== "imobiliaria") throw new Error("A gestão de condomínios só existe no modo imobiliária.");
     const { error } = await supabase.rpc("cond_ligar_modulo", { p_ligar: ligarModulo });
+    if (faltaNoBanco(error)) return { erro: "Este módulo ainda espera uma atualização do banco de dados. Assim que ela for aplicada, o botão passa a funcionar." };
     if (error) throw error;
   } catch (e) {
     return { erro: mensagemErro(e) };
@@ -28,8 +31,12 @@ async function ligar(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
 }
 
 export default async function ConfigCondominiosPage() {
-  const { organizacao, papel } = await obterContexto();
+  const { organizacao, papel, supabase } = await obterContexto();
   if (organizacao.modo === "pessoal") redirect("/configuracoes");
+  if (!equipeCondominio(papel)) redirect("/configuracoes");
+  // Publicado antes da migração de condomínios chegar ao banco: avisa em vez de oferecer "Ligar".
+  const { error: semBanco } = await supabase.from("cond_condominios").select("id").limit(1);
+  if (faltaNoBanco(semBanco)) return <AvisoBancoPendente titulo="Gestão de condomínios" />;
   const ligado = moduloCondominios(organizacao);
   return (
     <>

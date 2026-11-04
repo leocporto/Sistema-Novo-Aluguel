@@ -55,7 +55,7 @@ import { ROTULO_TIPO_COMPROMISSO } from "@/lib/dominio/agenda";
 import { STATUS_EM_ANDAMENTO, situacaoPrazo } from "@/lib/dominio/manutencao";
 import { numerosAnalisePainel } from "./analise/painel";
 import { numerosEquipePainel } from "./equipe/painel";
-import { moduloCondominios } from "./condominios/dados";
+import { equipeCondominio, moduloCondominios } from "./condominios/dados";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -106,7 +106,9 @@ function Variacao({ pct, inverso = false }: { pct: number | null; inverso?: bool
 }
 
 export default async function PainelPage() {
-  const { supabase, organizacao, usuario } = await obterContexto();
+  const { supabase, organizacao, usuario, papel } = await obterContexto();
+  // Condomínios: módulo opcional, só para administração e financeiro (mesma regra do menu).
+  const verCondominios = moduloCondominios(organizacao) && equipeCondominio(papel);
   const pessoal = organizacao.modo === "pessoal";
   const hoje = hojeISO();
   const mes = hoje.slice(0, 7);
@@ -188,7 +190,7 @@ export default async function PainelPage() {
       // Assistente e automações: ações sugeridas esperando decisão (a RLS mostra só o que a pessoa vê).
       supabase.from("ia_acoes").select("id", { count: "exact", head: true }).eq("status", "pendente"),
       // Condomínios (módulo opcional): cotas vencidas sem pagamento.
-      moduloCondominios(organizacao)
+      verCondominios
         ? supabase.from("cond_cotas").select("id", { count: "exact", head: true }).eq("status", "aberta").lt("vencimento", hoje)
         : Promise.resolve({ count: null }),
     ]);
@@ -789,7 +791,7 @@ export default async function PainelPage() {
         />
       ),
     },
-    moduloCondominios(organizacao) && {
+    verCondominios && {
       id: "cond_cotas_vencidas",
       titulo: "Cotas de condomínio vencidas",
       largura: 1,

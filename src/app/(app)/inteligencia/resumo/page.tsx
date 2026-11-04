@@ -38,6 +38,25 @@ export default async function ResumoPage({ searchParams }: PageProps<"/inteligen
     const { data } = await supabase.from("mkt_conversas").select("id, nome, contato, ultima_em").order("ultima_em", { ascending: false, nullsFirst: false }).limit(300);
     opcoes = ((data ?? []) as { id: string; nome: string | null; contato: string }[]).map((c) => ({ id: c.id, rotulo: c.nome || c.contato }));
   }
+  // Veio de um botão "Resumir" (ficha da pessoa, do lead ou da conversa) com um registro
+  // fora da lista dos mais recentes: busca direto pelo id (a RLS decide o que se vê).
+  let semHistorico = false;
+  if (/^[0-9a-f-]{36}$/i.test(id) && !opcoes.some((o) => o.id === id)) {
+    if (fonte === "pessoa") {
+      const [{ data: p }, { count }] = await Promise.all([
+        supabase.from("pessoas").select("id, nome").eq("id", id).maybeSingle(),
+        supabase.from("pessoa_interacoes").select("id", { count: "exact", head: true }).eq("pessoa_id", id),
+      ]);
+      if (p && count) opcoes.unshift({ id: p.id as string, rotulo: (p.nome as string) ?? "Pessoa" });
+      else if (p) semHistorico = true;
+    } else if (fonte === "lead") {
+      const { data: l } = await supabase.from("leads").select("id, nome, status").eq("id", id).maybeSingle();
+      if (l) opcoes.unshift({ id: l.id as string, rotulo: `${l.nome} (${l.status})` });
+    } else {
+      const { data: c } = await supabase.from("mkt_conversas").select("id, nome, contato").eq("id", id).maybeSingle();
+      if (c) opcoes.unshift({ id: c.id as string, rotulo: (c.nome as string | null) || (c.contato as string) });
+    }
+  }
   const escolhido = opcoes.find((o) => o.id === id);
   const ROTULO: Record<FonteResumo, string> = { pessoa: "Anotações de uma pessoa", lead: "Histórico de um lead", conversa: "Conversa do WhatsApp" };
   const LINK: Record<FonteResumo, string> = { pessoa: "/pessoas/", lead: "/comercial/leads/", conversa: "/marketing/conversas/" };
@@ -67,7 +86,7 @@ export default async function ResumoPage({ searchParams }: PageProps<"/inteligen
           </FiltroAutomatico>
         </div>
         {!escolhido ? (
-          <Aviso>{opcoes.length ? "Escolha na lista acima." : "Nada com histórico para resumir ainda."}</Aviso>
+          <Aviso>{semHistorico ? "Esta pessoa ainda não tem anotações para resumir." : opcoes.length ? "Escolha na lista acima." : "Nada com histórico para resumir ainda."}</Aviso>
         ) : (
           <Cartao
             titulo={escolhido.rotulo}

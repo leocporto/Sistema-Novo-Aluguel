@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { Formulario } from "@/components/formulario";
 import { Building, Building2, Check, House, PlugZap, Users } from "lucide-react";
 import { BotaoLink, Cabecalho, Campo, Cartao, Entrada, Grade } from "@/components/ui";
+import { equipeCondominio } from "../condominios/dados";
 import { obterContexto } from "@/lib/contexto";
 import { type EstadoAcao, inteiro, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 
@@ -74,7 +75,7 @@ export default async function ConfiguracoesPage() {
                 <Users className="size-4" /> Equipe e acessos
               </BotaoLink>
             )}
-            {!pessoal && (
+            {!pessoal && equipeCondominio(papel) && (
               <BotaoLink href="/configuracoes/condominios" variante="secundario">
                 <Building2 className="size-4" /> Condomínios
               </BotaoLink>

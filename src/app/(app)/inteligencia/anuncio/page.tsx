@@ -19,8 +19,14 @@ export default async function AnuncioPage({ searchParams }: PageProps<"/intelige
     estadoIA(supabase),
     supabase.from("imoveis").select("id, codigo, tipo, bairro, titulo, descricao").neq("status", "inativo").order("codigo").limit(500),
   ]);
-  const imoveis = (data ?? []) as { id: string; codigo: string; tipo: string | null; bairro: string | null; titulo: string | null; descricao: string | null }[];
+  type Im = { id: string; codigo: string; tipo: string | null; bairro: string | null; titulo: string | null; descricao: string | null };
+  const imoveis = (data ?? []) as Im[];
   const id = typeof sp.imovel === "string" ? sp.imovel : "";
+  // Veio do botão "Gerar descrição" da ficha com um imóvel fora da lista (inativo ou além dos 500): busca direto.
+  if (/^[0-9a-f-]{36}$/i.test(id) && !imoveis.some((i) => i.id === id)) {
+    const { data: um } = await supabase.from("imoveis").select("id, codigo, tipo, bairro, titulo, descricao").eq("id", id).maybeSingle();
+    if (um) imoveis.unshift(um as Im);
+  }
   const atual = imoveis.find((i) => i.id === id);
   return (
     <>
