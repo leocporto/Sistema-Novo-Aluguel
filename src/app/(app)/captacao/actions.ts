@@ -7,6 +7,18 @@ import { type EstadoAcao, ErroValidacao, booleano, inteiro, lista, mensagemErro,
 import { CHECKLIST_CAPTACAO, ROTULO_ETAPA_CAPTACAO, TODAS_ETAPAS_CAPTACAO, ordemEtapaCaptacao } from "@/lib/dominio/captacao";
 
 type Supabase = Awaited<ReturnType<typeof obterContexto>>["supabase"];
+
+/**
+ * Próximo corretor da fila, com as regras por funil/origem da Equipe →
+ * Distribuição (public.proximo_corretor_fila). Sem essa função no banco, a
+ * fila geral de sempre.
+ */
+async function proximoDaFila(supabase: Supabase, funil: string | null, origem: string | null): Promise<string | null> {
+  const { data, error } = await supabase.rpc("proximo_corretor_fila", { p_funil: funil, p_origem: origem });
+  if (!error) return (data as string | null) ?? null;
+  const { data: geral } = await supabase.rpc("proximo_corretor_lead");
+  return (geral as string | null) ?? null;
+}
 type Resultado = { ok: boolean; erro?: string };
 
 function revalidarTudo() {
@@ -76,10 +88,7 @@ export async function criarCaptacao(_: EstadoAcao, fd: FormData): Promise<Estado
   try {
     const dados = lerCaptacao(fd);
     let corretor = (dados.corretor_id as string | null) ?? null;
-    if (corretor === "auto") {
-      const { data } = await supabase.rpc("proximo_corretor_lead");
-      corretor = (data as string | null) ?? null;
-    }
+    if (corretor === "auto") corretor = await proximoDaFila(supabase, "captacao", (dados.origem as string | undefined) ?? null);
     const { data, error } = await supabase
       .from("captacoes")
       .insert({ ...dados, corretor_id: corretor })

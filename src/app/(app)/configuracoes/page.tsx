@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { Formulario } from "@/components/formulario";
-import { Building, Check, House } from "lucide-react";
-import { Cabecalho, Campo, Cartao, Entrada, Grade } from "@/components/ui";
+import { Building, Check, House, Users } from "lucide-react";
+import { BotaoLink, Cabecalho, Campo, Cartao, Entrada, Grade } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { type EstadoAcao, inteiro, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 
@@ -59,7 +59,17 @@ export default async function ConfiguracoesPage() {
   ] as const;
   return (
     <>
-      <Cabecalho titulo="Configurações" descricao="Modo de uso, dados e padrões para novos contratos." />
+      <Cabecalho
+        titulo="Configurações"
+        descricao="Modo de uso, dados e padrões para novos contratos."
+        acoes={
+          !pessoal && (
+            <BotaoLink href="/equipe" variante="secundario">
+              <Users className="size-4" /> Equipe e acessos
+            </BotaoLink>
+          )
+        }
+      />
       <Formulario acao={salvar} automatico>
         <Cartao titulo="Modo de uso">
           <div className="grid gap-3 md:grid-cols-2">

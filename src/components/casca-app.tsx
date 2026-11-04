@@ -9,7 +9,7 @@
  * - uma seleção só no app: se a tela é do topo, a pílula do menu some, e vice-versa;
  * - entrada da tela a cada troca e janelas animadas (useMovimentoJanelas).
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
@@ -44,12 +44,17 @@ import {
   FolderOpen,
   BadgeDollarSign,
   BadgePercent,
+  DoorOpen,
+  IdCard,
+  UsersRound,
+  Gavel,
   type LucideIcon,
 } from "lucide-react";
 import { AbasSegmentadas, type ItemAba } from "./abas-segmentadas";
 import { BotaoTema } from "./menu-lateral";
 import { useMovimentoJanelas } from "@/lib/movimento/useMovimentoJanelas";
 import { rotaPermitida } from "@/lib/modos";
+import { rotaVisivel, type Permissoes } from "@/lib/dominio/equipe";
 
 type Item = { href: string; rotulo: string; icone: LucideIcon };
 
@@ -70,6 +75,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
       { href: "/pessoas", rotulo: "Pessoas", icone: Users },
       { href: "/empreendimentos", rotulo: "Empreendimentos", icone: Building },
       { href: "/documentos", rotulo: "Documentos", icone: FolderOpen },
+      { href: "/portais", rotulo: "Portal de clientes", icone: DoorOpen },
     ],
   },
   {
@@ -84,6 +90,7 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     titulo: "Comercial",
     itens: [
       { href: "/comercial", rotulo: "Leads", icone: UserPlus },
+      { href: "/corretor", rotulo: "Meu portal (corretor)", icone: IdCard },
       { href: "/captacao", rotulo: "Captação de imóveis", icone: HousePlus },
       { href: "/vendas", rotulo: "Vendas", icone: BadgeDollarSign },
       { href: "/comissoes", rotulo: "Comissões", icone: BadgePercent },
@@ -110,6 +117,8 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
       { href: "/financeiro", rotulo: "Financeiro", icone: Wallet },
       { href: "/relatorios", rotulo: "Relatórios e DIMOB", icone: BarChart3 },
       { href: "/indices", rotulo: "Índices econômicos", icone: Percent },
+      { href: "/equipe", rotulo: "Equipe", icone: UsersRound },
+      { href: "/equipe/aprovacoes", rotulo: "Aprovações", icone: Gavel },
       { href: "/configuracoes", rotulo: "Configurações", icone: Settings },
     ],
   },
@@ -166,6 +175,7 @@ export function CascaApp({
   acaoSair,
   emAtraso = 0,
   modo = "imobiliaria",
+  permissoes,
   children,
 }: {
   nomeOrganizacao: string;
@@ -175,13 +185,20 @@ export function CascaApp({
   emAtraso?: number;
   /** No modo "pessoal" não existe repasse ao proprietário. */
   modo?: "imobiliaria" | "pessoal";
+  /** Perfil de acesso do usuário (Equipe → Perfis): esconde do menu o que ele não pode ver. */
+  permissoes?: Permissoes;
   children: ReactNode;
 }) {
-  // Cada modo só mostra as telas que existem nele (regras em src/lib/modos.ts).
-  const topo = useMemo(() => TOPO.filter((i) => rotaPermitida(i.href, modo)), [modo]);
+  // Cada modo só mostra as telas que existem nele (regras em src/lib/modos.ts)
+  // e cada perfil só as que pode ver (src/lib/dominio/equipe.ts).
+  const mostrar = useCallback(
+    (href: string) => rotaPermitida(href, modo) && (!permissoes || rotaVisivel(href, permissoes)),
+    [modo, permissoes],
+  );
+  const topo = useMemo(() => TOPO.filter((i) => mostrar(i.href)), [mostrar]);
   const lateral = useMemo(
-    () => LATERAL.map((g) => ({ ...g, itens: g.itens.filter((i) => rotaPermitida(i.href, modo)) })).filter((g) => g.itens.length > 0),
-    [modo],
+    () => LATERAL.map((g) => ({ ...g, itens: g.itens.filter((i) => mostrar(i.href)) })).filter((g) => g.itens.length > 0),
+    [mostrar],
   );
   const caminho = usePathname();
   const router = useRouter();

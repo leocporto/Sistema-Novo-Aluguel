@@ -98,7 +98,7 @@ export function MidiasChamado({ organizacaoId, chamadoId, midias, momentoInicial
                   </a>
                   <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-[11px] text-mudo">
                     <span className="truncate">
-                      {a.enviadoPor === "locatario" ? "pelo locatário · " : ""}
+                      {a.enviadoPor === "locatario" ? "pelo locatário · " : a.enviadoPor === "prestador" ? "pelo prestador (portal) · " : ""}
                       {a.criado}
                     </span>
                     <BotaoExcluir acao={excluirMidia} id={a.id} rotulo="Excluir arquivo" confirmar={`Excluir "${a.nome ?? "arquivo"}"?`} />

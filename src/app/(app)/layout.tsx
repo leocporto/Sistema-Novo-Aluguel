@@ -1,6 +1,7 @@
 import { CascaApp } from "@/components/casca-app";
 import { obterContexto } from "@/lib/contexto";
 import { hojeISO } from "@/lib/dominio/datas";
+import { permissoesDoUsuario } from "@/lib/permissoes";
 import { sair } from "../login/actions";
 import { agendarAutomacoesMarketing } from "./marketing/agendar";
 
@@ -14,8 +15,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .lt("vencimento", hojeISO());
   // Automações de marketing (imobiliária) rodam depois de responder a tela, sem atrasar nada.
   await agendarAutomacoesMarketing();
+  // Perfis de acesso (Equipe → Perfis) só existem na imobiliária; no pessoal vale o papel.
+  const permissoes = organizacao.modo === "pessoal" ? undefined : await permissoesDoUsuario();
   return (
-    <CascaApp nomeOrganizacao={organizacao.nome} email={usuario.email ?? ""} acaoSair={sair} emAtraso={count ?? 0} modo={organizacao.modo}>
+    <CascaApp
+      nomeOrganizacao={organizacao.nome}
+      email={usuario.email ?? ""}
+      acaoSair={sair}
+      emAtraso={count ?? 0}
+      modo={organizacao.modo}
+      permissoes={permissoes}
+    >
       {children}
     </CascaApp>
   );

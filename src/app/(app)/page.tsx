@@ -32,6 +32,10 @@ import {
   Users,
   Wallet,
   Wrench,
+  BadgeCheck,
+  Gavel,
+  Mail,
+  Hammer,
 } from "lucide-react";
 import { Contador } from "@/components/abas-segmentadas";
 import { BarraProgresso } from "@/components/barra-progresso";
@@ -48,6 +52,7 @@ import { pendencias } from "@/lib/dominio/pessoas";
 import { ROTULO_TIPO_COMPROMISSO } from "@/lib/dominio/agenda";
 import { STATUS_EM_ANDAMENTO, situacaoPrazo } from "@/lib/dominio/manutencao";
 import { numerosAnalisePainel } from "./analise/painel";
+import { numerosEquipePainel } from "./equipe/painel";
 import type { PreferenciaPainel } from "./painel-actions";
 import { PainelWidgets, type Quadro } from "./painel-widgets";
 
@@ -109,7 +114,7 @@ export default async function PainelPage() {
   const desde = `${mesesAnt[0]}-01`;
   const mesPassado = meses12[10];
 
-  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN, siteContatosR, portaisFalhaR, mktConversasR, mktFilaR] =
+  const [imoveisR, contratosR, abertasR, pagasMesR, receitasR, abertosR, repassesR, leadsR, visitasR, propostasR, tarefasR, metasR, prefR, pessoasDocR, arquivosR, chavesAtrasR, semRetornoR, desocR, garantiasR, docsR, vistAbertasR, vistHojeR, contestR, reparosR, reparosVencR, chamadosR, garantiasManutR, analiseN, siteContatosR, portaisFalhaR, mktConversasR, mktFilaR, portalPedidosR, portalConclusoesR, equipeN] =
     await Promise.all([
       supabase
         .from("imoveis")
@@ -174,6 +179,9 @@ export default async function PainelPage() {
       pessoal
         ? Promise.resolve({ count: 0 })
         : supabase.from("mkt_envios").select("id", { count: "exact", head: true }).eq("status", "pendente").lte("agendado_para", new Date().toISOString()),
+      supabase.from("portal_solicitacoes").select("id", { count: "exact", head: true }).eq("status", "nova"),
+      supabase.from("chamados").select("id", { count: "exact", head: true }).eq("status", "em_execucao").not("prestador_concluiu_em", "is", null),
+      pessoal ? Promise.resolve(null) : numerosEquipePainel(supabase, hoje, usuario.id).catch(() => null),
     ]);
 
   // ---------------------------------------------------------------- imóveis
@@ -754,6 +762,126 @@ export default async function PainelPage() {
           detalhe="campanhas e automações"
           tom={mktFilaR.count ? "alerta" : "neutro"}
           href="/marketing/fila"
+        />
+      ),
+    },
+    {
+      id: "portal_pedidos",
+      titulo: "Pedidos pelo portal",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Pedidos novos pelo portal"
+          icone={<DoorOpen />}
+          valor={<Contador valor={portalPedidosR.count ?? 0} />}
+          detalhe="renovação, desocupação e contato"
+          tom={portalPedidosR.count ? "alerta" : "sucesso"}
+          href="/portais/solicitacoes"
+        />
+      ),
+    },
+    {
+      id: "portal_conclusoes",
+      titulo: "Serviços terminados pelo prestador",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Prestador avisou que terminou"
+          icone={<Hammer />}
+          valor={<Contador valor={portalConclusoesR.count ?? 0} />}
+          detalhe={portalConclusoesR.count ? "confira e conclua o chamado" : "nada esperando"}
+          tom={portalConclusoesR.count ? "alerta" : "sucesso"}
+          href="/manutencao"
+        />
+      ),
+    },
+    !pessoal && !!equipeN && {
+      id: "equipe_creci",
+      titulo: "CRECI a renovar",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="CRECI vencido ou vencendo (60 dias)"
+          icone={<BadgeCheck />}
+          valor={<Contador valor={equipeN!.creciVencendo} />}
+          detalhe="corretores da equipe"
+          tom={equipeN!.creciVencendo ? "perigo" : "sucesso"}
+          href="/equipe?f=creci"
+        />
+      ),
+    },
+    !pessoal && !!equipeN && {
+      id: "equipe_documentos",
+      titulo: "Documentos da equipe a renovar",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Documentos profissionais (30 dias)"
+          icone={<FileClock />}
+          valor={<Contador valor={equipeN!.documentosVencendo} />}
+          detalhe="vencidos ou vencendo"
+          tom={equipeN!.documentosVencendo ? "alerta" : "sucesso"}
+          href="/equipe?f=documentos"
+        />
+      ),
+    },
+    !pessoal && !!equipeN && {
+      id: "equipe_aprovacoes",
+      titulo: "Aprovações pendentes",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Aprovações esperando decisão"
+          icone={<Gavel />}
+          valor={<Contador valor={equipeN!.aprovacoesPendentes} />}
+          detalhe="descontos, despesas, exceções"
+          tom={equipeN!.aprovacoesPendentes ? "alerta" : "sucesso"}
+          href="/equipe/aprovacoes"
+        />
+      ),
+    },
+    !pessoal && !!equipeN && {
+      id: "equipe_tarefas",
+      titulo: "Minhas tarefas internas",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Minhas tarefas internas"
+          icone={<ListTodo />}
+          valor={<Contador valor={equipeN!.minhasTarefas} />}
+          detalhe="em aberto"
+          tom={equipeN!.minhasTarefas ? "alerta" : "neutro"}
+          href="/equipe/tarefas"
+        />
+      ),
+    },
+    !pessoal && !!equipeN && {
+      id: "equipe_mensagens",
+      titulo: "Mensagens da equipe",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Mensagens não lidas"
+          icone={<Mail />}
+          valor={<Contador valor={equipeN!.mensagensNaoLidas} />}
+          detalhe="de colegas"
+          tom={equipeN!.mensagensNaoLidas ? "alerta" : "neutro"}
+          href="/equipe/comunicacao/mensagens"
+        />
+      ),
+    },
+    !pessoal && !!equipeN && {
+      id: "equipe_avisos",
+      titulo: "Avisos para confirmar",
+      largura: 1,
+      conteudo: (
+        <Indicador
+          rotulo="Avisos do mural para confirmar"
+          icone={<Megaphone />}
+          valor={<Contador valor={equipeN!.avisosNaoLidos} />}
+          detalhe="confirme a leitura"
+          tom={equipeN!.avisosNaoLidos ? "alerta" : "neutro"}
+          href="/equipe/comunicacao"
         />
       ),
     },

@@ -199,8 +199,8 @@ export async function contatoDoSolicitante(supabase: Supabase, c: Chamado) {
 
 /** Fotos e vídeos do chamado com link temporário (1 hora) para abrir. */
 export async function midiasDoChamado(supabase: Supabase, chamadoId: string) {
-  const { data } = await supabase.from("chamado_midias").select("id, path, nome, tipo, momento, enviado_por, created_at").eq("chamado_id", chamadoId).order("created_at");
-  const lista = (data ?? []) as { id: string; path: string; nome: string | null; tipo: string; momento: string; enviado_por: string; created_at: string }[];
+  const { data } = await supabase.from("chamado_midias").select("id, path, nome, tipo, momento, enviado_por, portal_pessoa_id, created_at").eq("chamado_id", chamadoId).order("created_at");
+  const lista = (data ?? []) as { id: string; path: string; nome: string | null; tipo: string; momento: string; enviado_por: string; portal_pessoa_id: string | null; created_at: string }[];
   const { data: assinadas } = lista.length ? await supabase.storage.from("manutencao").createSignedUrls(lista.map((m) => m.path), 3600) : { data: [] };
   const url = new Map((assinadas ?? []).map((a) => [a.path, a.signedUrl]));
   return lista.map((m) => ({
@@ -208,7 +208,8 @@ export async function midiasDoChamado(supabase: Supabase, chamadoId: string) {
     nome: m.nome,
     tipo: m.tipo,
     momento: m.momento,
-    enviadoPor: m.enviado_por,
+    // Foto mandada pelo prestador no Portal de clientes: o banco grava "equipe" + quem mandou (portal_pessoa_id).
+    enviadoPor: m.enviado_por === "equipe" && m.portal_pessoa_id ? "prestador" : m.enviado_por,
     url: url.get(m.path) ?? null,
     criado: formatarDataBR(diaLocal(m.created_at)),
   }));

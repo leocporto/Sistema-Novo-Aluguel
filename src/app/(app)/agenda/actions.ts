@@ -16,6 +16,7 @@ function revalidarTudo() {
   revalidatePath("/captacao", "layout");
   revalidatePath("/imoveis", "layout");
   revalidatePath("/chaves", "layout");
+  revalidatePath("/manutencao", "layout");
   revalidatePath("/");
 }
 

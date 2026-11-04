@@ -84,6 +84,24 @@ export function formatarDataBR(d: DataISO | null | undefined): string {
   return `${dia}/${m}/${a}`;
 }
 
+/**
+ * Data civil em Brasília de um instante (timestamptz do banco). Não use
+ * `.slice(0, 10)` num timestamp: isso pega a data em UTC (21h–23h59 de
+ * Brasília cairia no dia seguinte).
+ */
+export function dataLocal(instante: string | null | undefined): DataISO | null {
+  if (!instante) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(instante)) return instante;
+  const t = new Date(instante);
+  if (Number.isNaN(t.getTime())) return null;
+  return t.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+}
+
+/** dd/mm/aaaa de um instante (timestamptz), no fuso de Brasília. */
+export function formatarDataLocal(instante: string | null | undefined): string {
+  return formatarDataBR(dataLocal(instante));
+}
+
 export function formatarCompetencia(d: DataISO | null | undefined): string {
   if (!d) return "—";
   const [a, m] = d.slice(0, 7).split("-");

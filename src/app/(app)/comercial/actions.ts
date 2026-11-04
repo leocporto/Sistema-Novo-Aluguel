@@ -12,6 +12,18 @@ function revalidarTudo() {
 }
 
 type Supabase = Awaited<ReturnType<typeof obterContexto>>["supabase"];
+
+/**
+ * Próximo corretor da fila, com as regras por funil/origem da Equipe →
+ * Distribuição (public.proximo_corretor_fila). Sem essa função no banco, a
+ * fila geral de sempre.
+ */
+async function proximoDaFila(supabase: Supabase, funil: string | null, origem: string | null): Promise<string | null> {
+  const { data, error } = await supabase.rpc("proximo_corretor_fila", { p_funil: funil, p_origem: origem });
+  if (!error) return (data as string | null) ?? null;
+  const { data: geral } = await supabase.rpc("proximo_corretor_lead");
+  return (geral as string | null) ?? null;
+}
 type Resultado = { ok: boolean; erro?: string };
 
 /** Lê só os campos do lead que vieram no formulário (cada tela salva a sua parte). */
@@ -74,10 +86,7 @@ export async function criarLead(_: EstadoAcao, fd: FormData): Promise<EstadoAcao
         );
     }
     let corretor = texto(fd, "corretor_id");
-    if (corretor === "auto") {
-      const { data } = await supabase.rpc("proximo_corretor_lead");
-      corretor = (data as string | null) ?? null;
-    }
+    if (corretor === "auto") corretor = await proximoDaFila(supabase, (dados.funil as string | undefined) ?? "locacao", (dados.origem as string | undefined) ?? null);
     const agora = new Date().toISOString();
     const { data, error } = await supabase
       .from("leads")
@@ -204,8 +213,8 @@ export async function transferirLead(_: EstadoAcao, fd: FormData): Promise<Estad
   try {
     let novo = texto(fd, "corretor_id");
     if (novo === "auto") {
-      const { data } = await supabase.rpc("proximo_corretor_lead");
-      novo = (data as string | null) ?? null;
+      const { data: l } = await supabase.from("leads").select("funil, origem").eq("id", id).maybeSingle();
+      novo = await proximoDaFila(supabase, (l?.funil as string | null) ?? null, (l?.origem as string | null) ?? null);
     }
     const { data: atual } = await supabase.from("leads").select("corretor_id").eq("id", id).single();
     if ((atual?.corretor_id ?? null) === novo) throw new ErroValidacao("Esse já é o corretor do lead.");
