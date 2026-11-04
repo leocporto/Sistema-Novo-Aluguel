@@ -62,7 +62,7 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
   gaveta (260px) aberta pelo ☰, com fundo desfocado, e recebe também os itens do topo.
 - **Uma seleção só no app**: se a tela é do topo, a pílula do menu some (encolhe até um ponto),
   e vice-versa.
-- **Menu lateral na ordem da operação**: Locação (Análise cadastral → Vistorias → Chaves →
+- **Menu lateral na ordem da operação**: Locação (Análise cadastral → Chaves → Vistorias →
   Cobranças → Reajustes e índices → Manutenção), Atendimento (Agenda, Documentos, Portal de
   clientes), Comercial (Leads e propostas, Captação, Vendas, Empreendimentos, Comissões, Meu portal),
   Divulgação (Site e portais, Marketing) e Gestão (Financeiro, Despesas, Relatórios e DIMOB).

@@ -90,8 +90,8 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
     titulo: "Locação",
     itens: [
       { href: "/analise", rotulo: "Análise cadastral", icone: UserCheck },
-      { href: "/vistorias", rotulo: "Vistorias", icone: ClipboardCheck },
       { href: "/chaves", rotulo: "Chaves", icone: KeyRound },
+      { href: "/vistorias", rotulo: "Vistorias", icone: ClipboardCheck },
       { href: "/cobrancas", rotulo: "Cobranças", icone: Bell },
       { href: "/reajustes", rotulo: "Reajustes e índices", icone: TrendingUp },
       { href: "/manutencao", rotulo: "Manutenção", icone: Wrench },
