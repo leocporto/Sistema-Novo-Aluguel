@@ -577,10 +577,42 @@ export function funilPorOrigem<L extends LeadConversao>(leads: L[], chave: (l: L
     .sort((a, b) => b.leads - a.leads || a.chave.localeCompare(b.chave));
 }
 
-const csvCampo = (v: string | number | null | undefined) => {
-  const s = v === null || v === undefined ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
+/**
+ * Célula de CSV separado por vírgula. Texto que começa com = + - @ (ou tab/CR)
+ * vira fórmula no Excel — nome, e-mail e gclid vêm de formulário público —, então
+ * ganha um apóstrofo na frente (mesma regra do paraCSV do financeiro).
+ */
+export function celulaCsv(v: string | number | null | undefined): string {
+  if (v === null || v === undefined) return "";
+  let s = String(v);
+  if (typeof v !== "number" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+const csvCampo = celulaCsv;
+
+export type EnvioCsvEmail = { id: string; canal: string; status: string; email: string | null; nome: string | null; assunto: string | null; mensagem: string };
+
+/**
+ * CSV da fila para Mailchimp/Brevo/RD Station: só envio de E-MAIL, ainda pendente,
+ * com e-mail, e só os que o banco acabou de liberar (`permitidos`, vindos de
+ * mkt_conferir_envios — quem se descadastrou depois de a fila ser montada fica fora).
+ */
+export function csvFilaEmail(linhas: EnvioCsvEmail[], permitidos: ReadonlySet<string>): string {
+  const corpo = linhas
+    .filter((l) => l.canal === "email" && l.status === "pendente" && !!l.email && permitidos.has(l.id))
+    .map((l) => [l.email, l.nome, primeiroNome(l.nome), l.assunto, l.mensagem].map(celulaCsv).join(","));
+  return ["email,nome,primeiro_nome,assunto,mensagem", ...corpo].join("\r\n") + "\r\n";
+}
+
+/** Minutos em que um envio marcado como enviado ainda pode voltar para a fila (o banco confere a mesma regra). */
+export const JANELA_DESFAZER_ENVIO_MIN = 10;
+
+/** "Voltar para a fila": cancelado/descadastrado sempre (o banco confere o resto); enviado só logo depois. */
+export function podeVoltarParaFila(status: string, enviadoEm: string | null | undefined, agora: number): boolean {
+  if (status === "cancelado" || status === "bloqueado") return true;
+  if (status !== "enviado" || !enviadoEm) return false;
+  return agora - new Date(enviadoEm).getTime() < JANELA_DESFAZER_ENVIO_MIN * 60_000;
+}
 
 /** Data/hora no horário de Brasília no formato "AAAA-MM-DD HH:MM:SS". */
 function horaBrasilia(iso: string): string {

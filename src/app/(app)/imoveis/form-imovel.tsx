@@ -249,11 +249,16 @@ export function FormImovel({
           <Campo rotulo="Descrição">
             <AreaTexto name="descricao" rows={5} defaultValue={i?.descricao ?? ""} />
           </Campo>
-          <input type="hidden" name="_publicar_site" value="1" />
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="publicar_site" defaultChecked={i?.publicar_site} />
-            Publicar no site (e nos portais configurados em Site e portais)
-          </label>
+          {/* Site e portais só existem no modo imobiliária. */}
+          {!pessoal && (
+            <>
+              <input type="hidden" name="_publicar_site" value="1" />
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="publicar_site" defaultChecked={i?.publicar_site} />
+                Publicar no site (e nos portais configurados em Site e portais)
+              </label>
+            </>
+          )}
         </div>
       </Cartao>
 

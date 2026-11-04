@@ -19,8 +19,9 @@ import { supabaseConfig } from "@/lib/supabase/config";
  * Ponto de integração (src/proxy.ts), ANTES da checagem de login:
  *   const site = await reescreverDominioProprio(request);
  *   if (site) return site;
- * Opcional: HOSTS_DO_SISTEMA="app.novoaluguel.com.br" (separados por vírgula)
- * para o proxy nem consultar o banco nos endereços do próprio sistema.
+ * Em produção: HOSTS_DO_SISTEMA="app.novoaluguel.com.br" (separados por vírgula)
+ * — o proxy nem consulta o banco nos endereços do próprio sistema e qualquer outro
+ * domínio sem site confirmado recebe 404 (veja reescreverDominioProprio).
  */
 
 type Guardado = { slug: string | null; ate: number };
@@ -59,14 +60,24 @@ export async function slugDoDominio(dominio: string): Promise<string | null> {
 /**
  * Se a requisição veio por um domínio próprio de imobiliária, devolve a
  * reescrita para o site público dela; senão devolve null (segue o fluxo normal).
+ *
+ * Com HOSTS_DO_SISTEMA configurado, um domínio que não é do sistema e não tem
+ * site confirmado (TXT ausente, site fora do ar, conta no modo pessoal) recebe
+ * 404 — nunca o sistema (login, telas logadas) num domínio que a imobiliária
+ * controla: quem entrasse por ali deixaria os cookies da sessão nesse domínio.
+ * Sem HOSTS_DO_SISTEMA não dá para separar o endereço do sistema de um domínio
+ * de imobiliária, então segue como antes (configure-o em produção).
  */
 export async function reescreverDominioProprio(request: NextRequest): Promise<NextResponse | null> {
   const host = request.headers.get("host");
-  const extras = (process.env.HOSTS_DO_SISTEMA ?? "").split(",");
+  const extras = (process.env.HOSTS_DO_SISTEMA ?? "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
   const dominio = dominioDoHost(host, extras);
   if (!dominio || !host) return null;
   const slug = await slugDoDominio(dominio);
-  if (!slug) return null;
+  if (!slug) return extras.length ? new NextResponse("Site não encontrado", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } }) : null;
   const caminho = caminhoNoSite(request.nextUrl.pathname, slug);
   if (!caminho) return null;
   const destino = request.nextUrl.clone();

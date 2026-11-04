@@ -817,12 +817,22 @@ export function instanteVisita(data: string | null | undefined, hora: string | n
   return brasilia.slice(0, 10) === data && brasilia.slice(11, 16) === hora ? iso : null;
 }
 
-/** Valida o horário pedido (mesma regra do banco: de 1 h a 120 dias à frente). */
+/**
+ * Valida o horário pedido (mesma regra do banco, em site_contato: de 1 h a 120 dias
+ * à frente e, em Brasília, das 8h às 18h de meia em meia hora — os horários que o
+ * site oferece).
+ */
 export function problemaHorarioVisita(iso: string | null, agora: Date = new Date()): string | null {
   if (!iso) return "Escolha o dia e o horário da visita.";
   const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "Escolha o dia e o horário da visita.";
   if (t < agora.getTime() + 3_600_000) return "Escolha um horário a partir de daqui a 1 hora.";
   if (t > agora.getTime() + 120 * 86_400_000) return "Escolha uma data nos próximos 120 dias.";
+  const local = new Date(t - 3 * 3_600_000);
+  const minutos = local.getUTCHours() * 60 + local.getUTCMinutes();
+  if (minutos < 8 * 60 || minutos > 18 * 60 || local.getUTCMinutes() % 30 !== 0 || local.getUTCSeconds() !== 0) {
+    return "Escolha um horário entre 8h e 18h (de meia em meia hora).";
+  }
   return null;
 }
 

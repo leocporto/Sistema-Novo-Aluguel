@@ -38,8 +38,11 @@ export default async function ConversaPage({ params }: PageProps<"/marketing/con
   const titulo = c.nome ?? (c.canal === "email" ? c.contato : `+${c.contato}`);
   const lead = c.lead as { id: string; nome: string } | null;
   const pessoa = c.pessoa as { id: string; nome: string } | null;
-  // O lead ligado pode estar fechado (não aparece na lista): mantém na opção.
+  // O lead ligado pode estar fechado e a pessoa ligada pode estar fora das 2.000 primeiras:
+  // ficam na lista, senão o salvamento automático trocaria o vínculo por "nenhum".
   const opcoesLead = lead && !(leads ?? []).some((l) => l.id === lead.id) ? [lead, ...(leads ?? [])] : (leads ?? []);
+  const opcoesPessoa = pessoa && !(pessoas ?? []).some((p) => p.id === pessoa.id) ? [pessoa, ...(pessoas ?? [])] : (pessoas ?? []);
+  const opcoesMembro = c.responsavel_id && !membros.some((m) => m.user_id === c.responsavel_id) ? [{ user_id: c.responsavel_id as string, nome: "Ex-membro da equipe" }, ...membros] : membros;
 
   return (
     <>
@@ -149,7 +152,7 @@ export default async function ConversaPage({ params }: PageProps<"/marketing/con
               <Campo rotulo="Responsável">
                 <Selecao name="responsavel_id" defaultValue={c.responsavel_id ?? ""}>
                   <option value="">— ninguém —</option>
-                  {membros.map((m) => (
+                  {opcoesMembro.map((m) => (
                     <option key={m.user_id} value={m.user_id}>
                       {m.nome}
                     </option>
@@ -172,7 +175,7 @@ export default async function ConversaPage({ params }: PageProps<"/marketing/con
               <Campo rotulo="Pessoa cadastrada">
                 <Selecao name="pessoa_id" defaultValue={c.pessoa_id ?? ""}>
                   <option value="">— nenhuma —</option>
-                  {(pessoas ?? []).map((p) => (
+                  {opcoesPessoa.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nome}
                     </option>

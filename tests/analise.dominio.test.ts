@@ -8,6 +8,7 @@ import {
   comprometimentoPct,
   configComPadrao,
   contratoSugerido,
+  contratosVinculaveis,
   custoMensal,
   diasParaVencer,
   faixaVencimento,
@@ -21,6 +22,7 @@ import {
   normalizarResultadoCredito,
   papelAprovaExcecao,
   papelDecide,
+  podeVirarContrato,
   progressoDocumentos,
   rendaComprovada,
   rendaDeclarada,
@@ -120,6 +122,17 @@ describe("regras para aprovar (igual ao banco)", () => {
     expect(foraDaRegra(d, CONFIG_PADRAO)).toEqual([{ codigo: "fiador_renda", texto: "Fiador Fernando com renda abaixo de 3× o aluguel e encargos" }]);
     expect(foraDaRegra({ ...d, rendas: [...base.rendas, { valor_comprovado: 5400, fiador_id: "f1" }] }, CONFIG_PADRAO)).toEqual([]);
     expect(foraDaRegra({ ...base, garantias: [] }, { ...CONFIG_PADRAO, exigir_garantia: false })).toEqual([]);
+  });
+
+  it("fiança marcada 'aprovada' não conta sozinha: vale o fiador aprovado (igual ao banco)", () => {
+    const fianca = { ...base, garantias: [{ tipo: "fiador", status: "aprovada" }], fiadores: [{ id: "f1", nome: "João", status: "pendente" }] };
+    expect(foraDaRegra(fianca, CONFIG_PADRAO).map((m) => m.codigo)).toEqual(["garantia"]);
+    // Com o fiador aprovado (e renda suficiente), a fiança conta.
+    const aprovado = { ...fianca, fiadores: [{ id: "f1", nome: "João", status: "aprovado" }], rendas: [...base.rendas, { valor_comprovado: 5400, fiador_id: "f1" }] };
+    expect(foraDaRegra(aprovado, CONFIG_PADRAO)).toEqual([]);
+    // Fiador aprovado com renda baixa continua acusado (não dá para "esconder" atrás da fiança).
+    const fraco = { ...aprovado, rendas: [...base.rendas, { valor_comprovado: 1000, fiador_id: "f1" }] };
+    expect(foraDaRegra(fraco, CONFIG_PADRAO).map((m) => m.codigo)).toEqual(["fiador_renda"]);
   });
 });
 
@@ -269,5 +282,30 @@ describe("percentual, crédito automático e contrato sugerido", () => {
     expect(contratoSugerido([k("c4", { status: "encerrado" })], a)).toBeNull();
     expect(contratoSugerido([k("c5", { created_at: "2026-11-06T10:00:00Z" }), k("c6", { status: "rascunho", created_at: "2026-11-08T10:00:00Z" })], a)?.id).toBe("c6");
     expect(contratoSugerido([k("c7", { imovel_id: "i9" })], { imovel_id: null, decidido_em: null })?.id).toBe("c7");
+  });
+
+  it("vincular: só contrato do candidato como locatário, do imóvel da análise, ativo ou em rascunho", () => {
+    const k = (id: string, extra: Partial<{ status: string; imovel_id: string | null; candidatoLocatario: boolean }> = {}) => ({
+      id,
+      numero: 1,
+      status: "ativo",
+      imovel_id: "i1",
+      created_at: "2026-11-10T10:00:00Z",
+      candidatoLocatario: true,
+      ...extra,
+    });
+    const lista = [k("inquilino_atual", { candidatoLocatario: false }), k("outro_imovel", { imovel_id: "i2" }), k("encerrado", { status: "encerrado" }), k("certo", { status: "rascunho" })];
+    expect(contratosVinculaveis(lista, { imovel_id: "i1" }).map((c) => c.id)).toEqual(["certo"]);
+    expect(contratosVinculaveis(lista, { imovel_id: null }).map((c) => c.id)).toEqual(["outro_imovel", "certo"]);
+  });
+
+  it("pode virar contrato: aprovada, sem contrato, sem desistência e no prazo", () => {
+    const a = { decisao: "aprovado", status: "aprovada", contrato_id: null, validade_ate: "2026-11-30" };
+    expect(podeVirarContrato(a, "2026-11-30")).toBe(true);
+    expect(podeVirarContrato(a, "2026-12-01")).toBe(false); // venceu
+    expect(podeVirarContrato({ ...a, status: "desistencia" }, "2026-11-10")).toBe(false);
+    expect(podeVirarContrato({ ...a, contrato_id: "c1", status: "contratada" }, "2026-11-10")).toBe(false);
+    expect(podeVirarContrato({ ...a, decisao: "reprovado", status: "reprovada" }, "2026-11-10")).toBe(false);
+    expect(podeVirarContrato({ ...a, decisao: "aprovado_condicoes", status: "aprovada_condicoes", validade_ate: null }, "2026-11-10")).toBe(true);
   });
 });

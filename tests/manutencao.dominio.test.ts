@@ -9,13 +9,17 @@ import {
   parteDoProprietario,
   partesDaResponsabilidade,
   planoFinanceiro,
+  podeConfirmarServico,
+  podeDecidirChamado,
   podeIrPara,
   prazoAtendimento,
   precisaAprovacaoProprietario,
+  responsavelEfetivo,
   resumoPorImovel,
   resumoPrestadores,
   situacaoGarantia,
   situacaoPrazo,
+  statusAoEscolherOrcamento,
   sugerirResponsabilidade,
   textoPrazo,
 } from "@/lib/dominio/manutencao";
@@ -207,5 +211,44 @@ describe("avaliação e histórico", () => {
     expect(m).toContain("chamado #7");
     expect(m).toContain("valor, prazo e garantia");
     expect(m).not.toContain("Detalhes");
+  });
+});
+
+describe("correções da 2ª revisão", () => {
+  it("quem decide é lista fechada (papel novo ou vazio não decide)", () => {
+    expect(["admin", "gestor", "financeiro"].map(podeDecidirChamado)).toEqual([true, true, true]);
+    expect(podeDecidirChamado("corretor")).toBe(false);
+    expect(podeDecidirChamado("estagiario")).toBe(false);
+    expect(podeDecidirChamado(null)).toBe(false);
+  });
+
+  it("“A definir” conta como a sugestão da categoria também para a aprovação do proprietário", () => {
+    expect(responsavelEfetivo(null, "telhado")).toBe("proprietario");
+    expect(responsavelEfetivo("", "chaveiro")).toBe("locatario");
+    expect(responsavelEfetivo("imobiliaria", "telhado")).toBe("imobiliaria");
+    // Telhado aguardando o proprietário e alguém troca para "A definir": a parte dele continua 100% → nada de liberar sem ele.
+    const depois = parteDoProprietario(responsavelEfetivo(null, "telhado"), "imobiliaria");
+    expect(efeitoNaAprovacao({ modo: "imobiliaria", status: "aguardando_aprovacao", aprovacaoStatus: "pendente", parteAntes: 100, parteDepois: depois })).toBe("manter");
+  });
+
+  it("escolher outro orçamento num pedido de novo guarda a etapa de antes", () => {
+    expect(statusAoEscolherOrcamento({ precisa: true, status: "em_analise", statusAntes: null })).toEqual({ status: "aguardando_aprovacao", status_antes_aprovacao: null });
+    expect(statusAoEscolherOrcamento({ precisa: false, status: "em_analise", statusAntes: null })).toEqual({ status: "aprovado", status_antes_aprovacao: null });
+    expect(statusAoEscolherOrcamento({ precisa: true, status: "aguardando_aprovacao", statusAntes: "agendado" })).toEqual({ status: "aguardando_aprovacao", status_antes_aprovacao: "agendado" });
+    expect(statusAoEscolherOrcamento({ precisa: false, status: "aguardando_aprovacao", statusAntes: "em_execucao" })).toEqual({ status: "em_execucao", status_antes_aprovacao: null });
+  });
+
+  it("locatário só confirma o serviço depois do horário marcado", () => {
+    const agora = "2026-11-05T15:00:00.000Z";
+    expect(podeConfirmarServico({ status: "agendado", agendado_para: "2026-11-10T12:00:00.000Z" }, agora)).toBe(false);
+    expect(podeConfirmarServico({ status: "agendado", agendado_para: "2026-11-05T12:00:00.000Z" }, agora)).toBe(true);
+    expect(podeConfirmarServico({ status: "agendado", agendado_para: null }, agora)).toBe(false);
+    expect(podeConfirmarServico({ status: "em_execucao", agendado_para: null }, agora)).toBe(true);
+    expect(podeConfirmarServico({ status: "aprovado", agendado_para: null }, agora)).toBe(false);
+  });
+
+  it("histórico por imóvel usa o dia de Brasília (aberto às 22h não vira o dia seguinte)", () => {
+    const im = resumoPorImovel([{ imovel_id: "i", status: "aberto", valor_final: null, concluido_em: null, garantia_ate: null, created_at: "2026-11-06T01:30:00.000Z" }], "2026-11-05");
+    expect(im.get("i")?.ultimo).toBe("2026-11-05");
   });
 });

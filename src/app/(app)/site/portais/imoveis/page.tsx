@@ -107,7 +107,8 @@ export default async function PublicacaoPortaisPage({ searchParams }: PageProps<
                       const c = ctl.get(`${i.id}|${p.portal}`);
                       const modo = c?.publicado == null ? "auto" : !c.publicado ? "nao" : (c.destaque as Destaque);
                       const automatico = p.publicar_todos && i.publicar_site;
-                      const st = c?.ultimo_status ? STATUS[c.ultimo_status] : null;
+                      // Sem status mas conferido: passou na conferência e espera a próxima busca do portal.
+                      const st = c?.ultimo_status ? STATUS[c.ultimo_status] : c?.verificado_em ? { cor: "cinza" as const, rotulo: "PRONTO · AGUARDANDO O PORTAL" } : null;
                       return (
                         <div key={p.portal} className="space-y-1.5 px-[18px] py-3">
                           <div className="flex gap-1.5">

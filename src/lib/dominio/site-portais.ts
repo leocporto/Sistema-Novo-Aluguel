@@ -21,7 +21,7 @@ export const LISTA_PORTAIS = Object.keys(PORTAIS) as Portal[];
 /**
  * Nome do portal na aba Histórico do imóvel (imovel_anuncios.portal), igual à
  * lista de portais do "Registrar anúncio". O feed abre/encerra esses anúncios
- * (função portal_registrar no banco usa os mesmos nomes).
+ * (privado.portal_nome_anuncio no banco usa os mesmos nomes).
  */
 export const NOME_ANUNCIO: Record<Portal, string> = { zap: "ZAP Imóveis", vivareal: "VivaReal", olx: "OLX" };
 export const ehPortal = (p: string): p is Portal => p in PORTAIS;
@@ -152,6 +152,8 @@ const soDigitos = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "")
 /**
  * Confere o que cada portal exige. `problemas` impedem o envio (o imóvel fica
  * de fora e aparece em "Falhas de sincronização"); `avisos` não impedem.
+ * Os `problemas` são os MESMOS (conta e texto) de privado.portal_problemas no
+ * banco, que registra o envio — mude os dois juntos (tests/site.sql.test.ts compara).
  */
 export function validarParaPortal(i: ImovelPortal, portal: Portal): { problemas: string[]; avisos: string[] } {
   const problemas: string[] = [];
@@ -198,7 +200,10 @@ export function selecionarParaFeed(lista: ImovelPortal[], portal: Portal, limite
     else validos.push(i);
     for (const a of v.avisos) avisos.push({ codigo: i.codigo, aviso: a });
   }
-  validos.sort((a, b) => PESO_DESTAQUE[b.destaque] - PESO_DESTAQUE[a.destaque] || b.criado_em.localeCompare(a.criado_em));
+  // Mesma ordem do banco (portal_sincronizar): destaque, mais recente; o empate fica na
+  // ordem em que o feed trouxe (o banco desempata pelo id). Comparação simples de texto
+  // (localeCompare ordena "." e "+" diferente do banco).
+  validos.sort((a, b) => PESO_DESTAQUE[b.destaque] - PESO_DESTAQUE[a.destaque] || (b.criado_em > a.criado_em ? 1 : b.criado_em < a.criado_em ? -1 : 0));
   const max = limites.anuncios ?? null;
   const enviar = max === null ? validos : validos.slice(0, max);
   const foraDoLimite = max === null ? [] : validos.slice(max);
@@ -391,7 +396,16 @@ export function gerarFeed(portal: Portal, lista: ImovelPortal[], cab: CabecalhoF
 
 // Leads dos portais ---------------------------------------------------------------
 
-export type LeadPortal = { nome: string; telefone: string; email: string; mensagem: string; imovel: string | null; funil: "locacao" | "venda" | null };
+export type LeadPortal = {
+  nome: string;
+  telefone: string;
+  email: string;
+  mensagem: string;
+  imovel: string | null;
+  funil: "locacao" | "venda" | null;
+  /** Número do lead no portal (originLeadId): o mesmo lead reenviado não repete. */
+  id_externo: string | null;
+};
 
 /**
  * Lê o lead que o portal envia (JSON). Aceita o formato do Grupo OLX (leadOrigin,
@@ -424,5 +438,5 @@ export function lerLeadPortal(corpo: unknown, portal: Portal): LeadPortal | { er
     .slice(0, 2000);
   if (!nome) return { erro: "Lead sem nome." };
   if (!telefone && !email) return { erro: "Lead sem telefone e sem e-mail." };
-  return { nome, telefone, email, mensagem, imovel, funil };
+  return { nome, telefone, email, mensagem, imovel, funil, id_externo: idLead.slice(0, 80) || null };
 }

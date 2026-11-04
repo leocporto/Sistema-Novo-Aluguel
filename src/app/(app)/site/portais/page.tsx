@@ -67,10 +67,13 @@ export default async function PortaisPage() {
     todas<{ portal: string; ultimo_status: string | null }>(() => supabase.from("portal_imoveis").select("portal, ultimo_status").order("id")),
   ]);
   const porPortal = new Map(portais.map((p) => [p.portal, p]));
-  const ultimo = (p: Portal) => ((envios ?? []) as Envio[]).find((e) => e.portal === p);
+  // Busca do portal e conferência no sistema são coisas diferentes: só a busca é envio.
+  const ultimo = (p: Portal) => ((envios ?? []) as Envio[]).find((e) => e.portal === p && e.origem !== "manual");
+  const conferido = (p: Portal) => ((envios ?? []) as Envio[]).find((e) => e.portal === p && e.origem === "manual");
   const nLeads = (p: Portal) => leads.filter((l) => l.origem === p).length;
   const nStatus = (p: Portal, s: string) => controles.filter((c) => c.portal === p && c.ultimo_status === s).length;
   const token = config?.portais_token;
+  const tokenLeads = config?.leads_portais_token ?? token;
 
   return (
     <>
@@ -94,8 +97,9 @@ export default async function PortaisPage() {
             {LISTA_PORTAIS.map((p) => {
               const cfg = porPortal.get(p);
               const feed = `${origem}/api/portais/${token}/${p}.xml`;
-              const webhook = `${origem}/api/portais/${token}/${p}/leads`;
+              const webhook = `${origem}/api/portais/${tokenLeads}/${p}/leads`;
               const u = ultimo(p);
+              const c = conferido(p);
               if (!cfg)
                 return (
                   <Cartao key={p} titulo={<span className="flex items-center gap-2">{PORTAIS[p].nome} <Selo>NÃO LIGADO</Selo></span>}>
@@ -115,7 +119,14 @@ export default async function PortaisPage() {
                       {PORTAIS[p].nome} {cfg.ativo ? <Selo cor="verde">ENVIANDO</Selo> : <Selo cor="amarelo">PAUSADO</Selo>}
                     </span>
                   }
-                  acoes={<BotaoExcluir acao={excluirPortal} id={cfg.id} rotulo={`Desligar ${PORTAIS[p].nome}`} confirmar={`Desligar o ${PORTAIS[p].nome}? O feed fica vazio, as escolhas por imóvel deste portal são apagadas e os anúncios abertos pelo feed são encerrados hoje.`} />}
+                  acoes={
+                    <BotaoExcluir
+                      acao={excluirPortal}
+                      id={cfg.id}
+                      rotulo={`Desligar ${PORTAIS[p].nome}`}
+                      confirmar={`Desligar o ${PORTAIS[p].nome}? O endereço do feed continua respondendo, mas vazio: na próxima busca o portal tira os anúncios. As escolhas por imóvel deste portal são apagadas e os anúncios abertos pelo feed são encerrados hoje.`}
+                    />
+                  }
                 >
                   <div className="space-y-5">
                     <Formulario acao={salvarPortal} automatico semAviso className="space-y-4">
@@ -127,7 +138,8 @@ export default async function PortaisPage() {
                         <div className="mt-1 break-all rounded-[10px] border border-borda bg-elev px-3 py-2 font-mono text-[12px] text-texto">{feed}</div>
                         <div className="mt-1.5 flex flex-wrap gap-2">
                           <Copiar texto={feed} />
-                          <a href={feed} target="_blank" rel="noreferrer" className="text-xs font-semibold text-acento hover:underline">
+                          {/* Prévia: não conta como busca do portal nem abre anúncio no Histórico. */}
+                          <a href={`${feed}?previa=1`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-acento hover:underline">
                             ver o arquivo
                           </a>
                         </div>
@@ -144,13 +156,19 @@ export default async function PortaisPage() {
                     <div className="space-y-2 border-t border-borda-suave pt-4 text-sm">
                       {u ? (
                         <p className="text-texto-2">
-                          Último envio: <b className="text-texto">{dataHora(u.gerado_em)}</b> ({u.origem === "manual" ? "conferido no sistema" : "o portal buscou"}) ·{" "}
-                          <span className="text-ok">{u.total_enviados} enviado(s)</span>
+                          O portal buscou: <b className="text-texto">{dataHora(u.gerado_em)}</b> · <span className="text-ok">{u.total_enviados} enviado(s)</span>
                           {u.total_falhas ? <span className="text-ruim"> · {u.total_falhas} com falha</span> : null}
                           {u.total_fora_limite ? <span className="text-alerta"> · {u.total_fora_limite} fora do limite</span> : null}
                         </p>
                       ) : (
-                        <p className="text-texto-2">O portal ainda não buscou o feed.</p>
+                        <p className="text-texto-2">O portal ainda não buscou o feed (cole o endereço acima no painel do portal).</p>
+                      )}
+                      {c && (!u || c.gerado_em > u.gerado_em) && (
+                        <p className="text-xs text-mudo">
+                          Conferido no sistema em {dataHora(c.gerado_em)}: {c.total_enviados} pronto(s) para ir
+                          {c.total_falhas ? `, ${c.total_falhas} com falha` : ""}
+                          {c.total_fora_limite ? `, ${c.total_fora_limite} fora do limite` : ""}. Vão de fato na próxima busca do portal.
+                        </p>
                       )}
                       <p className="text-texto-2">
                         Leads nos últimos 30 dias: <b className="text-texto">{nLeads(p)}</b>

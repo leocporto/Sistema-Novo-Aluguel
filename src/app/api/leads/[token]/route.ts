@@ -29,7 +29,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/leads/[token]">
   const p = Object.fromEntries(
     ["nome", "telefone", "email", "mensagem", "origem", "funil", "imovel", ...CAMPOS_UTM].map((k) => [k, corpo[k] == null ? undefined : String(corpo[k]).slice(0, 2000)]),
   );
-  const { data, error } = await clienteAnonimo().rpc("receber_lead_marketing", { p_token: token, p });
+  const { error } = await clienteAnonimo().rpc("receber_lead_marketing", { p_token: token, p });
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 400, headers: CORS });
-  return Response.json({ ok: true, ...(data as object) }, { headers: CORS });
+  // Mesma resposta para contato novo ou repetido: não revela quem já é cliente/captação (nem o id).
+  return Response.json({ ok: true }, { headers: CORS });
 }

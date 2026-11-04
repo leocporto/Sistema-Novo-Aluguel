@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { diaLocal, horaLocal } from "@/lib/dominio/agenda";
-import { formatarDataBR } from "@/lib/dominio/datas";
-import { ROTULO_CATEGORIA_CURTO, ROTULO_STATUS_CHAMADO } from "@/lib/dominio/manutencao";
+import { agoraMs, formatarDataBR } from "@/lib/dominio/datas";
+import { ROTULO_CATEGORIA_CURTO, ROTULO_STATUS_CHAMADO, podeConfirmarServico } from "@/lib/dominio/manutencao";
 import { clienteAnonimo } from "@/lib/supabase/anonimo";
 import { ConfirmarServico, FormChamado } from "./form";
 
@@ -30,6 +30,7 @@ export default async function ChamadoPublico({ params }: PageProps<"/chamado/[to
   const valido = /^[0-9a-f-]{36}$/i.test(token);
   const { data } = valido ? await clienteAnonimo().rpc("info_chamado_link", { p_token: token }) : { data: null };
   const info = data as Info | null;
+  const agora = new Date(agoraMs()).toISOString();
 
   return (
     <main className="min-h-screen bg-app px-4 py-8">
@@ -77,7 +78,7 @@ export default async function ChamadoPublico({ params }: PageProps<"/chamado/[to
                         </div>
                         <span className={`rounded-full border px-2.5 py-1 font-mono text-[10.5px] font-bold ${COR[c.status] ?? "border-acento-bd bg-acento-bg text-acento-hot"}`}>{ROTULO_STATUS_CHAMADO[c.status] ?? c.status}</span>
                       </div>
-                      {["agendado", "em_execucao", "concluido", "avaliado"].includes(c.status) && (
+                      {podeConfirmarServico(c, agora) && (
                         <div className="mt-2">{c.confirmado ? <p className="text-xs text-ok">Você confirmou que o serviço foi feito.</p> : <ConfirmarServico token={token} chamado={c.id} />}</div>
                       )}
                     </li>

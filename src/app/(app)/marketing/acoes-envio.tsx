@@ -18,6 +18,8 @@ export type EnvioTela = {
   mensagem: string;
   status: string;
   nome: string | null;
+  /** Calculado no servidor (podeVoltarParaFila): enviado só nos primeiros minutos. */
+  podeVoltar: boolean;
 };
 
 /**
@@ -77,12 +79,18 @@ export function AcoesEnvio({ envio }: { envio: EnvioTela }) {
           <Check className="size-3.5" /> Marcar enviado
         </button>
       )}
-      {(envio.status === "enviado" || envio.status === "cancelado" || envio.status === "bloqueado") && (
+      {envio.podeVoltar && (
         <button
           type="button"
           disabled={rodando}
           className={classeBotao("fantasma", "sm")}
-          title={envio.status === "bloqueado" ? "Só volta se o bloqueio já foi retirado (o banco confere)" : undefined}
+          title={
+            envio.status === "bloqueado"
+              ? "Só volta se o bloqueio já foi retirado (o banco confere)"
+              : envio.status === "enviado"
+                ? "Desfaz o envio (só nos primeiros minutos): sai do histórico do contato"
+                : undefined
+          }
           onClick={() => rodar(voltarParaFila)}
         >
           <RotateCcw className="size-3.5" /> Voltar para a fila

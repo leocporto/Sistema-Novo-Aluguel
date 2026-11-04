@@ -47,7 +47,7 @@ const FILTROS: Record<string, string> = {
 type Linha = Analise & {
   analise_rendas: { valor_comprovado: number | null; fiador_id: string | null }[];
   analise_documentos: { status: string; obrigatorio: boolean }[];
-  analise_garantias: { status: string }[];
+  analise_garantias: { status: string; tipo: string }[];
   analise_fiadores: { id: string; status: string }[];
   analise_consultas: { consultado_em: string; created_at: string; score: number | null; restricoes: boolean; fiador_id: string | null }[];
 };
@@ -64,7 +64,7 @@ export default async function AnalisePage({ searchParams }: PageProps<"/analise"
   let q = supabase
     .from("analises")
     .select(
-      "*, candidato:pessoas!analises_candidato_id_fkey(id, nome, tipo_pessoa, documento, telefone), imovel:imoveis(id, codigo, logradouro, numero), analise_rendas(valor_comprovado, fiador_id), analise_documentos(status, obrigatorio), analise_garantias(status), analise_fiadores(id, status), analise_consultas(consultado_em, created_at, score, restricoes, fiador_id)",
+      "*, candidato:pessoas!analises_candidato_id_fkey(id, nome, tipo_pessoa, documento, telefone), imovel:imoveis(id, codigo, logradouro, numero), analise_rendas(valor_comprovado, fiador_id), analise_documentos(status, obrigatorio), analise_garantias(status, tipo), analise_fiadores(id, status), analise_consultas(consultado_em, created_at, score, restricoes, fiador_id)",
     )
     .order("created_at", { ascending: false })
     .limit(500);
@@ -151,7 +151,8 @@ export default async function AnalisePage({ searchParams }: PageProps<"/analise"
           const pct = comprometimentoPct(a.valor_aluguel, a.valor_encargos, renda);
           const sem = semaforoComprometimento(pct, cfg);
           const docs = progressoDocumentos(a.analise_documentos);
-          const aprovada = a.analise_garantias.find((g) => (GARANTIA_APROVADA as readonly string[]).includes(g.status));
+          // Fiança conta pelo fiador aprovado (igual à regra do banco).
+          const aprovada = a.analise_garantias.find((g) => g.tipo !== "fiador" && (GARANTIA_APROVADA as readonly string[]).includes(g.status));
           const garantia = aprovada ?? a.analise_garantias.find((g) => g.status !== "cancelada" && g.status !== "recusada") ?? a.analise_garantias[0];
           const fiadorOk = a.analise_fiadores.some((f) => f.status === "aprovado");
           const doc = situacaoDocumento(a.candidato?.documento);

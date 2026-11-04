@@ -18,34 +18,54 @@ export async function urlBase(): Promise<string> {
 export type Config = {
   id: string;
   organizacao_id: string;
-  webhook_token: string;
+  /** Tokens e chaves: só chegam para administrador/gestor (null para o resto da equipe). */
+  webhook_token: string | null;
   whatsapp_numero: string | null;
   whatsapp_phone_number_id: string | null;
   whatsapp_waba_id: string | null;
-  whatsapp_verify_token: string;
+  whatsapp_verify_token: string | null;
   whatsapp_cria_lead: boolean;
+  /** O segredo do app do WhatsApp está cadastrado (o valor nunca sai do banco). */
+  whatsapp_assinatura: boolean;
   meta_pixel_id: string | null;
-  meta_verify_token: string;
+  meta_verify_token: string | null;
   google_tag_id: string | null;
   google_conversao_label: string | null;
-  google_lead_key: string;
+  google_lead_key: string | null;
   email_remetente: string | null;
   assinatura: string | null;
   pesquisa_pergunta: string | null;
   automacoes_em: string | null;
 };
 
-/** Configuração de marketing da imobiliária (criada na primeira vez). */
+/** A função (RPC) ainda não existe no banco — migração não aplicada. */
+export const funcaoAusente = (e: { code?: string; message?: string } | null | undefined) =>
+  !!e && (e.code === "PGRST202" || /could not find the function/i.test(e.message ?? ""));
+
+/**
+ * Configuração de marketing da imobiliária (criada na primeira vez). Vem do
+ * banco por mkt_config_ler(): a tabela só abre para admin/gestor, e os tokens
+ * dos webhooks só chegam para eles.
+ */
 export async function obterConfig(supabase: Supabase): Promise<Config> {
-  const { data } = await supabase.from("mkt_config").select("*").maybeSingle();
-  if (data) return data as Config;
-  const { data: nova, error } = await supabase.from("mkt_config").insert({}).select("*").single();
+  const { data, error } = await supabase.rpc("mkt_config_ler");
+  let c = data as Partial<Config> | null;
   if (error) {
-    // Outra aba criou ao mesmo tempo.
-    const { data: de_novo } = await supabase.from("mkt_config").select("*").single();
-    return de_novo as Config;
+    // Banco ainda sem a migração 20261107000005 (código publicado antes): lê a tabela como antes.
+    if (!funcaoAusente(error)) throw error;
+    const { data: antiga } = await supabase.from("mkt_config").select("*").maybeSingle();
+    c = (antiga ?? (await supabase.from("mkt_config").insert({}).select("*").single()).data) as Partial<Config> | null;
+    if (!c) throw error;
   }
-  return nova as Config;
+  if (!c) throw new Error("Configuração de marketing não encontrada.");
+  return {
+    ...(c as Config),
+    webhook_token: c.webhook_token ?? null,
+    whatsapp_verify_token: c.whatsapp_verify_token ?? null,
+    meta_verify_token: c.meta_verify_token ?? null,
+    google_lead_key: c.google_lead_key ?? null,
+    whatsapp_assinatura: Boolean(c.whatsapp_assinatura),
+  };
 }
 
 export type Membro = { user_id: string; nome: string };

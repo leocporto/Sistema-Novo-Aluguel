@@ -8,9 +8,10 @@ import { Formulario } from "@/components/formulario";
 import { JanelaCadastro } from "@/components/janela-cadastro";
 import { AreaTexto, Aviso, Campo, Cartao, Celula, Definicao, Entrada, LinhaVazia, Selecao, Selo, Tabela, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
+import { diaLocal } from "@/lib/dominio/agenda";
 import { formatarDataBR } from "@/lib/dominio/datas";
 import { formatarReais, paraCentavos, paraReais, percentual } from "@/lib/dominio/dinheiro";
-import { compararOrcamentos, mensagemAprovacao, mensagemPedidoOrcamento, rotuloResponsavel } from "@/lib/dominio/manutencao";
+import { compararOrcamentos, mensagemAprovacao, mensagemPedidoOrcamento, podeDecidirChamado, rotuloResponsavel } from "@/lib/dominio/manutencao";
 import { linkWhatsapp } from "@/lib/whatsapp";
 import { atualizarOrcamento, escolherOrcamento, excluirOrcamento, registrarAprovacao, salvarNovoOrcamento } from "../../actions";
 import { OpcoesPrestador } from "../../campos";
@@ -63,8 +64,8 @@ export default async function OrcamentosChamado({ params }: PageProps<"/manutenc
   const { id } = await params;
   const { supabase, organizacao, papel } = await obterContexto();
   const pessoal = organizacao.modo === "pessoal";
-  // Escolher o orçamento e registrar a resposta do proprietário são decisões (corretor não faz).
-  const decide = papel !== "corretor";
+  // Escolher o orçamento, excluir e mandar/registrar a aprovação do proprietário são decisões (corretor não faz).
+  const decide = podeDecidirChamado(papel);
   const c = await carregarChamado(supabase, id);
   if (!c) notFound();
   const [{ data }, lista, donos, base] = await Promise.all([
@@ -157,14 +158,14 @@ export default async function OrcamentosChamado({ params }: PageProps<"/manutenc
                         variante="primario"
                         confirmar={
                           o.id === c.orcamento_id && recusadoPeloDono
-                            ? `Escolher de novo o orçamento de ${nome} (${formatarReais(o.valor)})? O proprietário recebe outra vez o pedido de aprovação (use o mesmo link).`
+                            ? `Escolher de novo o orçamento de ${nome} (${formatarReais(o.valor)})? O proprietário recebe outra vez o pedido de aprovação, com um link novo (o antigo deixa de valer).`
                             : `Escolher o orçamento de ${nome} (${formatarReais(o.valor)})?${pessoal ? " O serviço fica aprovado." : " Se o proprietário paga alguma parte, o chamado vai esperar a aprovação dele."}`
                         }
                       >
                         <CheckCircle2 className="size-3.5" /> {o.id === c.orcamento_id && recusadoPeloDono ? "Pedir aprovação de novo" : "Escolher"}
                       </BotaoAcao>
                     )}
-                    <BotaoExcluir acao={excluirOrcamento} id={o.id} rotulo="Excluir orçamento" confirmar={`Excluir o orçamento de ${nome}?`} />
+                    {decide && <BotaoExcluir acao={excluirOrcamento} id={o.id} rotulo="Excluir orçamento" confirmar={`Excluir o orçamento de ${nome}?`} />}
                   </div>
                 </Celula>
               </tr>
@@ -217,7 +218,7 @@ export default async function OrcamentosChamado({ params }: PageProps<"/manutenc
                 itens={[
                   ["Orçamento escolhido", c.valor_aprovado != null ? formatarReais(c.valor_aprovado) : "—"],
                   ["Parte do proprietário", `${formatarReais(parteDono)} (${String(Number(c.pct_proprietario)).replace(".", ",")}%)`],
-                  ["Resposta", c.aprovacao_em ? `${c.aprovacao_nome ?? "—"} em ${formatarDataBR(c.aprovacao_em.slice(0, 10))}${c.aprovacao_canal === "link" ? " (pelo link)" : " (registro manual)"}` : "—"],
+                  ["Resposta", c.aprovacao_em ? `${c.aprovacao_nome ?? "—"} em ${formatarDataBR(diaLocal(c.aprovacao_em))}${c.aprovacao_canal === "link" ? " (pelo link)" : " (registro manual)"}` : "—"],
                   ["Observação", c.aprovacao_obs ?? "—"],
                   ...(c.status === "aguardando_aprovacao" && c.status_antes_aprovacao
                     ? ([["Pedido de novo", "A parte do proprietário aumentou depois do serviço aprovado. Quando ele aprovar, o chamado volta para onde estava."]] as [string, string][])
@@ -227,7 +228,10 @@ export default async function OrcamentosChamado({ params }: PageProps<"/manutenc
                     : []),
                 ]}
               />
-              {c.status === "aguardando_aprovacao" && (
+              {c.status === "aguardando_aprovacao" && !decide && (
+                <p className="text-sm text-mudo">Quem manda o link e registra a resposta do proprietário é um administrador, gestor ou o financeiro.</p>
+              )}
+              {c.status === "aguardando_aprovacao" && decide && (
                 <>
                   <div className="rounded-[14px] border border-borda-suave bg-elev p-3">
                     <div className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-mudo">Link para o proprietário aprovar</div>

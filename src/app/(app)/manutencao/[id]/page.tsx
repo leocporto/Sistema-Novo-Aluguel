@@ -5,12 +5,14 @@ import { Check, Circle } from "lucide-react";
 import { Formulario } from "@/components/formulario";
 import { AreaTexto, Aviso, Campo, Cartao, Definicao, Entrada, Selecao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
+import { diaLocal } from "@/lib/dominio/agenda";
 import { agoraMs, formatarDataBR } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import {
   ETAPAS_CHAMADO,
   ROTULO_STATUS_CHAMADO,
   planoFinanceiro,
+  podeDecidirChamado,
   responsaveisDoModo,
   rotuloResponsavel,
   situacaoPrazo,
@@ -49,7 +51,7 @@ export default async function ChamadoResumo({ params }: PageProps<"/manutencao/[
       plano = planoFinanceiro({
         modo,
         valor: Number(valorRef),
-        responsabilidade: c.responsabilidade ?? sugestao.responsavel,
+        responsabilidade: c.responsabilidade || sugestao.responsavel,
         partes: { locatario: Number(c.pct_locatario), proprietario: Number(c.pct_proprietario), imobiliaria: Number(c.pct_imobiliaria) },
         pagoDireto: c.pago_direto,
         titulo: c.titulo,
@@ -64,7 +66,10 @@ export default async function ChamadoResumo({ params }: PageProps<"/manutencao/[
   const prazo = situacaoPrazo(c, new Date(agoraMs()).toISOString());
   const concluido = ["concluido", "avaliado"].includes(c.status);
   // Quem paga é decisão de admin, gestor ou financeiro (corretor só vê).
-  const travado = concluido || papel === "corretor";
+  const decide = podeDecidirChamado(papel);
+  const travado = concluido || !decide;
+  // Depois do orçamento escolhido, quem paga não volta para "A definir".
+  const podeADefinir = !c.orcamento_id || !c.responsabilidade;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
@@ -132,7 +137,7 @@ export default async function ChamadoResumo({ params }: PageProps<"/manutencao/[
             <div className="grid gap-4 sm:grid-cols-2">
               <Campo rotulo="Responsável pela conta">
                 <Selecao name="responsabilidade" defaultValue={c.responsabilidade ?? ""} disabled={travado}>
-                  <option value="">A definir (usa a sugestão)</option>
+                  {podeADefinir && <option value="">A definir (usa a sugestão)</option>}
                   {responsaveisDoModo(modo).map((r) => (
                     <option key={r} value={r}>
                       {rotuloResponsavel(r, modo)}
@@ -165,7 +170,7 @@ export default async function ChamadoResumo({ params }: PageProps<"/manutencao/[
             </fieldset>
           </Formulario>
           {concluido && <p className="mt-3 text-xs text-mudo">Já lançado no financeiro. Para mudar quem paga, desfaça a conclusão (aba Agenda e conclusão).</p>}
-          {!concluido && papel === "corretor" && <p className="mt-3 text-xs text-mudo">Quem define quem paga é um administrador, gestor ou o financeiro.</p>}
+          {!concluido && !decide && <p className="mt-3 text-xs text-mudo">Quem define quem paga é um administrador, gestor ou o financeiro.</p>}
           {!pessoal && !concluido && ["aprovado", "agendado", "em_execucao", "aguardando_aprovacao"].includes(c.status) && (
             <p className="mt-3 text-xs text-mudo">Se a parte do proprietário aumentar, o serviço volta a esperar a aprovação dele; se zerar enquanto ele não respondeu, segue sem ele.</p>
           )}
@@ -227,9 +232,9 @@ export default async function ChamadoResumo({ params }: PageProps<"/manutencao/[
           <dl className="grid grid-cols-1 gap-y-3 text-sm">
             {(
               [
-                ["Aberto em", `${formatarDataBR(c.created_at.slice(0, 10))}${c.origem === "link" ? " · pelo link do locatário" : ""}`],
+                ["Aberto em", `${formatarDataBR(diaLocal(c.created_at))}${c.origem === "link" ? " · pelo link do locatário" : ""}`],
                 ["Quem pediu", [ABERTO_POR[c.aberto_por], c.solicitante_nome ?? c.solicitante?.nome].filter(Boolean).join(" · ")],
-                ["Prazo para atender", prazo.situacao === "atendido" ? "atendido" : `${formatarDataBR(c.prazo_atendimento?.slice(0, 10))} (${textoPrazo(prazo.horas)})`],
+                ["Prazo para atender", prazo.situacao === "atendido" ? "atendido" : `${formatarDataBR(c.prazo_atendimento ? diaLocal(c.prazo_atendimento) : null)} (${textoPrazo(prazo.horas)})`],
                 ["Prestador", c.prestador ? <Link key="p" href={`/pessoas/${c.prestador.id}`} className="text-acento hover:underline">{c.prestador.nome}</Link> : "—"],
                 [
                   !pessoal && c.aprovacao_status === "recusado" && ["aberto", "em_analise"].includes(c.status) ? "Valor orçado (recusado pelo proprietário)" : "Valor aprovado",
@@ -258,7 +263,7 @@ export default async function ChamadoResumo({ params }: PageProps<"/manutencao/[
         </Cartao>
         {c.locatario_confirmou_em && (
           <Cartao titulo="Locatário confirmou o serviço">
-            <Definicao itens={[["Em", formatarDataBR(c.locatario_confirmou_em.slice(0, 10))], ["Comentário", c.locatario_comentario ?? "—"]]} />
+            <Definicao itens={[["Em", formatarDataBR(diaLocal(c.locatario_confirmou_em))], ["Comentário", c.locatario_comentario ?? "—"]]} />
           </Cartao>
         )}
       </div>

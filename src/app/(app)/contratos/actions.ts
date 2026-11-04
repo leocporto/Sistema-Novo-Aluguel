@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { obterContexto } from "@/lib/contexto";
 import { paraReais } from "@/lib/dominio/dinheiro";
-import { inicioDoMes, somarDias, somarMeses } from "@/lib/dominio/datas";
+import { podeVirarContrato } from "@/lib/dominio/analise";
+import { hojeISO, inicioDoMes, somarDias, somarMeses } from "@/lib/dominio/datas";
 import {
   type EstadoAcao,
   booleano,
@@ -36,6 +37,28 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
     if (!valor || valor <= 0) throw new ErroValidacao("Informe o valor do aluguel.");
     const dia = inteiro(fd, "dia_vencimento") ?? 10;
     if (dia < 1 || dia > 31) throw new ErroValidacao("Dia de vencimento deve estar entre 1 e 31.");
+
+    // Veio da análise cadastral: confere antes de gravar qualquer coisa (o banco confere de novo na RPC).
+    const analiseId = texto(fd, "analise_id");
+    if (analiseId) {
+      const { data: an } = await supabase
+        .from("analises")
+        .select("decisao, status, contrato_id, candidato_id, imovel_id, validade_ate")
+        .eq("id", analiseId)
+        .maybeSingle();
+      if (!an) throw new ErroValidacao("Análise cadastral não encontrada.");
+      if (an.contrato_id) throw new ErroValidacao("Esta análise cadastral já está ligada a um contrato.");
+      if (!podeVirarContrato(an, hojeISO()))
+        throw new ErroValidacao(
+          an.status === "desistencia"
+            ? "O candidato desistiu: retome a análise antes de criar o contrato."
+            : an.decisao === "aprovado" || an.decisao === "aprovado_condicoes"
+              ? "A aprovação da análise venceu. Reabra a análise e decida de novo antes de criar o contrato."
+              : "Só um candidato aprovado na análise cadastral pode virar contrato.",
+        );
+      if (an.candidato_id !== locatarioId) throw new ErroValidacao("O locatário precisa ser o candidato aprovado na análise cadastral.");
+      if (an.imovel_id && an.imovel_id !== imovelId) throw new ErroValidacao("A aprovação da análise vale só para o imóvel analisado.");
+    }
 
     const { data: props } = await supabase
       .from("imovel_proprietarios")
@@ -139,18 +162,18 @@ export async function criarContrato(_: EstadoAcao, fd: FormData): Promise<Estado
           observacoes: texto(fd, "garantia_detalhes"),
         });
       }
+      // Veio da análise cadastral aprovada: liga a análise e leva garantias e fiadores aprovados.
+      // Antes de marcar o imóvel como alugado: se falhar, o contrato sai e nada fica pela metade.
+      if (analiseId) {
+        const r3 = await supabase.rpc("levar_garantias_contrato", { p_analise: analiseId, p_contrato: id });
+        if (r3.error) throw r3.error;
+      }
       if (!booleano(fd, "rascunho")) await supabase.from("imoveis").update({ status: "alugado" }).eq("id", imovelId);
       for (const pid of [locatarioId, texto(fd, "fiador_id")].filter(Boolean) as string[]) {
         const { data: pes } = await supabase.from("pessoas").select("papeis").eq("id", pid).single();
         const papel = pid === locatarioId ? "locatario" : "fiador";
         if (pes && !pes.papeis.includes(papel))
           await supabase.from("pessoas").update({ papeis: [...pes.papeis, papel] }).eq("id", pid);
-      }
-      // Veio da análise cadastral aprovada: liga a análise e leva garantias e fiadores aprovados.
-      const analiseId = texto(fd, "analise_id");
-      if (analiseId) {
-        const r3 = await supabase.rpc("levar_garantias_contrato", { p_analise: analiseId, p_contrato: id });
-        if (r3.error) throw r3.error;
       }
     } catch (e) {
       await supabase.from("contratos").delete().eq("id", id);

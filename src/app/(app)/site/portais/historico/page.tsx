@@ -107,11 +107,11 @@ export default async function EnviosPortaisPage({ searchParams }: PageProps<"/si
             <Celula className="whitespace-nowrap text-xs">{dataHora(x.gerado_em)}</Celula>
             <Celula>{PORTAIS[x.portal]?.nome ?? x.portal}</Celula>
             <Celula className="text-xs text-texto-2">
-              {x.origem === "manual" ? "Conferido no sistema" : "O portal buscou"}
+              {x.origem === "manual" ? "Conferido no sistema (não é envio)" : "O portal buscou"}
               {x.agente && x.origem !== "manual" && <span className="block max-w-56 truncate text-mudo">{x.agente}</span>}
             </Celula>
             <Celula className="tabular-nums">{x.total_elegiveis}</Celula>
-            <Celula className="tabular-nums text-ok">{x.total_enviados}</Celula>
+            <Celula className={`tabular-nums ${x.origem === "manual" ? "text-mudo" : "text-ok"}`}>{x.total_enviados}</Celula>
             <Celula className={`tabular-nums ${x.total_falhas ? "text-ruim" : ""}`}>{x.total_falhas}</Celula>
             <Celula className={`tabular-nums ${x.total_fora_limite ? "text-alerta" : ""}`}>{x.total_fora_limite}</Celula>
             <Celula className="max-w-80 text-xs text-texto-2">{x.falhas.length ? x.falhas.map((y) => y.codigo).join(", ") : "—"}</Celula>

@@ -91,6 +91,14 @@ export default async function ImoveisNoSitePage({ searchParams }: PageProps<"/si
       />
       <AbasSite />
       {!config && <div className="mb-4"><Aviso tipo="alerta">O site ainda não foi criado (aba Configuração). Você já pode escolher os imóveis.</Aviso></div>}
+      {config && !config.mostrar_endereco && (
+        <div className="mb-4">
+          <Aviso>
+            O endereço exato está oculto no site. As fotos enviadas agora sobem sem a localização gravada pelo celular (GPS). Fotos enviadas antes desta
+            atualização, se tiradas com a localização ligada, ainda podem guardá-la: quando o endereço for sigiloso, apague e envie essas fotos de novo.
+          </Aviso>
+        </div>
+      )}
       <PilulasLink className="mb-4" rotulo="Filtro" ativo={url(filtro)} itens={Object.entries(FILTROS).map(([k, r]) => ({ href: url(k), rotulo: r }))} />
       <FiltroAutomatico>
         {filtro && <input type="hidden" name="filtro" value={filtro} />}

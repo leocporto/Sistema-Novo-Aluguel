@@ -13,7 +13,9 @@ export const metadata: Metadata = { title: "Integrações de marketing" };
 
 const caixaCodigo = "mt-1 overflow-x-auto whitespace-nowrap rounded-[10px] border border-borda bg-elev px-3 py-2 font-mono text-[12px] text-texto";
 
-function Codigo({ rotulo, valor, trocar, podeTrocar }: { rotulo: string; valor: string; trocar?: string; podeTrocar: boolean }) {
+function Codigo({ rotulo, valor, trocar, podeTrocar }: { rotulo: string; valor: string | null; trocar?: string; podeTrocar: boolean }) {
+  // Tokens e endereços dos webhooks só chegam (do banco) para administrador/gestor.
+  if (!valor) return null;
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
@@ -37,8 +39,8 @@ export default async function IntegracoesPage() {
   const cfg = await obterConfig(supabase);
   const base = await urlBase();
   const gestor = papel === "admin" || papel === "gestor";
-  const urlWhatsapp = `${base}/api/marketing/whatsapp/${cfg.webhook_token}`;
-  const urlLeadAds = `${base}/api/marketing/lead-ads/${cfg.webhook_token}`;
+  const urlWhatsapp = cfg.webhook_token ? `${base}/api/marketing/whatsapp/${cfg.webhook_token}` : null;
+  const urlLeadAds = cfg.webhook_token ? `${base}/api/marketing/lead-ads/${cfg.webhook_token}` : null;
   const v = (s: string | null) => s ?? "";
 
   return (
@@ -58,7 +60,7 @@ export default async function IntegracoesPage() {
       <AbasMarketing />
       {!gestor && (
         <div className="mb-4">
-          <Aviso tipo="alerta">Só administradores e gestores mudam estas configurações. Você pode consultar e copiar os endereços.</Aviso>
+          <Aviso tipo="alerta">Só administradores e gestores mudam estas configurações e veem os endereços e códigos secretos dos webhooks.</Aviso>
         </div>
       )}
       <Formulario acao={salvarConfig} automatico className="grid gap-6 xl:grid-cols-2">
@@ -82,6 +84,30 @@ export default async function IntegracoesPage() {
               </label>
               <Codigo rotulo="URL de retorno (Callback URL)" valor={urlWhatsapp} podeTrocar={false} />
               <Codigo rotulo="Token de verificação (Verify token)" valor={cfg.whatsapp_verify_token} trocar="whatsapp" podeTrocar={gestor} />
+              {gestor && (
+                <div>
+                  <Campo
+                    rotulo="Chave secreta do app (App Secret)"
+                    dica="Meta for Developers › seu app › Configurações › Básico › Chave secreta do app. Com ela, o sistema confere a assinatura de cada aviso da Meta e recusa o que não veio dela."
+                  >
+                    <Entrada
+                      name="whatsapp_app_secret"
+                      type="password"
+                      autoComplete="off"
+                      defaultValue=""
+                      placeholder={cfg.whatsapp_assinatura ? "•••••••• cadastrada (cole outra para trocar)" : "Cole aqui a chave secreta do app"}
+                    />
+                  </Campo>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                    {cfg.whatsapp_assinatura ? <Selo cor="verde">assinatura conferida</Selo> : <Selo cor="amarelo">assinatura não conferida</Selo>}
+                    {cfg.whatsapp_assinatura && (
+                      <BotaoAcao acao={trocarCodigo} id="segredo_whatsapp" tamanho="sm" variante="fantasma" confirmar="Apagar a chave secreta? Os avisos do WhatsApp passam a ser aceitos só pelo endereço secreto.">
+                        Remover chave
+                      </BotaoAcao>
+                    )}
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-mudo">
                 <b>Já funciona:</b> receber mensagens na caixa de entrada (Conversas), ligar ao lead/pessoa pelo telefone e tratar “SAIR”. Cadastre a URL e o token no app da
                 Meta (WhatsApp › Configuração › Webhooks, campo “messages”). <b>Para ligar depois:</b> enviar pela API sem abrir o WhatsApp exige o token de acesso permanente
@@ -139,14 +165,16 @@ export default async function IntegracoesPage() {
         </fieldset>
       </Formulario>
 
-      <div className="mt-6">
-        <Cartao titulo="Leads por integração (Zapier, Make, site)">
-          <p className="text-sm text-texto-2">Mande um POST em JSON para a URL de Lead Ads. O lead entra no Comercial sem repetir quem já está em atendimento.</p>
-          <div className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-[12px] border border-borda bg-elev p-3 font-mono text-[12px] text-texto">
-            {`curl -X POST ${urlLeadAds} \\\n  -H "Content-Type: application/json" \\\n  -d '{"nome":"Maria","telefone":"11999999999","email":"maria@exemplo.com","utm_source":"facebook","utm_campaign":"lancamento","funil":"venda"}'`}
-          </div>
-        </Cartao>
-      </div>
+      {urlLeadAds && (
+        <div className="mt-6">
+          <Cartao titulo="Leads por integração (Zapier, Make, site)">
+            <p className="text-sm text-texto-2">Mande um POST em JSON para a URL de Lead Ads. O lead entra no Comercial sem repetir quem já está em atendimento.</p>
+            <div className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-[12px] border border-borda bg-elev p-3 font-mono text-[12px] text-texto">
+              {`curl -X POST ${urlLeadAds} \\\n  -H "Content-Type: application/json" \\\n  -d '{"nome":"Maria","telefone":"11999999999","email":"maria@exemplo.com","utm_source":"facebook","utm_campaign":"lancamento","funil":"venda"}'`}
+            </div>
+          </Cartao>
+        </div>
+      )}
     </>
   );
 }

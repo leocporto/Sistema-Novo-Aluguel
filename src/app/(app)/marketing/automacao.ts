@@ -14,7 +14,7 @@ import {
   type Contato,
   type Gatilho,
 } from "@/lib/dominio/marketing";
-import { carregarBloqueios, carregarContatos, landingPorImovel, numerico, obterConfig, SELECT_IMOVEL_BASICO, todas, type ImovelBasico, type Supabase } from "./dados";
+import { carregarBloqueios, carregarContatos, funcaoAusente, landingPorImovel, numerico, obterConfig, SELECT_IMOVEL_BASICO, todas, type ImovelBasico, type Supabase } from "./dados";
 import { corpoPadrao, gravarFila, linhaParaContato, type NovaLinhaEnvio, type NovaPesquisa } from "./montar-fila";
 
 type Automacao = {
@@ -59,9 +59,17 @@ export async function processarAutomacoes(
   opcoes: { base: string; imobiliaria: string; forcar?: boolean },
 ): Promise<ResultadoAutomacoes> {
   const res: ResultadoAutomacoes = { envios: 0, tarefas: 0, eventos: 0 };
+  // O banco marca a hora e diz se é a vez (atômico: duas abas não rodam juntas). A tabela de
+  // configuração só é aberta para admin/gestor — por isso o relógio é por RPC.
+  const { data: vez, error: eVez } = await supabase.rpc("mkt_automacoes_vez", { p_intervalo_min: opcoes.forcar ? 0 : INTERVALO_MIN });
+  if (!eVez && !vez) return res;
+  if (eVez && !funcaoAusente(eVez)) throw eVez;
   const cfg = await obterConfig(supabase);
-  if (!opcoes.forcar && cfg.automacoes_em && Date.now() - new Date(cfg.automacoes_em).getTime() < INTERVALO_MIN * 60_000) return res;
-  await supabase.from("mkt_config").update({ automacoes_em: new Date().toISOString() }).eq("id", cfg.id);
+  if (eVez) {
+    // Banco ainda sem a migração 20261107000005: o relógio de antes.
+    if (!opcoes.forcar && cfg.automacoes_em && Date.now() - new Date(cfg.automacoes_em).getTime() < INTERVALO_MIN * 60_000) return res;
+    await supabase.from("mkt_config").update({ automacoes_em: new Date().toISOString() }).eq("id", cfg.id);
+  }
 
   const { data: autosBrutas } = await supabase
     .from("mkt_automacoes")
@@ -104,9 +112,10 @@ export async function processarAutomacoes(
     for (const ev of eventos) {
       const doTipo = autos.filter((a) => a.gatilho === ev.tipo);
       const imovel = imoveis.get(ev.imovel_id);
-      const velho = Date.now() - new Date(ev.criado_em).getTime() > VALIDADE_EVENTO_DIAS * 86_400_000;
+      // Marca na hora (senão o evento fica pendente e ocupa o lote de 200, travando os novos).
+      // Se o imóvel voltar ao mercado, o banco grava um "novo_imovel" outra vez.
       if (!imovel || imovel.status !== "disponivel") {
-        if (velho || !imovel) await marcar(ev.id, "Imóvel não está disponível");
+        await marcar(ev.id, "Imóvel não está disponível");
         continue;
       }
       const pct = ev.tipo === "reducao_preco" ? reducaoPct(ev.valor_anterior, ev.valor_novo) : 0;

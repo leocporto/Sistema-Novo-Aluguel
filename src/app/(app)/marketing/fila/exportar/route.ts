@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { paraCSV } from "@/lib/dominio/financeiro";
-import { formatarDataHora, primeiroNome, ROTULO_CANAL, ROTULO_STATUS_ENVIO, type Canal } from "@/lib/dominio/marketing";
+import { csvFilaEmail, formatarDataHora, ROTULO_CANAL, ROTULO_STATUS_ENVIO, type Canal } from "@/lib/dominio/marketing";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { todas } from "../../dados";
 
@@ -22,7 +22,8 @@ type Linha = {
  * Exporta a fila em CSV:
  * - padrão: planilha (abre no Excel) com tudo;
  * - ?formato=email: e-mail, nome, assunto e mensagem separados por vírgula,
- *   no formato que Mailchimp, Brevo e RD Station importam.
+ *   no formato que Mailchimp, Brevo e RD Station importam — só envios de e-mail
+ *   pendentes que o banco liberou na hora (mkt_conferir_envios).
  */
 export async function GET(request: NextRequest) {
   const supabase = await criarClienteServidor();
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
   const ateParam = p.get("ate");
   const ate = ateParam && !Number.isNaN(Date.parse(ateParam)) ? new Date(ateParam).toISOString() : null;
   const agora = ate ?? new Date().toISOString();
+  const paraEmail = p.get("formato") === "email";
   const linhas = await todas<Linha>(() => {
     let q = supabase.from("mkt_envios").select("id, nome, email, telefone, canal, assunto, mensagem, status, agendado_para, enviado_em, campanha:mkt_campanhas(nome)").order("id");
     if (campanha) q = q.eq("campanha_id", campanha);
@@ -47,20 +49,24 @@ export async function GET(request: NextRequest) {
     else if (situacao === "agendado") q = q.eq("status", "pendente").gt("agendado_para", agora);
     else if (situacao === "problemas") q = q.in("status", ["falhou", "cancelado"]);
     else if (["enviado", "bloqueado", "pendente"].includes(situacao)) q = q.eq("status", situacao);
-    if (canal) q = q.eq("canal", canal);
+    // CSV para ferramenta de e-mail: só envio de E-MAIL (o de WhatsApp/SMS também guarda o e-mail
+    // do contato, mas o descadastro dele foi conferido para o outro canal).
+    if (paraEmail) q = q.eq("canal", "email").eq("status", "pendente");
+    else if (canal) q = q.eq("canal", canal);
     if (ate) q = q.lte("created_at", ate);
     return q;
   });
 
-  if (p.get("formato") === "email") {
-    const cel = (v: string | null) => {
-      const s = v ?? "";
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const corpo = linhas
-      .filter((l) => l.email && l.status === "pendente")
-      .map((l) => [l.email, l.nome, primeiroNome(l.nome), l.assunto, l.mensagem].map(cel).join(","));
-    return new NextResponse(["email,nome,primeiro_nome,assunto,mensagem", ...corpo].join("\r\n") + "\r\n", {
+  if (paraEmail) {
+    // O banco confere o descadastro AGORA (pode ter mudado depois de a fila ser montada):
+    // quem passou a barrar vira "bloqueado" e fica fora do CSV.
+    const permitidos = new Set<string>();
+    for (let i = 0; i < linhas.length; i += 500) {
+      const { data, error } = await supabase.rpc("mkt_conferir_envios", { p_ids: linhas.slice(i, i + 500).map((l) => l.id) });
+      if (error) return NextResponse.json({ erro: "Não foi possível conferir os descadastros agora. Tente de novo." }, { status: 500 });
+      for (const id of (data ?? []) as string[]) permitidos.add(id);
+    }
+    return new NextResponse(csvFilaEmail(linhas, permitidos), {
       headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="fila-email.csv"` },
     });
   }

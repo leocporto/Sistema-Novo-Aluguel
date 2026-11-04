@@ -41,11 +41,12 @@ export async function POST(req: Request, ctx: RouteContext<"/api/marketing/lead-
   const rpc = (p: Record<string, unknown>) => clienteAnonimo().rpc("lead_ads_receber", { p_token: token, p });
   const bruto = corpo.length <= 20_000 ? payload : null;
 
+  // Respostas sem o id do lead e sem "duplicado": não revelam quem já é cliente da imobiliária.
   const google = lerLeadGoogle(payload);
   if (google) {
-    const { data, error } = await rpc({ ...google, bruto });
+    const { error } = await rpc({ ...google, bruto });
     if (error) return Response.json({ ok: false, erro: error.message }, { status: error.message.includes("Chave") ? 403 : 400 });
-    return Response.json({ ok: true, ...(data as object) });
+    return Response.json({ ok: true });
   }
 
   const meta = lerLeadMeta(payload);
@@ -60,7 +61,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/marketing/lead-
 
   const generico = lerLeadGenerico(payload);
   if (!generico) return Response.json({ ok: false, erro: "Informe pelo menos o nome e o telefone ou e-mail." }, { status: 400, headers: CORS });
-  const { data, error } = await rpc({ ...generico, bruto });
+  const { error } = await rpc({ ...generico, bruto });
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 400, headers: CORS });
-  return Response.json({ ok: true, ...(data as object) }, { headers: CORS });
+  return Response.json({ ok: true }, { headers: CORS });
 }

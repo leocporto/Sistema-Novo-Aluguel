@@ -87,6 +87,15 @@ export async function salvarConfig(_: EstadoAcao, fd: FormData): Promise<EstadoA
       d.google_conversao_label = v;
     }
     if (fd.has("whatsapp_cria_lead")) d.whatsapp_cria_lead = marcado(fd, "whatsapp_cria_lead");
+    // Segredo do app (Meta › Configurações do app › Básico › Chave secreta do app): campo vazio = mantém.
+    if (fd.has("whatsapp_app_secret")) {
+      const v = (texto(fd, "whatsapp_app_secret") ?? "").trim();
+      if (v) {
+        if (!/^[A-Za-z0-9_-]{16,200}$/.test(v)) throw new ErroValidacao("A chave secreta do app da Meta tem letras e números (32 caracteres, em geral).");
+        d.whatsapp_app_secret = v;
+      }
+    }
+    if (!Object.keys(d).length) return { ok: "Salvo." };
     const { error } = await supabase.from("mkt_config").update(d).eq("id", cfg.id);
     if (error) throw error;
   } catch (e) {
@@ -112,7 +121,9 @@ export async function trocarCodigo(qual: string): Promise<Resultado> {
             ? { meta_verify_token: novo }
             : qual === "google"
               ? { google_lead_key: novo }
-              : {};
+              : qual === "segredo_whatsapp"
+                ? { whatsapp_app_secret: null }
+                : {};
     if (!Object.keys(campo).length) throw new ErroValidacao("Código desconhecido.");
     const { error } = await supabase.from("mkt_config").update(campo).eq("id", cfg.id);
     if (error) throw error;
@@ -436,11 +447,22 @@ export async function marcarEmailsEnviados(ref: string): Promise<Resultado> {
   });
 }
 
+/**
+ * "Voltar para a fila": cancelado, descadastrado (se o bloqueio já saiu) ou enviado
+ * há poucos minutos (desfaz: o registro sai do histórico do CRM). O banco confere
+ * (mkt_envio_antes): campanha cancelada não volta e envio antigo não é desfeito.
+ */
 export async function voltarParaFila(id: string): Promise<Resultado> {
   return acao(async () => {
     const { supabase } = await contexto();
-    const { error } = await supabase.from("mkt_envios").update({ status: "pendente", motivo: null }).eq("id", id);
+    const { data, error } = await supabase
+      .from("mkt_envios")
+      .update({ status: "pendente", motivo: null })
+      .eq("id", id)
+      .in("status", ["enviado", "cancelado", "bloqueado"])
+      .select("id");
     if (error) throw error;
+    if (!data?.length) throw new ErroValidacao("Esta mensagem não pode voltar para a fila. Atualize a tela.");
   });
 }
 

@@ -59,7 +59,8 @@ export default async function AnaliseResumo({ params }: PageProps<"/analise/[id]
   const docs = progressoDocumentos(documentos);
   const ultima = ultimaConsulta(consultas);
   const regras = foraDaRegra(dadosDaRegra(c), cfg);
-  const garantiaOk = garantias.find((g) => (GARANTIA_APROVADA as readonly string[]).includes(g.status));
+  // Fiança conta pelo fiador aprovado (igual à regra do banco).
+  const garantiaOk = garantias.find((g) => g.tipo !== "fiador" && (GARANTIA_APROVADA as readonly string[]).includes(g.status));
   const fiadorOk = fiadores.find((f) => f.status === "aprovado");
   const decidida = a.decisao !== null;
   const doc = situacaoDocumento(a.candidato?.documento);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { diaLocal } from "@/lib/dominio/agenda";
 import { formatarDataBR } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_CATEGORIA_CURTO, ROTULO_URGENCIA } from "@/lib/dominio/manutencao";
@@ -25,6 +26,8 @@ type Info = {
   pago_direto: boolean | null;
   valor: number | null;
   parte_proprietario: number;
+  /** Retrato do que está na tela: a resposta é recusada se algo mudou depois. */
+  versao: string;
   orcamentos: { prestador: string; especialidade: string | null; valor: number; prazo_dias: number | null; garantia_dias: number | null; descricao: string | null; escolhido: boolean }[];
 };
 
@@ -94,14 +97,14 @@ export default async function AprovarOrcamento({ params }: PageProps<"/chamado/a
               {info.aprovacao_status === "pendente" && info.status === "aguardando_aprovacao" ? (
                 <>
                   <h2 className="mb-3 text-[16px] font-semibold text-texto">Sua resposta</h2>
-                  <FormAprovacao token={token} nome="" />
-                  <p className="mt-3 text-[11px] text-mudo">Registramos seu nome, a data, a hora e o IP da resposta.</p>
+                  <FormAprovacao token={token} versao={info.versao} nome="" />
+                  <p className="mt-3 text-[11px] text-mudo">Registramos o nome informado, a data e a hora da resposta.</p>
                 </>
               ) : (
                 <p className="text-[15px] text-texto-2">
                   {info.aprovacao_status === "aprovado" ? "Orçamento aprovado" : info.aprovacao_status === "recusado" ? "Orçamento recusado" : "Este orçamento não está mais aguardando resposta"}
                   {info.aprovacao_nome ? ` por ${info.aprovacao_nome}` : ""}
-                  {info.aprovacao_em ? ` em ${formatarDataBR(info.aprovacao_em.slice(0, 10))}` : ""}. Obrigado!
+                  {info.aprovacao_em ? ` em ${formatarDataBR(diaLocal(info.aprovacao_em))}` : ""}. Obrigado!
                 </p>
               )}
             </section>

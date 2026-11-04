@@ -35,13 +35,16 @@ export default async function EnviosCampanhaPage({ params, searchParams }: PageP
           <a href={`/marketing/fila/exportar?campanha=${id}`} className={classeBotao("secundario")}>
             <Download className="size-4" /> Exportar planilha
           </a>
-          <a
-            href={`/marketing/fila/exportar?${new URLSearchParams({ campanha: id, formato: "email", ate: agora })}`}
-            className={classeBotao("secundario")}
-            title="E-mail, nome, assunto e mensagem — para Mailchimp, Brevo, RD Station"
-          >
-            <Download className="size-4" /> CSV para e-mail marketing
-          </a>
+          {/* Só quando a campanha tem e-mails para enviar (campanha de WhatsApp/SMS não sai no CSV de e-mail). */}
+          {(emailsParaCsv ?? 0) > 0 && (
+            <a
+              href={`/marketing/fila/exportar?${new URLSearchParams({ campanha: id, formato: "email", ate: agora })}`}
+              className={classeBotao("secundario")}
+              title="E-mail, nome, assunto e mensagem — para Mailchimp, Brevo, RD Station"
+            >
+              <Download className="size-4" /> CSV para e-mail marketing
+            </a>
+          )}
           {(emailsParaCsv ?? 0) > 0 && (
             <BotaoAcao
               acao={marcarEmailsEnviados}

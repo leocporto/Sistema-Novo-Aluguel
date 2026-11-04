@@ -4,9 +4,9 @@
  * auditoria só leitura, LGPD nas consultas, conversão em contrato, renovação
  * de garantias, isolamento por organização e a ficha online pública (token).
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { PGlite } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
 import { comoAnonimo, comoUsuario, criarBanco } from "./pglite";
 
@@ -156,7 +156,7 @@ describe("regras e decisão", () => {
     const a = await novaAnalise({ completa: true, nome: "Fábio Score", cpf: "86288366757" });
     await comoUsuario(db, ADMIN, async () => {
       await db.query(`update analise_rendas set valor_comprovado = 5000 where analise_id = $1`, [a.id]); // 36% < 40%
-      await db.query(`insert into analise_consultas (analise_id, bureau, score, restricoes, base_legal, consultado_em) values ($1, 'spc', 650, true, 'protecao_credito', current_date)`, [a.id]);
+      await db.query(`insert into analise_consultas (analise_id, bureau, score, restricoes, base_legal, consultado_em) values ($1, 'spc', 650, true, 'protecao_credito', privado.analise_hoje())`, [a.id]); // hoje em Brasília
     });
     const regras = await comoUsuario(db, ADMIN, async () => (await um<{ r: string[] }>(`select public.analise_checar_regras($1) as r`, [a.id])).r);
     expect(regras).toEqual(["Score 650 abaixo do mínimo 700", "Restrições de crédito no nome do candidato"]);
@@ -363,12 +363,14 @@ describe("contrato e garantias", () => {
         `insert into contratos (imovel_id, data_inicio, prazo_meses, data_fim, valor_aluguel, dia_vencimento, data_base_reajuste) values ($1, '2026-12-01', 30, '2029-05-31', 1500, 10, '2026-12-01') returning id`,
         [a.imovel],
       )).id;
+      // O candidato é o locatário do contrato (a RPC confere).
+      await db.query(`insert into contrato_partes (contrato_id, pessoa_id, papel) values ($1, $2, 'locatario')`, [contrato, a.pessoa]);
       const antes = await erroDe(() => db.query(`select public.levar_garantias_contrato($1, $2)`, [a.id, contrato]));
       await db.query(`update analises set decisao = 'aprovado', decisao_justificativa = 'Tudo certo com a documentação' where id = $1`, [a.id]);
       const n = (await um<{ n: number }>(`select public.levar_garantias_contrato($1, $2) as n`, [a.id, contrato])).n;
       const de_novo = (await um<{ n: number }>(`select public.levar_garantias_contrato($1, $2) as n`, [a.id, contrato])).n;
       const gs = (await db.query<{ tipo: string; pessoa_id: string | null }>(`select tipo, pessoa_id from contrato_garantias where contrato_id = $1 order by tipo`, [contrato])).rows;
-      const partes = (await db.query<{ papel: string }>(`select papel from contrato_partes where contrato_id = $1`, [contrato])).rows;
+      const partes = (await db.query<{ papel: string }>(`select papel from contrato_partes where contrato_id = $1 order by papel`, [contrato])).rows;
       const an = await um<{ status: string; contrato_id: string }>(`select status, contrato_id from analises where id = $1`, [a.id]);
       const reabrir = await erroDe(() => db.query(`update analises set decisao = null, reaberta_motivo = 'Rever tudo de novo' where id = $1`, [a.id]));
       return { antes, n, de_novo, gs, partes, an, contrato, fiadorPessoa, reabrir };
@@ -380,7 +382,7 @@ describe("contrato e garantias", () => {
       { tipo: "fiador", pessoa_id: r.fiadorPessoa },
       { tipo: "seguro_fianca", pessoa_id: null },
     ]);
-    expect(r.partes.map((p) => p.papel)).toEqual(["fiador"]);
+    expect(r.partes.map((p) => p.papel)).toEqual(["fiador", "locatario"]);
     expect(r.an).toEqual({ status: "contratada", contrato_id: r.contrato });
     expect(r.reabrir).toContain("já virou contrato");
   });
@@ -552,6 +554,417 @@ describe("ficha online (pública, por token)", () => {
     expect(await comoAnonimo(db, () => erroDe(() => db.query(`select public.ficha_enviar($1, $2)`, [novo, JSON.stringify(dados)])))).toContain("expirado");
     // Visitante não chama as RPCs da equipe
     expect(await comoAnonimo(db, () => erroDe(() => db.query(`select public.analise_checar_regras($1)`, [a.id])))).toContain("permission denied");
+  });
+});
+
+describe("correções da revisão (migração 20261107000003)", () => {
+  /** Contrato no imóvel; com `locatario`, a pessoa entra como locatária. */
+  async function novoContrato(imovel: string, locatario: string | null, status = "ativo") {
+    return comoUsuario(db, ADMIN, async () => {
+      const id = (
+        await um<{ id: string }>(
+          `insert into contratos (imovel_id, data_inicio, prazo_meses, data_fim, valor_aluguel, dia_vencimento, data_base_reajuste, status) values ($1, '2026-12-01', 30, '2029-05-31', 1500, 10, '2026-12-01', $2) returning id`,
+          [imovel, status],
+        )
+      ).id;
+      if (locatario) await db.query(`insert into contrato_partes (contrato_id, pessoa_id, papel) values ($1, $2, 'locatario')`, [id, locatario]);
+      return id;
+    });
+  }
+  const aprovar = (id: string) =>
+    comoUsuario(db, ADMIN, () => db.query(`update analises set decisao = 'aprovado', decisao_justificativa = 'Tudo certo com a documentação' where id = $1`, [id]));
+  const levar = (u: string, analise: string, contrato: string) =>
+    comoUsuario(db, u, async () => (await um<{ n: number }>(`select public.levar_garantias_contrato($1, $2) as n`, [analise, contrato])).n);
+  /** Grava sem gatilhos (simula dado "torto" vindo de antes da correção). */
+  async function semGatilho(sql: string, params: unknown[] = []) {
+    await db.exec(`set session_replication_role = replica;`);
+    try {
+      return await db.query(sql, params);
+    } finally {
+      await db.exec(`set session_replication_role = origin;`);
+    }
+  }
+
+  it("fiança 'aprovada' não dribla a aprovação do fiador (gatilho, regra e contrato)", async () => {
+    const a = await novaAnalise({ completa: true, nome: "Quel Fiança", cpf: "12345678143" });
+    const r = await comoUsuario(db, CORRETOR, async () => {
+      await db.query(`delete from analise_garantias where analise_id = $1`, [a.id]);
+      const p = (await um<{ id: string }>(`insert into pessoas (nome) values ('João Fiador Pendente') returning id`)).id;
+      const f = (await um<{ id: string }>(`insert into analise_fiadores (analise_id, pessoa_id) values ($1, $2) returning id`, [a.id, p])).id;
+      const nascer = await erroDe(() => db.query(`insert into analise_garantias (analise_id, tipo, fiador_id, status) values ($1, 'fiador', $2, 'aprovada')`, [a.id, f]));
+      const g = (await um<{ id: string }>(`insert into analise_garantias (analise_id, tipo, fiador_id, status) values ($1, 'fiador', $2, 'proposta') returning id`, [a.id, f])).id;
+      const mudar = await erroDe(() => db.query(`update analise_garantias set status = 'aprovada' where id = $1`, [g]));
+      const contratada = await erroDe(() => db.query(`update analise_garantias set status = 'contratada' where id = $1`, [g]));
+      return { p, g, nascer, mudar, contratada };
+    });
+    expect(r.nascer).toContain("fiador aprovado");
+    expect(r.mudar).toContain("fiador aprovado");
+    expect(r.contratada).toContain("marcada sozinha");
+
+    // Mesmo gravada à força, a fiança com fiador pendente não conta para a regra…
+    await semGatilho(`update analise_garantias set status = 'aprovada' where id = $1`, [r.g]);
+    const regras = await comoUsuario(db, ADMIN, async () => (await um<{ r: string[] }>(`select public.analise_checar_regras($1) as r`, [a.id])).r);
+    expect(regras).toContain("Nenhuma garantia aprovada");
+    // …e não vai ao contrato (nem o fiador pendente vira parte).
+    await comoUsuario(db, ADMIN, () =>
+      db.query(`update analises set decisao = 'aprovado', decisao_justificativa = 'Cliente antigo da casa', excecao_justificativa = 'Pagou 5 anos sem atraso' where id = $1`, [a.id]),
+    );
+    const c = await novoContrato(a.imovel, a.pessoa);
+    expect(await levar(ADMIN, a.id, c)).toBe(0);
+    const fiadores = (await db.query(`select 1 from contrato_partes where contrato_id = $1 and papel = 'fiador'`, [c])).rows;
+    const garantias = (await db.query(`select 1 from contrato_garantias where contrato_id = $1`, [c])).rows;
+    expect({ fiadores: fiadores.length, garantias: garantias.length }).toEqual({ fiadores: 0, garantias: 0 });
+  });
+
+  it("trocar a pessoa de um fiador (aprovado ou não) é recusado: exclua e inclua", async () => {
+    const a = await novaAnalise({ completa: false, nome: "Rafa Troca", cpf: "23456789254" });
+    const { f, outro } = await comoUsuario(db, ADMIN, async () => {
+      const p1 = (await um<{ id: string }>(`insert into pessoas (nome) values ('Fiador Analisado') returning id`)).id;
+      const outro = (await um<{ id: string }>(`insert into pessoas (nome) values ('Fiador Nunca Analisado') returning id`)).id;
+      const f = (await um<{ id: string }>(`insert into analise_fiadores (analise_id, pessoa_id) values ($1, $2) returning id`, [a.id, p1])).id;
+      await db.query(`update analise_fiadores set status = 'aprovado' where id = $1`, [f]);
+      return { f, outro };
+    });
+    for (const u of [CORRETOR, ADMIN]) {
+      const erro = await comoUsuario(db, u, () => erroDe(() => db.query(`update analise_fiadores set pessoa_id = $2 where id = $1`, [f, outro])));
+      expect(erro, u).toContain("exclua este e inclua o novo");
+    }
+    // O candidato também não pode ser fiador dele mesmo (no banco).
+    expect(
+      await comoUsuario(db, ADMIN, () => erroDe(() => db.query(`insert into analise_fiadores (analise_id, pessoa_id) values ($1, $2)`, [a.id, a.pessoa]))),
+    ).toContain("fiador dele mesmo");
+  });
+
+  it("vincular confere locatário, imóvel, situação do contrato, prazo e desistência; contrato só pela RPC", async () => {
+    const a = await novaAnalise({ completa: true, nome: "Sara Vínculo", cpf: "34567891309" });
+    await aprovar(a.id);
+    const inquilinoAtual = await comoUsuario(db, ADMIN, async () => (await um<{ id: string }>(`insert into pessoas (nome) values ('Inquilino Atual') returning id`)).id);
+    const outroImovel = await comoUsuario(db, ADMIN, async () => (await um<{ id: string }>(`insert into imoveis (codigo, cidade) values ('AN-VINC-2', 'Canoas') returning id`)).id);
+    const doInquilinoAtual = await novoContrato(a.imovel, inquilinoAtual, "ativo");
+    const deOutroImovel = await novoContrato(outroImovel, a.pessoa, "ativo");
+    const encerrado = await novoContrato(a.imovel, a.pessoa, "encerrado");
+    const certo = await novoContrato(a.imovel, a.pessoa, "rascunho");
+
+    const tentar = (c: string) => comoUsuario(db, ADMIN, () => erroDe(() => db.query(`select public.levar_garantias_contrato($1, $2)`, [a.id, c])));
+    expect(await tentar(doInquilinoAtual)).toContain("não é locatário deste contrato");
+    expect(await tentar(deOutroImovel)).toContain("outro imóvel");
+    expect(await tentar(encerrado)).toContain("ativo ou em rascunho");
+    // Direto pela API (sem a RPC): recusado.
+    expect(await comoUsuario(db, CORRETOR, () => erroDe(() => db.query(`update analises set contrato_id = $2 where id = $1`, [a.id, certo])))).toContain("Vincular contrato");
+
+    // Desistência: precisa retomar antes.
+    await comoUsuario(db, CORRETOR, () => db.query(`update analises set status = 'desistencia', desistencia_motivo = 'Achou outro imóvel' where id = $1`, [a.id]));
+    expect(await tentar(certo)).toContain("desistiu");
+    await comoUsuario(db, CORRETOR, () => db.query(`update analises set status = 'em_analise' where id = $1`, [a.id]));
+
+    // Aprovação vencida (validade de ontem): reabrir e decidir de novo.
+    await semGatilho(`update analises set validade_ate = privado.analise_hoje() - 1 where id = $1`, [a.id]);
+    expect(await tentar(certo)).toContain("venceu");
+    await semGatilho(`update analises set validade_ate = privado.analise_hoje() + 30 where id = $1`, [a.id]);
+
+    expect(await levar(ADMIN, a.id, certo)).toBe(1);
+    const an = await um<{ status: string; contrato_id: string }>(`select status, contrato_id from analises where id = $1`, [a.id]);
+    expect(an).toEqual({ status: "contratada", contrato_id: certo });
+  });
+
+  it("desvincular: só admin/gestor (também pela API); garantias voltam e vão para o contrato certo", async () => {
+    const a = await novaAnalise({ completa: true, nome: "Tina Desvínculo", cpf: "45678912445" });
+    await aprovar(a.id);
+    const errado = await novoContrato(a.imovel, a.pessoa, "rascunho");
+    expect(await levar(ADMIN, a.id, errado)).toBe(1);
+
+    expect(await comoUsuario(db, FINANCEIRO, () => erroDe(() => db.query(`update analises set contrato_id = null where id = $1`, [a.id])))).toContain(
+      "Só administradores e gestores desvinculam",
+    );
+    expect(await comoUsuario(db, FINANCEIRO, () => erroDe(() => db.query(`select public.desvincular_contrato_analise($1)`, [a.id])))).toContain(
+      "Só administradores e gestores desvinculam",
+    );
+    expect(await comoUsuario(db, OUTRA, () => erroDe(() => db.query(`select public.desvincular_contrato_analise($1)`, [a.id])))).toContain("não encontrada");
+
+    const n = await comoUsuario(db, ADMIN, async () => (await um<{ n: number }>(`select public.desvincular_contrato_analise($1) as n`, [a.id])).n);
+    expect(n).toBe(1);
+    const gs = (await db.query<{ status: string; contrato_garantia_id: string | null }>(`select status, contrato_garantia_id from analise_garantias where analise_id = $1`, [a.id])).rows;
+    expect(gs).toEqual([{ status: "aprovada", contrato_garantia_id: null }]);
+    const antigo = await um<{ status: string; observacoes: string }>(`select status, observacoes from contrato_garantias where contrato_id = $1`, [errado]);
+    expect(antigo.status).toBe("encerrada");
+    expect(antigo.observacoes).toContain("desvinculada deste contrato");
+    expect(await um<{ status: string; contrato_id: string | null }>(`select status, contrato_id from analises where id = $1`, [a.id])).toEqual({ status: "aprovada", contrato_id: null });
+
+    // O contrato certo recebe o seguro-fiança aprovado.
+    const certo = await novoContrato(a.imovel, a.pessoa, "rascunho");
+    expect(await levar(ADMIN, a.id, certo)).toBe(1);
+    const novo = await um<{ tipo: string; status: string }>(`select tipo, status from contrato_garantias where contrato_id = $1`, [certo]);
+    expect(novo).toEqual({ tipo: "seguro_fianca", status: "ativa" });
+
+    // Excluir o contrato continua soltando a análise sozinho (on delete set null), para quem pode excluir.
+    await comoUsuario(db, FINANCEIRO, () => db.query(`delete from contratos where id = $1`, [certo]));
+    expect((await um<{ contrato_id: string | null }>(`select contrato_id from analises where id = $1`, [a.id])).contrato_id).toBeNull();
+  });
+
+  it("juntar repetidos: o fiador aprovado que sai leva rendas, documentos, consultas e garantias", async () => {
+    const a = await novaAnalise({ completa: false, nome: "Ulisses Junta", cpf: "56789123563" });
+    const r = await comoUsuario(db, ADMIN, async () => {
+      const sai = (await um<{ id: string }>(`insert into pessoas (nome) values ('Rui Fiador (cad. 1)') returning id`)).id;
+      const fica = (await um<{ id: string }>(`insert into pessoas (nome) values ('Rui Fiador (cad. 2)') returning id`)).id;
+      const f1 = (await um<{ id: string }>(`insert into analise_fiadores (analise_id, pessoa_id, imovel_matricula) values ($1, $2, '55.555') returning id`, [a.id, sai])).id;
+      const f2 = (await um<{ id: string }>(`insert into analise_fiadores (analise_id, pessoa_id) values ($1, $2) returning id`, [a.id, fica])).id;
+      await db.query(`insert into analise_rendas (analise_id, fiador_id, tipo, valor_declarado, valor_comprovado) values ($1, $2, 'aposentadoria', 9000, 9000)`, [a.id, f1]);
+      await db.query(
+        `insert into analise_documentos (analise_id, fiador_id, parte, item, rotulo, status) values
+           ($1, $2, 'fiador', 'rg_cpf', 'RG do Rui', 'validado'), ($1, $2, 'fiador', 'matricula', 'Matrícula', 'validado'), ($1, $3, 'fiador', 'rg_cpf', 'RG do Rui', 'pendente')`,
+        [a.id, f1, f2],
+      );
+      await db.query(`insert into analise_consultas (analise_id, fiador_id, bureau, score, base_legal) values ($1, $2, 'serasa', 780, 'protecao_credito')`, [a.id, f1]);
+      await db.query(`insert into analise_garantias (analise_id, tipo, fiador_id) values ($1, 'fiador', $2)`, [a.id, f1]);
+      await db.query(`update analise_fiadores set status = 'aprovado', parecer = 'Imóvel quitado' where id = $1`, [f1]);
+      // Fica o cadastro 2 (pendente); sai o 1 (aprovado).
+      await db.query(`select public.juntar_pessoas($1, $2)`, [fica, sai]);
+      const fs = (await db.query<{ id: string; pessoa_id: string; status: string; analisado_por: string; parecer: string; imovel_matricula: string }>(
+        `select id, pessoa_id, status, analisado_por, parecer, imovel_matricula from analise_fiadores where analise_id = $1`,
+        [a.id],
+      )).rows;
+      const so = fs[0]?.id;
+      const conta = async (t: string) => (await um<{ n: number }>(`select count(*)::int as n from ${t} where analise_id = $1 and fiador_id = $2`, [a.id, so])).n;
+      const docs = (await db.query<{ item: string; status: string }>(`select item, status from analise_documentos where fiador_id = $1 order by item`, [so])).rows;
+      return { fs, fica, rendas: await conta("analise_rendas"), consultas: await conta("analise_consultas"), garantias: await conta("analise_garantias"), docs };
+    });
+    expect(r.fs).toHaveLength(1);
+    expect(r.fs[0]).toMatchObject({ pessoa_id: r.fica, status: "aprovado", analisado_por: ADMIN, parecer: "Imóvel quitado", imovel_matricula: "55.555" });
+    expect({ rendas: r.rendas, consultas: r.consultas, garantias: r.garantias }).toEqual({ rendas: 1, consultas: 1, garantias: 1 });
+    expect(r.docs).toEqual([
+      { item: "matricula", status: "validado" },
+      { item: "rg_cpf", status: "validado" },
+    ]);
+  });
+
+  it("autorização (LGPD): data, origem, IP e texto sempre juntos; IP e texto só pela ficha; IP da conexão à parte", async () => {
+    const a = await novaAnalise({ completa: false, nome: "Vera Prova", cpf: "67891234663" });
+    await comoUsuario(db, ADMIN, () => db.query(`update analises set ficha_ativa = true, ficha_expira_em = privado.analise_hoje() + 15 where id = $1`, [a.id]));
+    const enviar = (ip: string, cabecalhos: string) =>
+      comoAnonimo(db, async () => {
+        await db.query(`select set_config('request.headers', $1, false)`, [cabecalhos]);
+        try {
+          await db.query(`select public.ficha_enviar($1, $2)`, [a.token, JSON.stringify({ consentimento: true, ip })]);
+        } finally {
+          await db.query(`select set_config('request.headers', '', false)`);
+        }
+      });
+    const prova = () =>
+      um<{ consentimento_em: string | null; consentimento_origem: string | null; consentimento_ip: string | null; consentimento_ip_rede: string | null; consentimento_texto: string | null }>(
+        `select consentimento_em, consentimento_origem, consentimento_ip, consentimento_ip_rede, consentimento_texto from analises where id = $1`,
+        [a.id],
+      );
+
+    await enviar("200.0.0.1", JSON.stringify({ "x-forwarded-for": "9.9.9.9" }));
+    expect(await prova()).toMatchObject({ consentimento_origem: "ficha online", consentimento_ip: "200.0.0.1", consentimento_ip_rede: "9.9.9.9" });
+    expect((await prova()).consentimento_texto).toContain("Lei Geral de Proteção de Dados");
+    const ev = await um<{ dados: { ip_informado: string; ip_rede: string } }>(`select dados from analise_eventos where analise_id = $1 and tipo = 'ficha_enviada'`, [a.id]);
+    expect(ev.dados).toMatchObject({ ip_informado: "200.0.0.1", ip_rede: "9.9.9.9" });
+
+    // Ninguém mexe no IP pela API.
+    await comoUsuario(db, ADMIN, () => db.query(`update analises set consentimento_ip = '1.1.1.1', consentimento_texto = 'adulterado' where id = $1`, [a.id]));
+    expect(await prova()).toMatchObject({ consentimento_ip: "200.0.0.1" });
+    // Retirada: some tudo junto.
+    await comoUsuario(db, ADMIN, () => db.query(`update analises set consentimento_em = null where id = $1`, [a.id]));
+    expect(await prova()).toEqual({ consentimento_em: null, consentimento_origem: null, consentimento_ip: null, consentimento_ip_rede: null, consentimento_texto: null });
+
+    // Nova autorização pela ficha, com o texto da organização já mudado: tudo desta submissão.
+    await comoUsuario(db, ADMIN, () =>
+      db.query(
+        `insert into analise_config (organizacao_id, texto_consentimento) values ($1, 'Texto v2 da autorização')
+         on conflict (organizacao_id) do update set texto_consentimento = excluded.texto_consentimento`,
+        [org],
+      ),
+    );
+    await enviar("200.0.0.2", "");
+    expect(await prova()).toMatchObject({ consentimento_ip: "200.0.0.2", consentimento_ip_rede: null, consentimento_texto: "Texto v2 da autorização" });
+    await comoUsuario(db, ADMIN, () => db.query(`update analise_config set texto_consentimento = null where organizacao_id = $1`, [org]));
+
+    // Registro manual (assinatura): sem IP nem texto da ficha.
+    await comoUsuario(db, ADMIN, () =>
+      db.query(`update analises set consentimento_em = now() - interval '1 day', consentimento_origem = 'assinatura', consentimento_ip = '5.5.5.5' where id = $1`, [a.id]),
+    );
+    expect(await prova()).toMatchObject({ consentimento_origem: "assinatura", consentimento_ip: null, consentimento_ip_rede: null, consentimento_texto: null });
+  });
+
+  it("datas do dia no horário de Brasília", async () => {
+    const a = await novaAnalise({ completa: true, nome: "Wagner Data", cpf: "78912345745" });
+    await aprovar(a.id);
+    const v = await um<{ ok: boolean }>(`select validade_ate = privado.analise_hoje() + (select coalesce(max(validade_dias), 30) from analise_config where organizacao_id = $2) as ok from analises where id = $1`, [a.id, org]);
+    expect(v.ok).toBe(true);
+    expect((await um<{ ok: boolean }>(`select privado.analise_hoje() = (now() at time zone 'America/Sao_Paulo')::date as ok`)).ok).toBe(true);
+    for (const f of [
+      "privado.analise_ficha(uuid)",
+      "privado.analises_regras()",
+      "privado.analise_garantias_trg()",
+      "privado.analise_consultas_trg()",
+      "privado.garantia_renovacoes_trg()",
+      "public.concluir_renovacao_garantia(uuid, jsonb)",
+    ]) {
+      const d = (await um<{ d: string }>(`select pg_get_functiondef($1::regprocedure) as d`, [f])).d;
+      expect(d, f).not.toMatch(/current_date/i);
+    }
+    const padroes = (await db.query<{ d: string }>(
+      `select column_default as d from information_schema.columns where table_schema = 'public' and ((table_name = 'analise_consultas' and column_name = 'consultado_em') or (table_name = 'garantia_renovacoes' and column_name = 'solicitada_em'))`,
+    )).rows;
+    expect(padroes).toHaveLength(2);
+    for (const p of padroes) expect(p.d).toContain("America/Sao_Paulo");
+  });
+
+  it("anotação da auditoria: data e autor do banco; só na análise da própria organização", async () => {
+    const a = await novaAnalise({ completa: false, nome: "Xavier Nota", cpf: "89123456809" });
+    await comoUsuario(db, FINANCEIRO, () =>
+      db.query(`insert into analise_eventos (analise_id, tipo, descricao, data, usuario_id, dados) values ($1, 'nota', 'Candidato avisado', '2026-01-10', $2, '{"x":1}')`, [a.id, ADMIN]),
+    );
+    const n = await um<{ antiga: boolean; usuario_id: string; dados: unknown }>(
+      `select data < now() - interval '1 hour' as antiga, usuario_id, dados from analise_eventos where analise_id = $1 and tipo = 'nota'`,
+      [a.id],
+    );
+    expect(n).toEqual({ antiga: false, usuario_id: FINANCEIRO, dados: null });
+    expect(
+      await comoUsuario(db, OUTRA, () => erroDe(() => db.query(`insert into analise_eventos (analise_id, tipo, descricao) values ($1, 'nota', 'Intruso')`, [a.id]))),
+    ).toContain("Análise não encontrada");
+  });
+
+  it("token da ficha é do banco; caminho do arquivo conferido; token antigo não vale para outra organização", async () => {
+    const a = await novaAnalise({ completa: false, nome: "Yara Token", cpf: "91234567954" });
+    const escolhido = "11111111-2222-3333-4444-555555555555";
+    await comoUsuario(db, ADMIN, () => db.query(`update analises set token = $2 where id = $1`, [a.id, escolhido]));
+    const atual = (await um<{ token: string }>(`select token from analises where id = $1`, [a.id])).token;
+    expect(atual).not.toBe(escolhido);
+    expect(atual).not.toBe(a.token);
+
+    // Caminhos fora da pasta desta análise são recusados; o caminho não muda depois.
+    const outraAnalise = (await novaAnalise({ completa: false, nome: "Zé Outra", cpf: "13579246828" })).id;
+    const registrar = (path: string) =>
+      comoUsuario(db, ADMIN, () => erroDe(() => db.query(`insert into analise_arquivos (analise_id, path, nome) values ($1, $2, 'x.pdf')`, [a.id, path])));
+    expect(await registrar(`${org}/${outraAnalise}/rg.pdf`)).toContain("Arquivo inválido");
+    expect(await registrar(`ficha/${a.token}/rg.pdf`)).toContain("Arquivo inválido"); // token antigo
+    expect(await registrar(`${org}/${a.id}/../${outraAnalise}/rg.pdf`)).toContain("Arquivo inválido");
+    expect(await registrar(`${org}/${a.id}/`)).toContain("Arquivo inválido");
+    expect(await registrar(`${org}/${a.id}/rg.pdf`)).toBe("");
+    expect(await registrar(`ficha/${atual}/holerite.pdf`)).toBe("");
+    await comoUsuario(db, ADMIN, () => db.query(`update analise_arquivos set path = $2 where analise_id = $1`, [a.id, `ficha/${a.token}/qualquer.pdf`]));
+    const paths = (await db.query<{ path: string; enviado_pela_ficha: boolean }>(`select path, enviado_pela_ficha from analise_arquivos where analise_id = $1 order by path`, [a.id])).rows;
+    expect(paths).toEqual([
+      { path: `${org}/${a.id}/rg.pdf`, enviado_pela_ficha: false },
+      { path: `ficha/${atual}/holerite.pdf`, enviado_pela_ficha: true },
+    ]);
+
+    // Outra organização tenta "pegar" o token antigo (cujos arquivos ficaram em ficha/<antigo>/): não consegue.
+    const r = await comoUsuario(db, OUTRA, async () => {
+      const p = (await um<{ id: string }>(`insert into pessoas (nome) values ('Laranja') returning id`)).id;
+      const nova = await um<{ id: string; token: string }>(`insert into analises (candidato_id, token) values ($1, $2) returning id, token`, [p, a.token]);
+      await db.query(`update analises set token = $2 where id = $1`, [nova.id, a.token]);
+      const depois = (await um<{ token: string }>(`select token from analises where id = $1`, [nova.id])).token;
+      const le = (await um<{ ok: boolean }>(`select privado.analise_arquivo_da_org($1) as ok`, [`ficha/${a.token}/rg-do-candidato.pdf`])).ok;
+      return { criado: nova.token, depois, le, nova: nova.id };
+    });
+    expect(r.criado).not.toBe(a.token);
+    expect(r.depois).not.toBe(a.token);
+    expect(r.le).toBe(false);
+
+    // Registro "torto" de antes da correção (outra organização apontando para a pasta do token atual de A): não dá leitura.
+    await semGatilho(
+      `insert into analise_arquivos (organizacao_id, analise_id, path, nome) select organizacao_id, id, $2, 'rg.pdf' from analises where id = $1`,
+      [r.nova, `ficha/${atual}/holerite.pdf`],
+    );
+    const daOrg = (u: string) => comoUsuario(db, u, async () => (await um<{ ok: boolean }>(`select privado.analise_arquivo_da_org($1) as ok`, [`ficha/${atual}/holerite.pdf`])).ok);
+    expect(await daOrg(OUTRA)).toBe(false);
+    expect(await daOrg(ADMIN)).toBe(true);
+  });
+
+  it("ficha_enviar: limite por ficha", async () => {
+    const a = await novaAnalise({ completa: false, nome: "Ana Limite", cpf: "24681357928" });
+    await comoUsuario(db, ADMIN, () => db.query(`update analises set ficha_ativa = true, ficha_expira_em = privado.analise_hoje() + 15 where id = $1`, [a.id]));
+    const enviar = (token: string) => comoAnonimo(db, () => erroDe(() => db.query(`select public.ficha_enviar($1, $2)`, [token, JSON.stringify({ consentimento: true })])));
+    for (let i = 0; i < 3; i++) expect(await enviar(a.token)).toBe("");
+    expect(await enviar(a.token)).toContain("Limite de envios desta ficha");
+
+    // 10 envios no mesmo dia (fora do último minuto) também param a ficha.
+    const b = await novaAnalise({ completa: false, nome: "Bruno Limite", cpf: "35792468109" });
+    await comoUsuario(db, ADMIN, () => db.query(`update analises set ficha_ativa = true, ficha_expira_em = privado.analise_hoje() + 15 where id = $1`, [b.id]));
+    await db.query(`select set_config('request.jwt.claim.sub', '', false)`);
+    await db.query(
+      `insert into analise_eventos (organizacao_id, analise_id, tipo, descricao, data) select $1, $2, 'ficha_enviada', 'Candidato enviou a ficha online', now() - interval '2 hours' from generate_series(1, 10)`,
+      [org, b.id],
+    );
+    expect(await enviar(b.token)).toContain("Limite de envios desta ficha");
+  });
+
+  it("candidato, corretor e fiador precisam ser da mesma organização da análise", async () => {
+    const estranho = await comoUsuario(db, OUTRA, async () => (await um<{ id: string }>(`insert into pessoas (nome) values ('Proprietário da Outra') returning id`)).id);
+    const a = await novaAnalise({ completa: false, nome: "Caio Org", cpf: "29537914852" });
+    await comoUsuario(db, ADMIN, async () => {
+      expect(await erroDe(() => db.query(`insert into analises (candidato_id) values ($1)`, [estranho]))).toContain("Pessoa não encontrada");
+      expect(await erroDe(() => db.query(`insert into analises (candidato_id, corretor_id) values ($1, $2)`, [a.pessoa, estranho]))).toContain("Pessoa não encontrada");
+      expect(await erroDe(() => db.query(`update analises set corretor_id = $2 where id = $1`, [a.id, estranho]))).toContain("Pessoa não encontrada");
+      expect(await erroDe(() => db.query(`update analises set candidato_id = $2 where id = $1`, [a.id, estranho]))).toContain("Pessoa não encontrada");
+      expect(await erroDe(() => db.query(`insert into analise_fiadores (analise_id, pessoa_id) values ($1, $2)`, [a.id, estranho]))).toContain("Pessoa não encontrada");
+    });
+    // Mesmo com uma análise "torta" (de antes da correção), a ficha não completa o cadastro de outra organização.
+    const torta = await semGatilho(
+      `insert into analises (organizacao_id, candidato_id, ficha_ativa, ficha_expira_em) values ($1, $2, true, privado.analise_hoje() + 5) returning token`,
+      [org, estranho],
+    );
+    const token = (torta.rows[0] as { token: string }).token;
+    expect(await comoAnonimo(db, () => erroDe(() => db.query(`select public.ficha_enviar($1, $2)`, [token, JSON.stringify({ consentimento: true, email: "golpe@exemplo.com" })])))).toBe("");
+    expect((await um<{ email: string | null }>(`select email from pessoas where id = $1`, [estranho])).email).toBeNull();
+  });
+
+  it("a correção roda de novo sem erro, sem DROP, e vale mesmo depois da migração original", async () => {
+    const dir = join(__dirname, "..", "supabase", "migrations");
+    const original = readFileSync(join(dir, "20261106000005_analise_cadastral.sql"), "utf8");
+    const correcao = readFileSync(join(dir, "20261107000003_correcoes_analise.sql"), "utf8");
+    expect(correcao).not.toMatch(/\bdrop\s+(table|trigger|policy|function|constraint|index|column|schema|view)/i);
+    await db.exec(original);
+    await db.exec(correcao);
+    await db.exec(correcao);
+    const a = await novaAnalise({ completa: false, nome: "Dora Reaplica", cpf: "46802468123" });
+    await comoUsuario(db, ADMIN, () => db.query(`update analises set token = '11111111-2222-3333-4444-555555555555' where id = $1`, [a.id]));
+    expect((await um<{ token: string }>(`select token from analises where id = $1`, [a.id])).token).not.toBe("11111111-2222-3333-4444-555555555555");
+  });
+});
+
+describe("Storage da ficha (bucket simulado)", () => {
+  it("no máximo 40 arquivos por link, só em ficha/<token>/<arquivo>; arquivo anterior ao token não vale pelo token", async () => {
+    const st = new PGlite();
+    await st.exec(`
+      create role anon nologin; create role authenticated nologin;
+      create schema auth;
+      create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+      grant usage on schema auth to anon, authenticated; grant execute on function auth.uid() to anon, authenticated;
+      create schema storage;
+      create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+      create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, created_at timestamptz not null default now());
+      alter table storage.objects enable row level security;
+      create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
+      grant usage on schema storage to anon, authenticated;
+      grant select, insert, delete on storage.objects to anon, authenticated;
+      grant execute on function storage.foldername(text) to anon, authenticated;
+    `);
+    const dir = join(__dirname, "..", "supabase", "migrations");
+    for (const f of readdirSync(dir).sort()) await st.exec(readFileSync(join(dir, f), "utf8"));
+    await st.exec(`grant usage on schema public to authenticated; grant select, insert, update, delete on all tables in schema public to authenticated;`);
+    const U = "00000000-0000-0000-0000-000000015a51";
+    const r = await comoUsuario(st, U, async () => {
+      await st.query(`select public.criar_organizacao('Storage Análise')`);
+      const p = (await st.query<{ id: string }>(`insert into pessoas (nome) values ('Candidato Storage') returning id`)).rows[0].id;
+      const a = (await st.query<{ id: string; token: string }>(`insert into analises (candidato_id) values ($1) returning id, token`, [p])).rows[0];
+      await st.query(`update analises set ficha_ativa = true, ficha_expira_em = privado.analise_hoje() + 10 where id = $1`, [a.id]);
+      return a;
+    });
+    // Um objeto "esquecido" de antes de a análise ter este token.
+    await st.query(`insert into storage.objects (bucket_id, name, created_at) values ('analises', $1, now() - interval '1 day')`, [`ficha/${r.token}/antigo.pdf`]);
+    const enviar = (name: string) => comoAnonimo(st, () => erroDe(() => st.query(`insert into storage.objects (bucket_id, name) values ('analises', $1)`, [name])));
+    expect(await enviar(`ficha/${r.token}/sub/pasta.pdf`)).toContain("row-level security");
+    expect(await enviar(`ficha/00000000-0000-0000-0000-000000000000/x.pdf`)).toContain("row-level security");
+    expect(await enviar(`ficha/${r.token.toUpperCase()}/maiusculas.pdf`)).toContain("row-level security"); // não escapa da contagem
+    for (let i = 1; i <= 39; i++) expect(await enviar(`ficha/${r.token}/${i}.pdf`), String(i)).toBe("");
+    expect(await enviar(`ficha/${r.token}/41.pdf`)).toContain("row-level security");
+    const le = (path: string) => comoUsuario(st, U, async () => (await st.query<{ ok: boolean }>(`select privado.analise_arquivo_da_org($1) as ok`, [path])).rows[0].ok);
+    expect(await le(`ficha/${r.token}/1.pdf`)).toBe(true);
+    expect(await le(`ficha/${r.token}/antigo.pdf`)).toBe(false);
   });
 });
 

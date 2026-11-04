@@ -11,7 +11,7 @@ import { diaLocal, horaLocal } from "@/lib/dominio/agenda";
 import { formatarCompetencia, formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { ROTULO_SITUACAO, situacaoLancamento } from "@/lib/dominio/financeiro";
-import { estrelas, mensagemAgendamento, planoFinanceiro, sugerirResponsabilidade, textoGarantia } from "@/lib/dominio/manutencao";
+import { estrelas, mensagemAgendamento, planoFinanceiro, podeDecidirChamado, responsavelEfetivo, textoGarantia } from "@/lib/dominio/manutencao";
 import { linkWhatsapp } from "@/lib/whatsapp";
 import { agendarChamado, avaliarChamado, concluirChamado, desfazerConclusao, gerarContaReceber, lancarNaFatura } from "../../actions";
 import { carregarChamado, contatoDoSolicitante, enderecoImovel, faturasAbertas, midiasDoChamado } from "../../dados";
@@ -34,7 +34,7 @@ export default async function ExecucaoChamado({ params }: PageProps<"/manutencao
   ]);
   const podeAgendar = ["aprovado", "agendado", "em_execucao"].includes(c.status);
   const concluido = ["concluido", "avaliado"].includes(c.status);
-  const podeDecidir = papel !== "corretor";
+  const podeDecidir = podeDecidirChamado(papel);
   const endereco = enderecoImovel(c.imovel) || c.imovel?.codigo || "";
   const quando = c.agendado_para ? `${formatarDataBR(diaLocal(c.agendado_para))} às ${horaLocal(c.agendado_para)}` : null;
   const valorRef = Number(c.valor_final ?? c.valor_aprovado ?? 0);
@@ -45,7 +45,7 @@ export default async function ExecucaoChamado({ params }: PageProps<"/manutencao
       plano = planoFinanceiro({
         modo,
         valor: valorRef,
-        responsabilidade: c.responsabilidade ?? sugerirResponsabilidade(c.categoria).responsavel,
+        responsabilidade: responsavelEfetivo(c.responsabilidade, c.categoria),
         partes: { locatario: Number(c.pct_locatario), proprietario: Number(c.pct_proprietario), imobiliaria: Number(c.pct_imobiliaria) },
         pagoDireto: c.pago_direto,
         titulo: c.titulo,
@@ -55,7 +55,7 @@ export default async function ExecucaoChamado({ params }: PageProps<"/manutencao
     }
   }
   const lancamentos = (lancs ?? []) as { id: string; tipo: string; descricao: string; valor: number; vencimento: string; status: string; requer_aprovacao: boolean; aprovado_em: string | null; descontar_repasse: boolean }[];
-  const temReceber = lancamentos.some((l) => l.tipo === "receber");
+  const temReceber = lancamentos.some((l) => l.tipo === "receber" && l.status !== "cancelado");
   const cobrancaPendente = concluido && (plano?.cobrarLocatario ?? 0) > 0 && !c.fatura_item_id && !temReceber;
   const faturasFuturas = faturas.filter((f) => f.vencimento >= hoje);
 
@@ -142,7 +142,7 @@ export default async function ExecucaoChamado({ params }: PageProps<"/manutencao
                   ["Valor final", c.valor_final != null ? formatarReais(c.valor_final) : "—"],
                   ["Garantia", textoGarantia(c.concluido_em, c.garantia_ate)],
                   ["Observação", c.conclusao_obs ?? "—"],
-                  ["Locatário confirmou", c.locatario_confirmou_em ? formatarDataBR(c.locatario_confirmou_em.slice(0, 10)) : "não"],
+                  ["Locatário confirmou", c.locatario_confirmou_em ? formatarDataBR(diaLocal(c.locatario_confirmou_em)) : "não"],
                 ]}
               />
               <div>
@@ -178,7 +178,7 @@ export default async function ExecucaoChamado({ params }: PageProps<"/manutencao
                 <Aviso tipo="alerta">
                   <div className="space-y-2">
                     <p>
-                      <b>Cobrança do locatário pendente: {formatarReais(plano!.cobrarLocatario)}.</b> Não havia fatura em aberto quando o chamado foi concluído.
+                      <b>Cobrança do locatário pendente: {formatarReais(plano!.cobrarLocatario)}.</b> Não havia fatura em aberto quando o chamado foi concluído (ou a fatura em que ela estava foi cancelada).
                     </p>
                     {podeDecidir && (
                       <div className="flex flex-wrap gap-2">

@@ -5,10 +5,19 @@
  * comparação de orçamentos, garantia e avaliação dos prestadores.
  * Dinheiro sempre em centavos por dentro (dinheiro.ts); datas ISO (datas.ts).
  */
+import { diaLocal } from "./agenda";
 import { paraCentavos, paraReais, ratear, formatarReais } from "./dinheiro";
 import { diasEntre, formatarDataBR, somarDias, type DataISO } from "./datas";
 
 export type Modo = "imobiliaria" | "pessoal";
+
+/**
+ * Quem decide na manutenção (quem paga, valor, prestador, aprovação, recusa,
+ * conclusão, exclusão): lista fechada — papel novo não ganha acesso sozinho.
+ * Mesma regra de `privado.manutencao_decide` no banco.
+ */
+export const PAPEIS_DECIDEM = ["admin", "gestor", "financeiro"] as const;
+export const podeDecidirChamado = (papel: string | null | undefined) => (PAPEIS_DECIDEM as readonly string[]).includes(papel ?? "");
 
 // ---------------------------------------------------------------------------
 // Categorias e urgência
@@ -179,6 +188,11 @@ export function sugerirResponsabilidade(categoria: string): { responsavel: "loca
   }
 }
 
+/** Quem paga de fato: o escolhido ou, "a definir", a sugestão da categoria (a mesma regra da aprovação e do financeiro). */
+export function responsavelEfetivo(resp: string | null | undefined, categoria: string): string {
+  return resp || sugerirResponsabilidade(categoria).responsavel;
+}
+
 export type Partes = { locatario: number; proprietario: number; imobiliaria: number };
 
 /**
@@ -229,6 +243,22 @@ export function efeitoNaAprovacao(o: { modo: Modo; status: string; aprovacaoStat
   if (o.status === "aguardando_aprovacao") return depois <= 0 ? "liberar" : "manter";
   if (["aprovado", "agendado", "em_execucao"].includes(o.status) && depois > 0 && (depois > antes || o.aprovacaoStatus !== "aprovado")) return "pedir";
   return "manter";
+}
+
+/**
+ * Situação do chamado ao escolher o orçamento. Num "pedido de novo" (o serviço
+ * já estava agendado/em execução e voltou a esperar o proprietário), a etapa
+ * de antes é guardada; sem aprovação, volta direto para ela.
+ */
+export function statusAoEscolherOrcamento(o: { precisa: boolean; status: string; statusAntes: string | null }): { status: string; status_antes_aprovacao: string | null } {
+  const antes = o.status === "aguardando_aprovacao" ? o.statusAntes : null;
+  return o.precisa ? { status: "aguardando_aprovacao", status_antes_aprovacao: antes } : { status: antes ?? "aprovado", status_antes_aprovacao: null };
+}
+
+/** O locatário pode confirmar pelo link que o serviço foi feito? Só depois do horário marcado. Mesma regra de `confirmar_servico_chamado`. */
+export function podeConfirmarServico(c: { status: string; agendado_para: string | null }, agoraIso: string): boolean {
+  if (["em_execucao", "concluido", "avaliado"].includes(c.status)) return true;
+  return c.status === "agendado" && Boolean(c.agendado_para) && new Date(c.agendado_para as string).getTime() <= new Date(agoraIso).getTime();
 }
 
 /** Percentual do proprietário (0 se a divisão gravada estiver inválida). */
@@ -427,7 +457,7 @@ export function resumoPorImovel(chamados: { imovel_id: string; status: string; v
     r.chamados += 1;
     if ((STATUS_EM_ANDAMENTO as string[]).includes(c.status)) r.abertos += 1;
     if (["concluido", "avaliado"].includes(c.status)) r.gasto += paraCentavos(c.valor_final);
-    const d = c.concluido_em ?? c.created_at.slice(0, 10);
+    const d = c.concluido_em ?? diaLocal(c.created_at);
     if (!r.ultimo || d > r.ultimo) r.ultimo = d;
     if (c.garantia_ate && c.garantia_ate >= hoje) r.garantias += 1;
     m.set(c.imovel_id, r);

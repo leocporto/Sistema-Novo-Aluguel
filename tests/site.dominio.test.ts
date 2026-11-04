@@ -1,5 +1,5 @@
 /** Regras puras do site imobiliário e da integração com portais. */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   alternarNaLista,
   caminhoNoSite,
@@ -44,6 +44,9 @@ import {
   type ImovelSite,
 } from "@/lib/dominio/site";
 import { cdata, escXml, gerarOlx, gerarVrsync, iptuAnual, lerLeadPortal, selecionarParaFeed, validarParaPortal, type ImovelPortal } from "@/lib/dominio/site-portais";
+import { gerarICS } from "@/lib/dominio/agenda";
+import { NextRequest } from "next/server";
+import { reescreverDominioProprio } from "@/lib/servicos/site-dominio";
 
 const base: ImovelSite = {
   id: "1",
@@ -147,6 +150,27 @@ describe("endereço, cores e domínio", () => {
     expect(caminhoNoSite("/api/portais/x/zap", "imob-site")).toBeNull();
     expect(caminhoNoSite("/_next/data/x.json", "imob-site")).toBeNull();
     expect(caminhoNoSite("/", "Slug Ruim")).toBeNull();
+  });
+
+  it("proxy: domínio sem site confirmado recebe 404 (nunca o login do sistema) quando HOSTS_DO_SISTEMA está configurado", async () => {
+    // Sem banco aqui: nenhum site é dono do domínio.
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    const req = (host: string) => new NextRequest(`https://${host}/login`, { headers: { host } });
+    try {
+      vi.stubEnv("HOSTS_DO_SISTEMA", " app.novoaluguel.com.br ");
+      const fora = await reescreverDominioProprio(req("imob-sem-txt.com.br"));
+      expect(fora?.status).toBe(404);
+      expect(await reescreverDominioProprio(req("app.novoaluguel.com.br"))).toBeNull();
+      expect(await reescreverDominioProprio(req("www.app.novoaluguel.com.br"))).toBeNull();
+      expect(await reescreverDominioProprio(req("localhost:3000"))).toBeNull();
+      // Sem a variável não dá para separar o endereço do sistema: segue o fluxo normal.
+      vi.stubEnv("HOSTS_DO_SISTEMA", "");
+      expect(await reescreverDominioProprio(req("outro-sem-txt.com.br"))).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
@@ -298,6 +322,28 @@ describe("visita e anúncio pelo site", () => {
     expect(problemaHorarioVisita("2026-11-04T10:00:00-03:00", agora)).toBeNull();
     expect(problemaHorarioVisita("2027-06-01T10:00:00-03:00", agora)).toContain("120 dias");
     expect(problemaHorarioVisita(null, agora)).toContain("Escolha");
+    // Mesma regra do banco: das 8h às 18h de Brasília, de meia em meia hora.
+    expect(problemaHorarioVisita("2026-11-04T08:00:00-03:00", agora)).toBeNull();
+    expect(problemaHorarioVisita("2026-11-04T18:00:00-03:00", agora)).toBeNull();
+    expect(problemaHorarioVisita("2026-11-04T07:30:00-03:00", agora)).toContain("entre 8h e 18h");
+    expect(problemaHorarioVisita("2026-11-04T18:30:00-03:00", agora)).toContain("entre 8h e 18h");
+    expect(problemaHorarioVisita("2026-11-04T10:15:00-03:00", agora)).toContain("meia em meia hora");
+    expect(problemaHorarioVisita("2026-11-05T03:00:00Z", agora)).toContain("entre 8h e 18h");
+    expect(problemaHorarioVisita("lixo", agora)).toContain("Escolha");
+  });
+
+  it("calendário .ics: texto do visitante não quebra linha nem injeta evento", () => {
+    const ics = gerarICS(
+      [{ id: "v1", titulo: "Visita\rEND:VEVENT", inicio: "2026-11-10T17:00:00.000Z", duracao_min: 45, descricao: "oi\r\nlinha 2\rBEGIN:VEVENT\rUID:x\u0001" }],
+      "Agenda",
+      "2026-11-01T00:00:00.000Z",
+    );
+    // Toda quebra de linha do arquivo é CRLF (nenhum CR ou LF solto no meio de uma linha).
+    expect(ics.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/);
+    expect(ics.match(/^BEGIN:VEVENT$/gm)).toHaveLength(1);
+    expect(ics.match(/^END:VEVENT$/gm)).toHaveLength(1);
+    expect(ics).toContain("SUMMARY:Visita\\nEND:VEVENT");
+    expect(ics).not.toContain("\u0001");
   });
 
   it("valor digitado vira número para o banco", () => {
@@ -386,6 +432,16 @@ describe("portais", () => {
     expect(r.falhas).toEqual([{ imovel_id: "d", codigo: "D", problemas: ["Envie pelo menos 1 foto."] }]);
     expect(r.avisos.map((a) => a.codigo)).toEqual(expect.arrayContaining(["C", "A"]));
     expect(selecionarParaFeed(lista, "zap").enviar).toHaveLength(3);
+    // Empate (cadastrados no mesmo instante): fica a ordem em que o feed trouxe — a mesma do banco.
+    const empate = ["x", "y", "z"].map((id) => ({ ...ok, id, codigo: id.toUpperCase(), destaque: "normal" as const, criado_em: "2026-10-05T10:00:00.123456+00:00" }));
+    expect(selecionarParaFeed(empate, "zap", { anuncios: 2 }).enviar.map((i) => i.id)).toEqual(["x", "y"]);
+    // Microssegundos: o mais recente vem antes (comparação de texto simples, como o banco).
+    const micro = [
+      { ...ok, id: "a", destaque: "normal" as const, criado_em: "2026-10-05T10:00:00+00:00" },
+      { ...ok, id: "b", destaque: "normal" as const, criado_em: "2026-10-05T10:00:00.5+00:00" },
+      { ...ok, id: "c", destaque: "normal" as const, criado_em: "2026-10-05T10:00:00.45+00:00" },
+    ];
+    expect(selecionarParaFeed(micro, "zap").enviar.map((i) => i.id)).toEqual(["b", "c", "a"]);
   });
 
   it("gera o VRSync (ZAP/Viva Real) com preço, fotos, endereço e escape", () => {
@@ -435,8 +491,8 @@ describe("portais", () => {
         { leadOrigin: "VivaReal", originLeadId: "L-9", clientListingId: "AP-1", name: "Maria", email: "m@x.com", ddd: "11", phone: "99999-8888", message: "Ainda disponível?", transactionType: "RENT" },
         "vivareal",
       ),
-    ).toEqual({ nome: "Maria", email: "m@x.com", telefone: "11999998888", imovel: "AP-1", funil: "locacao", mensagem: "Ainda disponível? (lead Viva Real nº L-9)" });
-    expect(lerLeadPortal({ nome: "João", telefone: "51 98888-7777", imovel: "CASA-2", funil: "venda" }, "olx")).toMatchObject({ nome: "João", telefone: "51 98888-7777", funil: "venda" });
+    ).toEqual({ nome: "Maria", email: "m@x.com", telefone: "11999998888", imovel: "AP-1", funil: "locacao", mensagem: "Ainda disponível? (lead Viva Real nº L-9)", id_externo: "L-9" });
+    expect(lerLeadPortal({ nome: "João", telefone: "51 98888-7777", imovel: "CASA-2", funil: "venda" }, "olx")).toMatchObject({ nome: "João", telefone: "51 98888-7777", funil: "venda", id_externo: null });
     expect(lerLeadPortal({ name: "Sem contato" }, "zap")).toEqual({ erro: "Lead sem telefone e sem e-mail." });
     expect(lerLeadPortal([], "zap")).toEqual({ erro: "Envie um objeto JSON." });
     expect(lerLeadPortal({ email: "x@y.com" }, "zap")).toEqual({ erro: "Lead sem nome." });

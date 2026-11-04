@@ -34,6 +34,13 @@ export default async function LandingPage({ params }: PageProps<"/marketing/land
     supabase.from("leads").select("id, nome, origem, utm_source, utm_campaign, created_at").eq("landing_id", id).order("created_at", { ascending: false }).limit(20),
   ]);
   if (!p) notFound();
+  // O imóvel em destaque pode ter ficado inativo (fora da lista): continua nas opções,
+  // senão o salvamento automático apagaria o vínculo ao mexer em outro campo.
+  let opcoesImovel = (imoveis ?? []) as { id: string; codigo: string; bairro: string | null }[];
+  if (p.imovel_id && !opcoesImovel.some((i) => i.id === p.imovel_id)) {
+    const { data: atual } = await supabase.from("imoveis").select("id, codigo, bairro").eq("id", p.imovel_id as string).maybeSingle();
+    if (atual) opcoesImovel = [atual as { id: string; codigo: string; bairro: string | null }, ...opcoesImovel];
+  }
   const link = `${base}/lp/${p.slug}`;
   const campanha = (p.utm_campaign as string | null) ?? (p.slug as string);
 
@@ -85,7 +92,7 @@ export default async function LandingPage({ params }: PageProps<"/marketing/land
                 <Campo rotulo="Imóvel em destaque">
                   <Selecao name="imovel_id" defaultValue={(p.imovel_id as string | null) ?? ""}>
                     <option value="">— nenhum —</option>
-                    {(imoveis ?? []).map((i) => (
+                    {opcoesImovel.map((i) => (
                       <option key={i.id} value={i.id}>
                         {i.codigo}
                         {i.bairro ? ` — ${i.bairro}` : ""}

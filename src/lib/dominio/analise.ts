@@ -4,8 +4,8 @@
  * (LGPD), fiadores, garantias propostas, decisão e exceção, vencimentos e
  * mensagens prontas. Dinheiro em centavos (dinheiro.ts); datas ISO (datas.ts).
  *
- * ⚠️ foraDaRegra() é a mesma conta de privado.analise_fora_da_regra() na
- * migração 20261106000005_analise_cadastral.sql — mude as duas juntas.
+ * ⚠️ foraDaRegra() é a mesma conta de privado.analise_fora_da_regra() (versão
+ * atual na migração 20261107000003_correcoes_analise.sql) — mude as duas juntas.
  */
 import { paraCentavos, paraReais, formatarReais } from "./dinheiro";
 import { diasEntre, formatarDataBR, somarDias, type DataISO } from "./datas";
@@ -396,7 +396,8 @@ export type DadosRegra = {
   rendas: RendaAnalise[];
   consultas: ConsultaCredito[];
   documentos: DocumentoChecklist[];
-  garantias: { status: string }[];
+  /** tipo "fiador" (fiança) não conta sozinho: vale o fiador aprovado (com a renda conferida). */
+  garantias: { status: string; tipo?: string | null }[];
   fiadores: { id: string; nome: string; status: string }[];
 };
 
@@ -429,7 +430,7 @@ export function foraDaRegra(d: DadosRegra, cfg: ConfigAnalise): MotivoRegra[] {
   if (pend > 0) out.push({ codigo: "documentos", texto: `${pend} documento(s) obrigatório(s) sem validação` });
 
   const temGarantia =
-    d.garantias.some((g) => (GARANTIA_APROVADA as readonly string[]).includes(g.status)) || d.fiadores.some((f) => f.status === "aprovado");
+    d.garantias.some((g) => g.tipo !== "fiador" && (GARANTIA_APROVADA as readonly string[]).includes(g.status)) || d.fiadores.some((f) => f.status === "aprovado");
   if (cfg.exigir_garantia && !temGarantia) out.push({ codigo: "garantia", texto: "Nenhuma garantia aprovada" });
 
   if (cfg.renda_fiador_multiplo > 0)
@@ -462,6 +463,17 @@ export function validarDecisao(p: {
 /** Aprovação vencida (passou da validade sem virar contrato)? */
 export function aprovacaoVencida(a: { status: string; validade_ate: string | null }, hoje: DataISO): boolean {
   return (a.status === "aprovada" || a.status === "aprovada_condicoes") && !!a.validade_ate && a.validade_ate < hoje;
+}
+
+/**
+ * Dá para criar ou vincular o contrato agora? Aprovada, ainda sem contrato, sem
+ * desistência e dentro da validade (o banco confere de novo em levar_garantias_contrato).
+ */
+export function podeVirarContrato(
+  a: { decisao: string | null; status: string; contrato_id: string | null; validade_ate: string | null },
+  hoje: DataISO,
+): boolean {
+  return (a.decisao === "aprovado" || a.decisao === "aprovado_condicoes") && !a.contrato_id && a.status !== "desistencia" && !(a.validade_ate && a.validade_ate < hoje);
 }
 
 // Vencimento e renovação de garantias ----------------------------------------------
@@ -624,20 +636,22 @@ export function linkNovoContrato(a: { id: string; imovel_id: string | null; cand
 export type ContratoPossivel = { id: string; numero: number; status: string; imovel_id: string | null; created_at: string; candidatoLocatario: boolean };
 
 /**
+ * Contratos que podem receber a análise (mesma conferência do banco): o candidato
+ * é locatário, é do imóvel da análise (se ela tem imóvel) e está ativo ou em rascunho.
+ */
+export function contratosVinculaveis<T extends ContratoPossivel>(contratos: T[], a: { imovel_id: string | null }): T[] {
+  return contratos.filter((k) => k.candidatoLocatario && (k.status === "rascunho" || k.status === "ativo") && (!a.imovel_id || k.imovel_id === a.imovel_id));
+}
+
+/**
  * O contrato que provavelmente nasceu desta análise: o candidato é locatário, é do
  * mesmo imóvel (se a análise tem imóvel), está em rascunho ou ativo e foi criado
  * depois da decisão. O mais novo ganha. null = nenhum com certeza.
  */
 export function contratoSugerido(contratos: ContratoPossivel[], a: { imovel_id: string | null; decidido_em: string | null }): ContratoPossivel | null {
   return (
-    contratos
-      .filter(
-        (k) =>
-          k.candidatoLocatario &&
-          (k.status === "rascunho" || k.status === "ativo") &&
-          (!a.imovel_id || k.imovel_id === a.imovel_id) &&
-          (!a.decidido_em || new Date(k.created_at).getTime() >= new Date(a.decidido_em).getTime()),
-      )
+    contratosVinculaveis(contratos, a)
+      .filter((k) => !a.decidido_em || new Date(k.created_at).getTime() >= new Date(a.decidido_em).getTime())
       .sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime())[0] ?? null
   );
 }

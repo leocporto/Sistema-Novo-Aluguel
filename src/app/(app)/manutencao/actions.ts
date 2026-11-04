@@ -15,8 +15,11 @@ import {
   parteDoProprietario,
   partesDaResponsabilidade,
   planoFinanceiro,
+  podeDecidirChamado,
   podeIrPara,
   precisaAprovacaoProprietario,
+  responsavelEfetivo,
+  statusAoEscolherOrcamento,
   sugerirResponsabilidade,
   type Modo,
 } from "@/lib/dominio/manutencao";
@@ -39,8 +42,12 @@ function revalidarFinanceiro() {
 }
 
 const falha = (e: unknown): Resultado => ({ ok: false, erro: mensagemErro(e) });
-/** Corretor abre chamados, pede orçamentos e agenda; decidir e mexer no financeiro é de admin, gestor e financeiro. */
-const podeDecidir = (papel: string) => papel !== "corretor";
+/**
+ * Corretor abre chamados, pede orçamentos e agenda; decidir e mexer no
+ * financeiro é de admin, gestor e financeiro (lista fechada; o banco confere
+ * a mesma regra nos gatilhos e RPCs).
+ */
+const podeDecidir = podeDecidirChamado;
 const MSG_PAPEL = "Só administradores, gestores e o financeiro fazem isto.";
 
 const umDe = <T extends string>(v: string | null, lista: readonly T[], padrao: T): T => ((lista as readonly string[]).includes(v ?? "") ? (v as T) : padrao);
@@ -52,12 +59,13 @@ async function evento(supabase: Supabase, chamadoId: string, tipo: string, descr
 async function chamadoBase(supabase: Supabase, id: string) {
   const { data, error } = await supabase
     .from("chamados")
-    .select("id, numero, titulo, status, categoria, imovel_id, contrato_id, prestador_id, responsabilidade, pct_locatario, pct_proprietario, pct_imobiliaria, pago_direto, valor_aprovado, garantia_dias, visita_id, solicitante_pessoa_id, cobranca_locatario, fatura_item_id, valor_final, agendado_para, aprovacao_status, status_antes_aprovacao, orcamento_id")
+    .select("id, organizacao_id, numero, titulo, status, categoria, imovel_id, contrato_id, prestador_id, responsabilidade, pct_locatario, pct_proprietario, pct_imobiliaria, pago_direto, valor_aprovado, garantia_dias, visita_id, solicitante_pessoa_id, cobranca_locatario, fatura_item_id, valor_final, agendado_para, aprovacao_status, status_antes_aprovacao, orcamento_id, upload_token")
     .eq("id", id)
     .single();
   if (error || !data) throw new ErroValidacao("Chamado não encontrado.");
   return data as {
     id: string;
+    organizacao_id: string;
     numero: number;
     titulo: string;
     status: string;
@@ -81,6 +89,7 @@ async function chamadoBase(supabase: Supabase, id: string) {
     aprovacao_status: string;
     status_antes_aprovacao: string | null;
     orcamento_id: string | null;
+    upload_token: string;
   };
 }
 
@@ -195,11 +204,16 @@ export async function atualizarChamado(_: EstadoAcao, fd: FormData): Promise<Est
     const concluido = ["concluido", "avaliado"].includes(atual.status);
     if (fd.has("responsabilidade")) {
       const resp = texto(fd, "responsabilidade");
+      // Depois do orçamento escolhido, "A definir" faria a aprovação e o financeiro olharem regras diferentes.
+      if (!resp && atual.orcamento_id && atual.responsabilidade) throw new ErroValidacao("Depois de escolher o orçamento, defina quem paga o conserto (não dá para voltar para “A definir”).");
       const pagoDireto = texto(fd, "pagamento") === "direto";
       let informado = { locatario: numero(fd, "pct_locatario") ?? 0, proprietario: numero(fd, "pct_proprietario") ?? 0, imobiliaria: modo === "pessoal" ? 0 : (numero(fd, "pct_imobiliaria") ?? 0) };
       // Acabou de escolher "Dividido" e ainda não digitou nada: começa meio a meio (locatário e proprietário).
       if (resp === "dividido" && informado.locatario + informado.proprietario + informado.imobiliaria === 0) informado = { locatario: 50, proprietario: 50, imobiliaria: 0 };
       const partes = resp ? partesDaResponsabilidade(resp, modo, informado) : { locatario: 0, proprietario: 0, imobiliaria: 0 };
+      // Para a aprovação vale quem paga de fato (com "A definir", a sugestão da categoria — a mesma do financeiro).
+      const categoria = (d.categoria as string | undefined) ?? atual.categoria;
+      const partesEfetivas = resp ? partes : partesDaResponsabilidade(responsavelEfetivo(resp, categoria), modo, informado);
       if (pagoDireto && (resp === "dividido" || resp === "imobiliaria")) throw new ErroValidacao(resp === "dividido" ? "Com a conta dividida, o pagamento ao prestador passa por vocês." : "Se a imobiliária paga, escolha “Nós pagamos o prestador”.");
       const mudou =
         resp !== atual.responsabilidade ||
@@ -212,12 +226,12 @@ export async function atualizarChamado(_: EstadoAcao, fd: FormData): Promise<Est
         Object.assign(d, { responsabilidade: resp, pago_direto: pagoDireto, pct_locatario: partes.locatario, pct_proprietario: partes.proprietario, pct_imobiliaria: partes.imobiliaria });
         // A parte do proprietário apareceu/aumentou depois do serviço aprovado → pede de novo;
         // zerou enquanto esperava a resposta dele → segue sem ele.
-        const antes = parteDoProprietario(atual.responsabilidade ?? sugerirResponsabilidade(atual.categoria).responsavel, modo, {
+        const antes = parteDoProprietario(responsavelEfetivo(atual.responsabilidade, atual.categoria), modo, {
           locatario: Number(atual.pct_locatario),
           proprietario: Number(atual.pct_proprietario),
           imobiliaria: Number(atual.pct_imobiliaria),
         });
-        const efeito = efeitoNaAprovacao({ modo, status: atual.status, aprovacaoStatus: atual.aprovacao_status, parteAntes: antes, parteDepois: partes.proprietario });
+        const efeito = efeitoNaAprovacao({ modo, status: atual.status, aprovacaoStatus: atual.aprovacao_status, parteAntes: antes, parteDepois: partesEfetivas.proprietario });
         if (efeito === "pedir") {
           Object.assign(d, {
             status: "aguardando_aprovacao",
@@ -229,7 +243,7 @@ export async function atualizarChamado(_: EstadoAcao, fd: FormData): Promise<Est
             aprovacao_canal: null,
             aprovacao_ip: null,
           });
-          aviso = " A parte do proprietário aumentou: o serviço volta a esperar a aprovação dele (aba Orçamentos e aprovação).";
+          aviso = " A parte do proprietário aumentou: o serviço volta a esperar a aprovação dele (aba Orçamentos e aprovação, com um link novo).";
         } else if (efeito === "liberar") {
           Object.assign(d, { status: atual.status_antes_aprovacao ?? "aprovado", aprovacao_status: "nao_precisa", status_antes_aprovacao: null, aprovacao_em: null, aprovacao_nome: null, aprovacao_obs: null, aprovacao_canal: null, aprovacao_ip: null });
           aviso = " O proprietário não paga mais nada: o serviço segue sem a aprovação dele.";
@@ -254,9 +268,16 @@ export async function atualizarChamado(_: EstadoAcao, fd: FormData): Promise<Est
   return { ok: `Salvo.${aviso}` };
 }
 
-async function mudarStatus(id: string, para: string, extra: Record<string, unknown> = {}, depois?: (c: Awaited<ReturnType<typeof chamadoBase>>, supabase: Supabase) => Promise<void>): Promise<Resultado> {
-  const { supabase } = await obterContexto();
+async function mudarStatus(
+  id: string,
+  para: string,
+  extra: Record<string, unknown> = {},
+  depois?: (c: Awaited<ReturnType<typeof chamadoBase>>, supabase: Supabase) => Promise<void>,
+  soQuemDecide = false,
+): Promise<Resultado> {
+  const { supabase, papel } = await obterContexto();
   try {
+    if (soQuemDecide && !podeDecidir(papel)) throw new ErroValidacao(MSG_PAPEL);
     const c = await chamadoBase(supabase, id);
     if (!podeIrPara(c.status, para)) throw new ErroValidacao("Este passo não vale para a situação atual do chamado.");
     const { error } = await supabase.from("chamados").update({ status: para, ...extra }).eq("id", id);
@@ -290,9 +311,16 @@ export async function iniciarExecucao(id: string): Promise<Resultado> {
  * "recebido" para poder ser escolhido (e aprovado) de novo.
  */
 export async function reabrirChamado(id: string): Promise<Resultado> {
-  return mudarStatus(id, "em_analise", { motivo: null, agendado_para: null, iniciado_em: null, status_antes_aprovacao: null }, async (c, supabase) => {
-    if (c.orcamento_id) await supabase.from("chamado_orcamentos").update({ status: "recebido" }).eq("id", c.orcamento_id).eq("status", "escolhido");
-  });
+  // Desfazer uma recusa/cancelamento é decisão de quem pode recusar/cancelar.
+  return mudarStatus(
+    id,
+    "em_analise",
+    { motivo: null, agendado_para: null, iniciado_em: null, status_antes_aprovacao: null },
+    async (c, supabase) => {
+      if (c.orcamento_id) await supabase.from("chamado_orcamentos").update({ status: "recebido" }).eq("id", c.orcamento_id).eq("status", "escolhido");
+    },
+    true,
+  );
 }
 
 /** Recusar (não procede) ou cancelar, com o motivo. Desmarca o compromisso da agenda. */
@@ -318,14 +346,26 @@ export async function encerrarChamado(_: EstadoAcao, fd: FormData): Promise<Esta
   return { ok: "Feito." };
 }
 
+/** Arquivos guardados na pasta do chamado (inclusive os que o locatário enviou e não chegaram a ser registrados). */
+async function arquivosDaPasta(supabase: Supabase, c: { organizacao_id: string; id: string; upload_token: string }) {
+  const caminhos: string[] = [];
+  for (const pasta of [`${c.organizacao_id}/${c.id}`, `${c.organizacao_id}/${c.id}/${c.upload_token}`]) {
+    const { data } = await supabase.storage.from("manutencao").list(pasta, { limit: 1000 });
+    for (const a of data ?? []) if (a.id) caminhos.push(`${pasta}/${a.name}`);
+  }
+  return caminhos;
+}
+
 export async function excluirChamado(id: string): Promise<Resultado> {
   const { supabase, papel } = await obterContexto();
   try {
     if (!podeDecidir(papel)) throw new ErroValidacao(MSG_PAPEL);
+    const c = await chamadoBase(supabase, id);
     const { data: midias } = await supabase.from("chamado_midias").select("path").eq("chamado_id", id);
+    const pasta = await arquivosDaPasta(supabase, c).catch(() => [] as string[]);
     const { error } = await supabase.rpc("excluir_chamado", { p_chamado: id });
     if (error) throw error;
-    const caminhos = (midias ?? []).map((m) => m.path as string);
+    const caminhos = [...new Set([...(midias ?? []).map((m) => m.path as string), ...pasta])];
     if (caminhos.length) await supabase.storage.from("manutencao").remove(caminhos);
   } catch (e) {
     return falha(e);
@@ -421,7 +461,7 @@ export async function salvarNovoOrcamento(_: EstadoAcao, fd: FormData): Promise<
 
 /** Edição automática dos valores de um orçamento (ao preencher o valor, vira "recebido"). */
 export async function atualizarOrcamento(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
-  const { supabase } = await obterContexto();
+  const { supabase, papel } = await obterContexto();
   const id = String(fd.get("id"));
   let chamadoId = "";
   try {
@@ -433,6 +473,8 @@ export async function atualizarOrcamento(_: EstadoAcao, fd: FormData): Promise<E
     if (fd.has("valor")) {
       const v = numero(fd, "valor");
       if (v != null && v < 0) throw new ErroValidacao("O valor não pode ser negativo.");
+      // Corretor registra o valor que chegou; trocar um valor já informado é decisão.
+      if (atual.valor != null && paraCentavos(v) !== paraCentavos(atual.valor) && !podeDecidir(papel)) throw new ErroValidacao(MSG_PAPEL);
       // Escolhido e já aprovado/aguardando: o valor está com o chamado (e com o proprietário).
       if (atual.status === "escolhido" && !["aberto", "em_analise"].includes(stChamado) && paraCentavos(v) !== paraCentavos(atual.valor))
         throw new ErroValidacao("Este é o orçamento escolhido. Para mudar o valor, escolha de novo depois de ajustar (ou ajuste o valor final na conclusão).");
@@ -451,7 +493,8 @@ export async function atualizarOrcamento(_: EstadoAcao, fd: FormData): Promise<E
 }
 
 export async function excluirOrcamento(id: string): Promise<Resultado> {
-  const { supabase } = await obterContexto();
+  const { supabase, papel } = await obterContexto();
+  if (!podeDecidir(papel)) return { ok: false, erro: MSG_PAPEL };
   const { data: o } = await supabase.from("chamado_orcamentos").select("status, chamado_id, chamado:chamados!chamado_orcamentos_chamado_id_fkey(status)").eq("id", id).single();
   if (!o) return { ok: false, erro: "Orçamento não encontrado." };
   const st = (o.chamado as unknown as { status: string } | null)?.status ?? "";
@@ -489,6 +532,8 @@ export async function escolherOrcamento(id: string): Promise<Resultado> {
     }
     const { resp, partes } = partesDo(c, organizacao.modo);
     const precisa = precisaAprovacaoProprietario(organizacao.modo, partes);
+    // Num "pedido de novo" (serviço já agendado/em execução), a etapa de antes não se perde.
+    const situacao = statusAoEscolherOrcamento({ precisa, status: c.status, statusAntes: c.status_antes_aprovacao });
     const { error } = await supabase
       .from("chamados")
       .update({
@@ -500,9 +545,9 @@ export async function escolherOrcamento(id: string): Promise<Resultado> {
         pct_locatario: partes.locatario,
         pct_proprietario: partes.proprietario,
         pct_imobiliaria: partes.imobiliaria,
-        status: precisa ? "aguardando_aprovacao" : "aprovado",
+        status: situacao.status,
         aprovacao_status: precisa ? "pendente" : "nao_precisa",
-        status_antes_aprovacao: null,
+        status_antes_aprovacao: situacao.status_antes_aprovacao,
         aprovacao_em: null,
         aprovacao_nome: null,
         aprovacao_obs: null,
@@ -725,7 +770,7 @@ async function parteDoLocatario(supabase: Supabase, id: string, modo: Modo) {
   const c = await chamadoBase(supabase, id);
   if (!["concluido", "avaliado"].includes(c.status)) throw new ErroValidacao("O chamado ainda não foi concluído.");
   if (c.fatura_item_id) throw new ErroValidacao("A cobrança já está numa fatura.");
-  const { count } = await supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("chamado_id", id).eq("tipo", "receber");
+  const { count } = await supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("chamado_id", id).eq("tipo", "receber").neq("status", "cancelado");
   if (count) throw new ErroValidacao("A cobrança do locatário já está no Financeiro (conta a receber).");
   const { resp, partes } = partesDo(c, modo);
   const plano = planoFinanceiro({ modo, valor: Number(c.valor_final ?? c.valor_aprovado ?? 0), responsabilidade: resp, partes, pagoDireto: c.pago_direto, titulo: c.titulo });
@@ -758,27 +803,23 @@ export async function lancarNaFatura(id: string): Promise<Resultado> {
   return { ok: true };
 }
 
-/** Cobrança pendente do locatário → conta a receber no Financeiro. */
+/** Cobrança pendente do locatário → conta a receber no Financeiro (RPC trava o chamado: não duplica). */
 export async function gerarContaReceber(id: string): Promise<Resultado> {
   const { supabase, organizacao, papel } = await obterContexto();
   try {
     if (!podeDecidir(papel)) throw new ErroValidacao(MSG_PAPEL);
     const { c, valor } = await parteDoLocatario(supabase, id, organizacao.modo);
     const { data: loc } = c.contrato_id ? await supabase.from("contrato_partes").select("pessoa_id").eq("contrato_id", c.contrato_id).eq("papel", "locatario").limit(1).maybeSingle() : { data: null };
-    const { error } = await supabase.from("lancamentos").insert({
-      tipo: "receber",
-      descricao: `Reembolso de manutenção — chamado #${c.numero} (${c.titulo})`,
-      categoria: "Manutenção",
-      valor,
-      vencimento: hojeISO(),
-      pessoa_id: (loc?.pessoa_id as string | undefined) ?? c.solicitante_pessoa_id,
-      contrato_id: c.contrato_id,
-      imovel_id: c.imovel_id,
-      chamado_id: id,
+    const { error } = await supabase.rpc("chamado_conta_receber", {
+      p_chamado: id,
+      p: {
+        valor,
+        vencimento: hojeISO(),
+        pessoa_id: (loc?.pessoa_id as string | undefined) ?? c.solicitante_pessoa_id,
+        descricao: `Reembolso de manutenção — chamado #${c.numero} (${c.titulo})`,
+      },
     });
     if (error) throw error;
-    await supabase.from("chamados").update({ cobranca_locatario: "receber" }).eq("id", id);
-    await evento(supabase, id, "financeiro", `Conta a receber do locatário criada: ${formatarReais(valor)}`);
   } catch (e) {
     return falha(e);
   }

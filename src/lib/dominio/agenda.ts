@@ -111,7 +111,19 @@ export type EventoCalendario = {
 };
 
 const icsData = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-const icsTexto = (s: string) => s.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
+/**
+ * Texto de um campo do .ics. Quebras de linha (CRLF, CR ou LF) viram "\n" escapado
+ * e os outros caracteres de controle somem: um CR solto no texto (vem de formulário
+ * público, como o pedido de visita do site) quebraria a linha e permitiria injetar
+ * eventos no calendário assinado.
+ */
+const icsTexto = (s: string) =>
+  s
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/([,;])/g, "\\$1");
 
 /** Quebra linhas longas do .ics (máx. 75 caracteres, continuação com espaço). */
 function dobrar(linha: string) {

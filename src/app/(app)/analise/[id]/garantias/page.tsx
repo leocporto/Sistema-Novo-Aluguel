@@ -114,7 +114,8 @@ export default async function GarantiasAnalise({ params }: PageProps<"/analise/[
               </li>
             ))}
           </ul>
-          <Link href={`/analise/${id}/fiadores`} className="mt-2 block text-xs text-acento hover:underline">
+          <p className="mt-2 text-xs text-mudo">A fiança conta para a decisão (e vai ao contrato) quando o fiador é aprovado na aba Fiadores.</p>
+          <Link href={`/analise/${id}/fiadores`} className="mt-1 block text-xs text-acento hover:underline">
             analisar fiadores
           </Link>
         </Cartao>

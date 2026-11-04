@@ -197,10 +197,10 @@ describe("aprovação do proprietário por link", () => {
       return um<{ id: string; aprovacao_token: string }>(`select id, aprovacao_token from chamados where id = $1`, [id]);
     });
     const r = await comoAnonimo(db, async () => {
-      const info = (await um<{ i: { orcamentos: { prestador: string; valor: number; escolhido: boolean }[]; parte_proprietario: number; aprovacao_status: string } }>(`select public.info_aprovacao_chamado($1) as i`, [c.aprovacao_token])).i;
-      const semNome = await erroDe(() => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.aprovacao_token, { aprovar: true, nome: "" }]));
-      const resp = (await um<{ r: { aprovado: boolean } }>(`select public.responder_aprovacao_chamado($1, $2) as r`, [c.aprovacao_token, { aprovar: true, nome: "Dono do Imóvel", obs: "Pode fazer" }])).r;
-      const deNovo = await erroDe(() => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.aprovacao_token, { aprovar: false, nome: "Dono do Imóvel" }]));
+      const info = (await um<{ i: { orcamentos: { prestador: string; valor: number; escolhido: boolean }[]; parte_proprietario: number; aprovacao_status: string; versao: string } }>(`select public.info_aprovacao_chamado($1) as i`, [c.aprovacao_token])).i;
+      const semNome = await erroDe(() => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.aprovacao_token, { aprovar: true, nome: "", versao: info.versao }]));
+      const resp = (await um<{ r: { aprovado: boolean } }>(`select public.responder_aprovacao_chamado($1, $2) as r`, [c.aprovacao_token, { aprovar: true, nome: "Dono do Imóvel", obs: "Pode fazer", versao: info.versao }])).r;
+      const deNovo = await erroDe(() => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.aprovacao_token, { aprovar: false, nome: "Dono do Imóvel", versao: info.versao }]));
       return { info, semNome, resp, deNovo };
     });
     expect(r.info.orcamentos).toHaveLength(2);
@@ -450,9 +450,9 @@ describe("correções da revisão", () => {
       const t = await um<{ aprovacao_token: string }>(`select aprovacao_token from chamados where id = $1`, [id]);
       return { id, orc, visita, token: t.aprovacao_token };
     });
-    const info = await comoAnonimo(db, async () => (await um<{ i: { pago_direto: boolean; aprovacao_status: string } }>(`select public.info_aprovacao_chamado($1) as i`, [c.token])).i);
+    const info = await comoAnonimo(db, async () => (await um<{ i: { pago_direto: boolean; aprovacao_status: string; versao: string } }>(`select public.info_aprovacao_chamado($1) as i`, [c.token])).i);
     expect(info).toMatchObject({ pago_direto: false, aprovacao_status: "pendente" });
-    await comoAnonimo(db, () => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.token, { aprovar: true, nome: "Dono do Imóvel" }]));
+    await comoAnonimo(db, () => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.token, { aprovar: true, nome: "Dono do Imóvel", versao: info.versao }]));
     const aprovado = await comoUsuario(db, GESTOR, () => um<{ status: string; antes: string | null }>(`select status, status_antes_aprovacao as antes from chamados where id = $1`, [c.id]));
     expect(aprovado).toEqual({ status: "em_execucao", antes: null });
 
@@ -520,5 +520,442 @@ describe("juntar cadastros repetidos", () => {
     expect(r.ch.solicitante_pessoa_id).toBe(prestador);
     expect(r.orc.prestador_id).toBe(prestador);
     expect(r.sumiu).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Correções da 2ª revisão (migração 20261107000002_correcoes_manutencao.sql)
+// ---------------------------------------------------------------------------
+const CORRETOR = "00000000-0000-0000-0000-000000014a04";
+const LIMITE = "00000000-0000-0000-0000-000000014a05";
+const MSG_PAPEL = "Só administradores, gestores e o financeiro";
+
+/** Chamado da organização principal, criado pelo gestor, já com orçamento escolhido. */
+async function chamadoComOrcamento(o: { titulo: string; valor: number; resp?: string; pctProp?: number; pctLoc?: number; status?: string; pendente?: boolean }) {
+  return comoUsuario(db, GESTOR, async () => {
+    const id = (
+      await um<{ id: string }>(`insert into chamados (imovel_id, contrato_id, titulo, categoria, prestador_id) values ($1, $2, $3, 'telhado', $4) returning id`, [
+        imovel,
+        contrato,
+        o.titulo,
+        prestador,
+      ])
+    ).id;
+    const orc = (await um<{ id: string }>(`insert into chamado_orcamentos (chamado_id, prestador_id, valor, status) values ($1, $2, $3, 'escolhido') returning id`, [id, prestador, o.valor])).id;
+    const outro = (await um<{ id: string }>(`insert into chamado_orcamentos (chamado_id, prestador_nome, valor, status) values ($1, 'Outro Prestador', $2, 'recebido') returning id`, [id, o.valor + 500])).id;
+    await db.query(
+      `update chamados set orcamento_id = $2, valor_aprovado = $3, responsabilidade = $4, pct_proprietario = $5, pct_locatario = $6,
+              status = $7, aprovacao_status = $8 where id = $1`,
+      [id, orc, o.valor, o.resp ?? "proprietario", o.pctProp ?? 100, o.pctLoc ?? 0, o.status ?? (o.pendente ? "aguardando_aprovacao" : "aprovado"), o.pendente ? "pendente" : "nao_precisa"],
+    );
+    const t = await um<{ aprovacao_token: string }>(`select aprovacao_token from chamados where id = $1`, [id]);
+    return { id, orc, outro, token: t.aprovacao_token };
+  });
+}
+
+/** Conclui como o gestor, com a parte do locatário numa fatura nova do contrato (R$ 2.000 + o reparo). */
+async function concluirComFatura(id: string, competencia: string, valor: number) {
+  return comoUsuario(db, GESTOR, async () => {
+    const f = (await um<{ id: string }>(`insert into faturas (contrato_id, competencia, vencimento, valor_total) values ($1, $2, ($2::date + 9), 2000) returning id`, [contrato, competencia])).id;
+    await db.query(`select public.concluir_chamado($1, $2)`, [
+      id,
+      {
+        concluido_em: "2026-11-03",
+        valor_final: valor,
+        aprovado_por: "Gestor",
+        cobranca_locatario: "fatura",
+        lancamentos: [{ tipo: "pagar", descricao: "Manutenção", valor, vencimento: "2026-11-10", pessoa_id: prestador }],
+        fatura: { fatura_id: f, valor, descricao: "Manutenção (sua parte)", destino: "imobiliaria" },
+      },
+    ]);
+    return f;
+  });
+}
+
+describe("correções da 2ª revisão", () => {
+  beforeAll(async () => {
+    await db.query(`insert into membros (organizacao_id, user_id, papel) values ($1, $2, 'corretor')`, [org, CORRETOR]);
+  });
+
+  it("outra organização não liga o chamado dela a registros desta; as funções públicas filtram pela organização do chamado", async () => {
+    const v = await comoUsuario(db, GESTOR, async () => {
+      const visita = (await um<{ id: string }>(`insert into visitas (tipo, titulo, data_hora, imovel_id) values ('outro', 'Manutenção da vítima', '2026-12-05T13:00:00Z', $1) returning id`, [imovel])).id;
+      const ch = (await um<{ id: string }>(`insert into chamados (imovel_id, titulo, categoria) values ($1, 'Chamado da vítima', 'telhado') returning id`, [imovel])).id;
+      const orc = (await um<{ id: string }>(`insert into chamado_orcamentos (chamado_id, prestador_id, valor, status) values ($1, $2, 700, 'escolhido') returning id`, [ch, prestador])).id;
+      await db.query(
+        `update chamados set orcamento_id = $2, valor_aprovado = 700, responsabilidade = 'proprietario', pct_proprietario = 100, status = 'aguardando_aprovacao', aprovacao_status = 'pendente' where id = $1`,
+        [ch, orc],
+      );
+      const t = (await um<{ t: string }>(`select aprovacao_token as t from chamados where id = $1`, [ch])).t;
+      return { visita, ch, orc, token: t };
+    });
+    const r = await comoUsuario(db, OUTRO, async () => {
+      const im = (await um<{ id: string }>(`insert into imoveis (codigo) values ('ATK-1') returning id`)).id;
+      const meu = (await um<{ id: string }>(`insert into chamados (imovel_id, titulo) values ($1, 'Meu chamado') returning id`, [im])).id;
+      const tenta = (sql: string, params: unknown[]) => erroDe(() => db.query(sql, params));
+      return {
+        visita: await tenta(`update chamados set visita_id = $2 where id = $1`, [meu, v.visita]),
+        orcamento: await tenta(`update chamados set orcamento_id = $2 where id = $1`, [meu, v.orc]),
+        imovel: await tenta(`update chamados set imovel_id = $2 where id = $1`, [meu, imovel]),
+        prestador: await tenta(`update chamados set prestador_id = $2 where id = $1`, [meu, prestador]),
+        inserir: await tenta(`insert into chamados (imovel_id, titulo, contrato_id) values ($1, 'x', $2)`, [im, contrato]),
+        orcAlheio: await tenta(`insert into chamado_orcamentos (chamado_id, prestador_nome, valor) values ($1, 'Falso', 1)`, [v.ch]),
+        evAlheio: await tenta(`insert into chamado_eventos (chamado_id, tipo, descricao) values ($1, 'nota', 'x')`, [v.ch]),
+        midiaAlheia: await tenta(`insert into chamado_midias (chamado_id, path) values ($1, 'x/y.jpg')`, [v.ch]),
+        lancAlheio: await tenta(`insert into lancamentos (tipo, descricao, valor, vencimento, chamado_id) values ('pagar', 'x', 1, '2026-12-01', $1)`, [v.ch]),
+      };
+    });
+    expect(r.visita).toContain("Compromisso da agenda não encontrado");
+    expect(r.orcamento).toContain("Orçamento não encontrado");
+    expect(r.imovel).toContain("Imóvel não encontrado");
+    expect(r.prestador).toContain("Prestador não encontrado");
+    expect(r.inserir).toContain("Contrato não encontrado");
+    expect(r.orcAlheio).toContain("row-level security");
+    expect(r.evAlheio).toContain("row-level security");
+    expect(r.midiaAlheia).toContain("row-level security");
+    expect(r.lancAlheio).toContain("Chamado não encontrado");
+
+    // Vínculos "tortos" gravados antes desta correção (simulados sem gatilhos): as funções security definer não os seguem.
+    await db.exec(`set session_replication_role = replica;`);
+    const forjado = await um<{ id: string; aprovacao_token: string }>(
+      `insert into chamados (organizacao_id, imovel_id, titulo, visita_id, orcamento_id, prestador_id, status, aprovacao_status, valor_aprovado, pct_proprietario, responsabilidade)
+       values ($1, $2, 'Forjado', $3, $4, $5, 'aguardando_aprovacao', 'pendente', 700, 100, 'proprietario') returning id, aprovacao_token`,
+      [orgB, imovel, v.visita, v.orc, prestador],
+    );
+    await db.query(`insert into chamado_orcamentos (organizacao_id, chamado_id, prestador_nome, valor) values ($1, $2, 'Injetado', 1)`, [orgB, v.ch]);
+    await db.exec(`set session_replication_role = origin;`);
+    const pub = await comoAnonimo(db, async () => {
+      const iForjado = (await um<{ i: { imovel: string | null; endereco: string | null; versao: string } }>(`select public.info_aprovacao_chamado($1) as i`, [forjado.aprovacao_token])).i;
+      const iVitima = (await um<{ i: { orcamentos: { prestador: string }[] } }>(`select public.info_aprovacao_chamado($1) as i`, [v.token])).i;
+      await db.query(`select public.responder_aprovacao_chamado($1, $2)`, [forjado.aprovacao_token, { aprovar: false, nome: "Atacante", versao: iForjado.versao }]);
+      return { iForjado, iVitima };
+    });
+    expect(pub.iForjado.imovel).toBeNull();
+    expect(pub.iForjado.endereco).toBeNull();
+    expect(pub.iVitima.orcamentos.map((o) => o.prestador)).toEqual(["Paulo Encanador"]);
+    const depois = await um<{ visita: string; orc: string }>(`select (select status from visitas where id = $1) as visita, (select status from chamado_orcamentos where id = $2) as orc`, [v.visita, v.orc]);
+    expect(depois).toEqual({ visita: "agendada", orc: "escolhido" });
+
+    // A migração roda de novo sem erro (idempotente) e solta os vínculos com outra organização.
+    await db.exec(readFileSync(join(__dirname, "..", "supabase", "migrations", "20261107000002_correcoes_manutencao.sql"), "utf8"));
+    const limpo = await um<{ visita_id: string | null; orcamento_id: string | null; prestador_id: string | null }>(`select visita_id, orcamento_id, prestador_id from chamados where id = $1`, [forjado.id]);
+    expect(limpo).toEqual({ visita_id: null, orcamento_id: null, prestador_id: null });
+    await db.query(`delete from chamados where id = $1`, [forjado.id]);
+  });
+
+  it("orçamento gravado por quem é membro das duas organizações passa para a organização do chamado (sem perder o vínculo)", async () => {
+    const MULTI = "00000000-0000-0000-0000-000000014a06";
+    await db.query(`insert into membros (organizacao_id, user_id, papel) values ($1, $3, 'gestor'), ($2, $3, 'gestor')`, [orgB, org, MULTI]);
+    const c = await chamadoComOrcamento({ titulo: "Multi-organização", valor: 400 });
+    // Antes desta correção o orçamento nascia com a 1ª organização do usuário (aqui, a outra).
+    await db.exec(`set session_replication_role = replica;`);
+    await db.query(`update chamado_orcamentos set organizacao_id = $2 where id = $1`, [c.orc, orgB]);
+    await db.exec(`set session_replication_role = origin;`);
+    await db.exec(readFileSync(join(__dirname, "..", "supabase", "migrations", "20261107000002_correcoes_manutencao.sql"), "utf8"));
+    const r = await um<{ org: string; orcamento_id: string }>(`select (select organizacao_id from chamado_orcamentos where id = $1) as org, (select orcamento_id from chamados where id = $2) as orcamento_id`, [c.orc, c.id]);
+    expect(r).toEqual({ org, orcamento_id: c.orc });
+    await db.query(`delete from membros where user_id = $1`, [MULTI]);
+  });
+
+  it("corretor não decide nem pela API: resposta do proprietário, quem paga, encerrar, RPCs de decisão, excluir e orçamentos", async () => {
+    const c = await chamadoComOrcamento({ titulo: "Telhado (corretor)", valor: 5000, pendente: true });
+    const r = await comoUsuario(db, CORRETOR, async () => {
+      const tenta = (sql: string, params: unknown[]) => erroDe(() => db.query(sql, params));
+      return {
+        forjaLink: await tenta(
+          `update chamados set aprovacao_status = 'aprovado', aprovacao_canal = 'link', aprovacao_nome = 'Maria', aprovacao_ip = '177.0.0.1', aprovacao_em = now(), status = 'aprovado' where id = $1`,
+          [c.id],
+        ),
+        forjaManual: await tenta(`update chamados set aprovacao_status = 'aprovado', aprovacao_canal = 'manual', aprovacao_nome = 'Maria', status = 'aprovado' where id = $1`, [c.id]),
+        pularAprovacao: await tenta(`update chamados set aprovacao_status = 'nao_precisa', status = 'aprovado' where id = $1`, [c.id]),
+        quemPaga: await tenta(`update chamados set responsabilidade = 'locatario', pct_locatario = 100, pct_proprietario = 0 where id = $1`, [c.id]),
+        valor: await tenta(`update chamados set valor_aprovado = 1 where id = $1`, [c.id]),
+        cancelar: await tenta(`update chamados set status = 'cancelado', motivo = 'x' where id = $1`, [c.id]),
+        inserirAprovado: await tenta(`insert into chamados (imovel_id, titulo, status, valor_aprovado) values ($1, 'x', 'aprovado', 10)`, [imovel]),
+        registrar: await tenta(`select public.registrar_aprovacao_chamado($1, $2)`, [c.id, { aprovar: true, nome: "Maria" }]),
+        concluir: await tenta(`select public.concluir_chamado($1, $2)`, [
+          c.id,
+          { valor_final: 5000, aprovado_por: "x", lancamentos: [{ tipo: "pagar", descricao: "x", valor: 5000, vencimento: "2026-11-10", descontar_repasse: true }] },
+        ]),
+        desfazer: await tenta(`select public.desfazer_conclusao_chamado($1)`, [c.id]),
+        excluirRpc: await tenta(`select public.excluir_chamado($1)`, [c.id]),
+        excluirDireto: await tenta(`delete from chamados where id = $1`, [c.id]),
+        cobrar: await tenta(`select public.cobrar_chamado_na_fatura($1, $2, 10, 'x', 'imobiliaria')`, [c.id, fatura]),
+        receber: await tenta(`select public.chamado_conta_receber($1, $2)`, [c.id, { valor: 10 }]),
+        orcEscolher: await tenta(`update chamado_orcamentos set status = 'escolhido' where id = $1`, [c.outro]),
+        orcValor: await tenta(`update chamado_orcamentos set valor = 1 where id = $1`, [c.orc]),
+        orcExcluir: await tenta(`delete from chamado_orcamentos where id = $1`, [c.outro]),
+      };
+    });
+    for (const [k, e] of Object.entries(r)) expect(e, k).toContain(MSG_PAPEL);
+    const igual = await um<{ status: string; aprovacao_status: string; responsabilidade: string; valor: string; n: number }>(
+      `select status, aprovacao_status, responsabilidade, valor_aprovado::text as valor, (select count(*)::int from chamado_orcamentos where chamado_id = c.id) as n from chamados c where id = $1`,
+      [c.id],
+    );
+    expect(igual).toEqual({ status: "aguardando_aprovacao", aprovacao_status: "pendente", responsabilidade: "proprietario", valor: "5000.00", n: 2 });
+
+    // Mesmo o gestor não grava resposta "pelo link" direto pela API (só a página do proprietário).
+    const gestor = await comoUsuario(db, GESTOR, () =>
+      erroDe(() => db.query(`update chamados set aprovacao_status = 'aprovado', aprovacao_canal = 'link', aprovacao_nome = 'Maria', status = 'aprovado' where id = $1`, [c.id])),
+    );
+    expect(gestor).toContain("só pela página do proprietário");
+  });
+
+  it("o corretor continua abrindo, analisando, pedindo orçamento, agendando, iniciando e juntando cadastros", async () => {
+    const aprovado = await chamadoComOrcamento({ titulo: "Fechadura (corretor agenda)", valor: 150, resp: "locatario", pctProp: 0, pctLoc: 100 });
+    const r = await comoUsuario(db, CORRETOR, async () => {
+      const novo = (await um<{ id: string }>(`insert into chamados (imovel_id, titulo, prestador_id) values ($1, 'Aberto pelo corretor', $2) returning id`, [imovel, prestador])).id;
+      await db.query(`update chamados set status = 'em_analise', titulo = 'Aberto pelo corretor (ok)', urgencia = 'alta' where id = $1`, [novo]);
+      const orc = (await um<{ id: string }>(`insert into chamado_orcamentos (chamado_id, prestador_id, status) values ($1, $2, 'solicitado') returning id`, [novo, prestador])).id;
+      await db.query(`update chamado_orcamentos set valor = 300, status = 'recebido', prazo_dias = 2 where id = $1`, [orc]);
+      await db.query(`insert into chamado_eventos (chamado_id, tipo, descricao) values ($1, 'nota', 'Liguei para o prestador')`, [novo]);
+      const visita = (await um<{ id: string }>(`insert into visitas (tipo, titulo, data_hora, imovel_id) values ('outro', 'Fechadura', '2026-12-10T12:00:00Z', $1) returning id`, [imovel])).id;
+      await db.query(`update chamados set agendado_para = '2026-12-10T12:00:00Z', visita_id = $2, status = 'agendado' where id = $1`, [aprovado.id, visita]);
+      await db.query(`update chamados set status = 'em_execucao', iniciado_em = now() where id = $1`, [aprovado.id]);
+      // Juntar cadastros repetidos troca o prestador dos orçamentos mesmo quando quem junta é o corretor.
+      const dup = (await um<{ id: string }>(`insert into pessoas (nome, papeis) values ('Paulo Encanador (repetido)', '{prestador}') returning id`)).id;
+      await db.query(`update chamado_orcamentos set prestador_id = $2 where id = $1`, [orc, dup]);
+      await db.query(`select public.juntar_pessoas($1, $2)`, [prestador, dup]);
+      return um<{ novo: string; agendado: string; orcPrest: string }>(
+        `select (select status from chamados where id = $1) as novo, (select status from chamados where id = $2) as agendado,
+                (select prestador_id from chamado_orcamentos where id = $3) as "orcPrest"`,
+        [novo, aprovado.id, orc],
+      );
+    });
+    expect(r).toEqual({ novo: "em_analise", agendado: "em_execucao", orcPrest: prestador });
+  });
+
+  it("histórico: autor e data são os de quem grava; tipos do sistema não são gravados à mão", async () => {
+    const c = await chamadoComOrcamento({ titulo: "Histórico", valor: 100 });
+    const r = await comoUsuario(db, CORRETOR, async () => {
+      await db.query(`insert into chamado_eventos (chamado_id, tipo, descricao, usuario_id, data) values ($1, 'aprovacao', 'Proprietário aprovou (falso)', $2, now() - interval '10 days')`, [c.id, GESTOR]);
+      const ev = await um<{ usuario_id: string; recente: boolean }>(
+        `select usuario_id, data > now() - interval '1 minute' as recente from chamado_eventos where chamado_id = $1 and descricao = 'Proprietário aprovou (falso)'`,
+        [c.id],
+      );
+      const sistema = await erroDe(() => db.query(`insert into chamado_eventos (chamado_id, tipo, descricao) values ($1, 'status', 'Aberto → Concluído')`, [c.id]));
+      return { ev, sistema };
+    });
+    expect(r.ev).toEqual({ usuario_id: CORRETOR, recente: true });
+    expect(r.sistema).toContain("só pelo sistema");
+  });
+
+  it("depois de escolher o orçamento, quem paga não volta para “A definir”", async () => {
+    const c = await chamadoComOrcamento({ titulo: "A definir", valor: 800, pendente: true });
+    const e = await comoUsuario(db, GESTOR, () => erroDe(() => db.query(`update chamados set responsabilidade = null, pct_proprietario = 0 where id = $1`, [c.id])));
+    expect(e).toContain("A definir");
+  });
+
+  it("aprovação: link novo a cada pedido e a resposta confere a versão que o proprietário viu", async () => {
+    const c = await chamadoComOrcamento({ titulo: "Versão da aprovação", valor: 500, pendente: true });
+    const v1 = await comoAnonimo(db, async () => (await um<{ i: { versao: string; valor: string } }>(`select public.info_aprovacao_chamado($1) as i`, [c.token])).i);
+    // A equipe escolhe outro orçamento (mais caro) enquanto a página do proprietário está aberta.
+    await comoUsuario(db, GESTOR, async () => {
+      await db.query(`update chamado_orcamentos set status = 'recebido' where id = $1`, [c.orc]);
+      await db.query(`update chamado_orcamentos set status = 'escolhido' where id = $1`, [c.outro]);
+      await db.query(`update chamados set orcamento_id = $2, valor_aprovado = 1000 where id = $1`, [c.id, c.outro]);
+    });
+    const r = await comoAnonimo(db, async () => {
+      const velha = await erroDe(() => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.token, { aprovar: true, nome: "Dono do Imóvel", versao: v1.versao }]));
+      const semVersao = await erroDe(() => db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.token, { aprovar: true, nome: "Dono do Imóvel" }]));
+      const v2 = (await um<{ i: { versao: string; valor: string } }>(`select public.info_aprovacao_chamado($1) as i`, [c.token])).i;
+      await db.query(`select public.responder_aprovacao_chamado($1, $2)`, [c.token, { aprovar: false, nome: "Dono do Imóvel", versao: v2.versao }]);
+      return { velha, semVersao, v2 };
+    });
+    expect(r.velha).toContain("mudaram");
+    expect(r.semVersao).toContain("mudaram");
+    expect(Number(r.v2.valor)).toBe(1000);
+    // Pedido de novo: o link antigo para de valer.
+    const novo = await comoUsuario(db, GESTOR, async () => {
+      await db.query(`update chamado_orcamentos set status = 'escolhido' where id = $1`, [c.outro]);
+      await db.query(
+        `update chamados set status = 'aguardando_aprovacao', aprovacao_status = 'pendente', aprovacao_em = null, aprovacao_nome = null, aprovacao_obs = null, aprovacao_canal = null, aprovacao_ip = null where id = $1`,
+        [c.id],
+      );
+      return (await um<{ t: string }>(`select aprovacao_token as t from chamados where id = $1`, [c.id])).t;
+    });
+    expect(novo).not.toBe(c.token);
+    const links = await comoAnonimo(db, async () => ({
+      antigo: (await um<{ i: unknown }>(`select public.info_aprovacao_chamado($1) as i`, [c.token])).i,
+      novo: (await um<{ i: { aprovacao_status: string } }>(`select public.info_aprovacao_chamado($1) as i`, [novo])).i,
+    }));
+    expect(links.antigo).toBeNull();
+    expect(links.novo.aprovacao_status).toBe("pendente");
+  });
+
+  it("fatura cancelada solta a cobrança do locatário; a conta a receber não duplica", async () => {
+    const c = await chamadoComOrcamento({ titulo: "Chave perdida", valor: 300, resp: "locatario", pctProp: 0, pctLoc: 100 });
+    const f = await concluirComFatura(c.id, "2027-01-01", 300);
+    const r = await comoUsuario(db, GESTOR, async () => {
+      const antes = await um<{ item: string | null }>(`select fatura_item_id as item from chamados where id = $1`, [c.id]);
+      await db.query(`update faturas set status = 'cancelada' where id = $1`, [f]);
+      const depois = await um<{ item: string | null; cobranca: string | null; ev: string }>(
+        `select fatura_item_id as item, cobranca_locatario as cobranca,
+                (select descricao from chamado_eventos where chamado_id = c.id and tipo = 'financeiro' and descricao like '%cancelada%' limit 1) as ev
+           from chamados c where id = $1`,
+        [c.id],
+      );
+      const lanc = (await um<{ l: string }>(`select public.chamado_conta_receber($1, $2) as l`, [c.id, { valor: 300, pessoa_id: locatario }])).l;
+      const dobrada = await erroDe(() => db.query(`select public.chamado_conta_receber($1, $2)`, [c.id, { valor: 300 }]));
+      const naFatura = await erroDe(() => db.query(`select public.cobrar_chamado_na_fatura($1, $2, 300, 'x', 'imobiliaria')`, [c.id, fatura]));
+      const receber = await um<{ n: number; cobranca: string }>(
+        `select (select count(*)::int from lancamentos where chamado_id = $1 and tipo = 'receber') as n, (select cobranca_locatario from chamados where id = $1) as cobranca`,
+        [c.id],
+      );
+      return { antes, depois, lanc, dobrada, naFatura, receber };
+    });
+    expect(r.antes.item).not.toBeNull();
+    expect(r.depois.item).toBeNull();
+    expect(r.depois.cobranca).toBeNull();
+    expect(r.depois.ev).toContain("foi cancelada");
+    expect(r.lanc).toBeTruthy();
+    expect(r.dobrada).toContain("já está no Financeiro");
+    expect(r.naFatura).toContain("já está no Financeiro");
+    expect(r.receber).toEqual({ n: 1, cobranca: "receber" });
+  });
+
+  it("desfazer e excluir recusam fatura com recebimento parcial; vínculo antigo com fatura cancelada só é solto", async () => {
+    const c = await chamadoComOrcamento({ titulo: "Vazamento (parcial)", valor: 300, resp: "locatario", pctProp: 0, pctLoc: 100 });
+    const f = await concluirComFatura(c.id, "2027-02-01", 300);
+    const r = await comoUsuario(db, GESTOR, async () => {
+      await db.query(`select public.registrar_recebimento($1::jsonb)`, [JSON.stringify({ pagamentos: [{ fatura_id: f, pago_em: "2026-11-03", valor: 2200, principal: 2200, forma: "pix" }] })]);
+      const desfazer = await erroDe(() => db.query(`select public.desfazer_conclusao_chamado($1)`, [c.id]));
+      const excluir = await erroDe(() => db.query(`select public.excluir_chamado($1)`, [c.id]));
+      const fat = await um<{ total: string; abatido: string; status: string }>(`select valor_total as total, valor_abatido as abatido, status from faturas where id = $1`, [f]);
+      return { desfazer, excluir, fat };
+    });
+    expect(r.desfazer).toContain("já recebeu pagamento");
+    expect(r.excluir).toContain("já recebeu pagamento");
+    expect(r.fat).toEqual({ total: "2300.00", abatido: "2200.00", status: "aberta" });
+
+    // Chamado ainda ligado a item de fatura cancelada (dado antigo, sem o gatilho): desfazer só solta o vínculo.
+    const c2 = await chamadoComOrcamento({ titulo: "Antigo na fatura cancelada", valor: 120, resp: "locatario", pctProp: 0, pctLoc: 100 });
+    const f2 = await concluirComFatura(c2.id, "2027-03-01", 120);
+    await db.exec(`set session_replication_role = replica;`);
+    await db.query(`update faturas set status = 'cancelada' where id = $1`, [f2]);
+    await db.exec(`set session_replication_role = origin;`);
+    const d = await comoUsuario(db, GESTOR, async () => {
+      await db.query(`select public.desfazer_conclusao_chamado($1)`, [c2.id]);
+      return um<{ status: string; item: string | null; itens: number }>(
+        `select status, fatura_item_id as item, (select count(*)::int from fatura_itens where fatura_id = $2 and tipo = 'outro') as itens from chamados where id = $1`,
+        [c2.id, f2],
+      );
+    });
+    expect(d).toEqual({ status: "em_execucao", item: null, itens: 1 });
+  });
+
+  it("locatário só confirma o serviço depois do horário marcado", async () => {
+    const token = await comoUsuario(db, GESTOR, async () => (await um<{ token: string }>(`select token from chamado_links where contrato_id = $1`, [contrato])).token);
+    const c = await chamadoComOrcamento({ titulo: "Serviço marcado", valor: 200, resp: "locatario", pctProp: 0, pctLoc: 100, status: "agendado" });
+    await comoUsuario(db, GESTOR, () => db.query(`update chamados set agendado_para = now() + interval '2 days' where id = $1`, [c.id]));
+    const cedo = await comoAnonimo(db, () => erroDe(() => db.query(`select public.confirmar_servico_chamado($1, $2, null)`, [token, c.id])));
+    expect(cedo).toContain("ainda não teve o serviço feito");
+    await comoUsuario(db, GESTOR, () => db.query(`update chamados set agendado_para = now() - interval '1 hour' where id = $1`, [c.id]));
+    const depois = await comoAnonimo(db, () => erroDe(() => db.query(`select public.confirmar_servico_chamado($1, $2, 'Feito')`, [token, c.id])));
+    expect(depois).toBe("");
+  });
+
+  it("remarcar ou cancelar o compromisso na Agenda atualiza o chamado", async () => {
+    const c = await chamadoComOrcamento({ titulo: "Agenda sincronizada", valor: 200, resp: "locatario", pctProp: 0, pctLoc: 100 });
+    const visita = await comoUsuario(db, GESTOR, async () => {
+      const v = (await um<{ id: string }>(`insert into visitas (tipo, titulo, data_hora, imovel_id) values ('outro', 'Serviço', '2026-12-10T12:00:00Z', $1) returning id`, [imovel])).id;
+      await db.query(`update chamados set visita_id = $2, agendado_para = '2026-12-10T12:00:00Z', status = 'agendado' where id = $1`, [c.id, v]);
+      return v;
+    });
+    const ler = () => um<{ status: string; agendado: string | null }>(`select status, to_char(agendado_para at time zone 'UTC', 'YYYY-MM-DD HH24:MI') as agendado from chamados where id = $1`, [c.id]);
+    // Quem mexe na Agenda pode ser o corretor: a sincronização não esbarra nas travas dele.
+    const r = await comoUsuario(db, CORRETOR, async () => {
+      await db.query(`update visitas set data_hora = '2026-12-12T15:00:00Z' where id = $1`, [visita]);
+      const remarcado = await ler();
+      await db.query(`update visitas set status = 'cancelada', motivo_cancelamento = 'Prestador desmarcou' where id = $1`, [visita]);
+      const cancelado = await ler();
+      const ev = (await um<{ d: string }>(`select descricao as d from chamado_eventos where chamado_id = $1 and tipo = 'agenda' and descricao like 'Compromisso cancelado%' limit 1`, [c.id])).d;
+      await db.query(`update visitas set status = 'agendada', data_hora = '2026-12-15T13:00:00Z' where id = $1`, [visita]);
+      const reagendado = await ler();
+      return { remarcado, cancelado, ev, reagendado };
+    });
+    expect(r.remarcado).toEqual({ status: "agendado", agendado: "2026-12-12 15:00" });
+    expect(r.cancelado).toEqual({ status: "aprovado", agendado: null });
+    expect(r.ev).toContain("Prestador desmarcou");
+    expect(r.reagendado).toEqual({ status: "agendado", agendado: "2026-12-15 13:00" });
+  });
+
+  it("abertura pelo link tem limite por telefone e por organização", async () => {
+    const { token, orgL, imL } = await comoUsuario(db, LIMITE, async () => {
+      const orgL = (await um<{ id: string }>(`select public.criar_organizacao('Imob Limite') as id`)).id;
+      const imL = (await um<{ id: string }>(`insert into imoveis (codigo) values ('LIM-1') returning id`)).id;
+      const ct = (
+        await um<{ id: string }>(
+          `insert into contratos (imovel_id, data_inicio, prazo_meses, data_fim, valor_aluguel, dia_vencimento, data_base_reajuste) values ($1, '2026-01-01', 30, '2028-06-30', 1500, 10, '2026-01-01') returning id`,
+          [imL],
+        )
+      ).id;
+      const token = (await um<{ token: string }>(`insert into chamado_links (contrato_id) values ($1) returning token`, [ct])).token;
+      return { token, orgL, imL };
+    });
+    const tel = await comoAnonimo(db, async () => {
+      for (let i = 0; i < 5; i++) await db.query(`select public.abrir_chamado_link($1, $2)`, [token, { nome: "Lúcia", telefone: "(51) 99999-0000", titulo: `Problema ${i + 1}` }]);
+      return erroDe(() => db.query(`select public.abrir_chamado_link($1, $2)`, [token, { nome: "Lúcia", telefone: "51999990000", titulo: "Problema 6" }]));
+    });
+    expect(tel).toContain("este telefone");
+    await db.query(`insert into chamados (organizacao_id, imovel_id, titulo, origem) select $1, $2, 'lote', 'link' from generate_series(1, 200)`, [orgL, imL]);
+    const porOrg = await comoAnonimo(db, () => erroDe(() => db.query(`select public.abrir_chamado_link($1, $2)`, [token, { nome: "Outra Pessoa", titulo: "Problema novo" }])));
+    expect(porOrg).toContain("Tente mais tarde");
+  });
+});
+
+describe("fotos do locatário no bucket: limites do envio anônimo", () => {
+  it("só logo depois de abrir, até 20 arquivos e só foto/vídeo", async () => {
+    const st = new PGlite();
+    await st.exec(`
+      create role anon nologin; create role authenticated nologin;
+      create schema auth;
+      create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+      grant usage on schema auth to anon, authenticated; grant execute on function auth.uid() to anon, authenticated;
+      create schema storage;
+      create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+      create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+      alter table storage.objects enable row level security;
+      create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
+      grant usage on schema storage to anon, authenticated;
+      grant select, insert, delete on storage.objects to anon, authenticated;
+      grant execute on function storage.foldername(text) to anon, authenticated;
+    `);
+    const dir = join(__dirname, "..", "supabase", "migrations");
+    for (const f of readdirSync(dir).sort()) await st.exec(readFileSync(join(dir, f), "utf8"));
+    await st.exec(`grant usage on schema public to authenticated; grant select, insert, update, delete on all tables in schema public to authenticated;`);
+    const U = "00000000-0000-0000-0000-000000014b02";
+    const t = await comoUsuario(st, U, async () => {
+      await st.query(`select public.criar_organizacao('Storage 2')`);
+      const im = (await st.query<{ id: string }>(`insert into imoveis (codigo) values ('S-2') returning id`)).rows[0].id;
+      const c = (
+        await st.query<{ id: string }>(
+          `insert into contratos (imovel_id, data_inicio, prazo_meses, data_fim, valor_aluguel, dia_vencimento, data_base_reajuste) values ($1, '2026-01-01', 12, '2026-12-31', 1000, 5, '2026-01-01') returning id`,
+          [im],
+        )
+      ).rows[0].id;
+      return (await st.query<{ token: string }>(`insert into chamado_links (contrato_id) values ($1) returning token`, [c])).rows[0].token;
+    });
+    const enviar = (nome: string) => erroDe(() => st.query(`insert into storage.objects (bucket_id, name) values ('manutencao', $1)`, [nome]));
+    const r = await comoAnonimo(st, async () => {
+      const a = (await st.query<{ a: { id: string; pasta: string } }>(`select public.abrir_chamado_link($1, $2) as a`, [t, { nome: "Ana", titulo: "Pia entupida" }])).rows[0].a;
+      const pdf = await enviar(`${a.pasta}/documento.pdf`);
+      const semExtensao = await enviar(`${a.pasta}/foto`);
+      const erros: string[] = [];
+      for (let i = 0; i < 20; i++) erros.push(await enviar(`${a.pasta}/foto-${i}.JPG`));
+      const vigesimoPrimeiro = await enviar(`${a.pasta}/foto-20.jpg`);
+      return { a, pdf, semExtensao, erros, vigesimoPrimeiro };
+    });
+    expect(r.pdf).toContain("row-level security");
+    expect(r.semExtensao).toContain("row-level security");
+    expect(r.erros.every((e) => e === "")).toBe(true);
+    expect(r.vigesimoPrimeiro).toContain("row-level security");
+    // Chamado aberto há mais de 2 horas: a pasta não recebe mais nada.
+    const b = await comoAnonimo(st, async () => (await st.query<{ a: { id: string; pasta: string } }>(`select public.abrir_chamado_link($1, $2) as a`, [t, { nome: "Ana", titulo: "Chuveiro" }])).rows[0].a);
+    await st.query(`update chamados set created_at = now() - interval '3 hours' where id = $1`, [b.id]);
+    const tarde = await comoAnonimo(st, () => enviar(`${b.pasta}/foto.jpg`));
+    expect(tarde).toContain("row-level security");
+    const bucket = await st.query<{ tipos: string[] }>(`select allowed_mime_types as tipos from storage.buckets where id = 'manutencao'`);
+    expect(bucket.rows[0].tipos).not.toContain("application/pdf");
   });
 });

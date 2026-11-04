@@ -38,6 +38,20 @@ export default async function CampanhaPage({ params }: PageProps<"/marketing/cam
     prepararCampanha(supabase, c, { base, imobiliaria: organizacao.nome, agoraMs: agoraMs() }),
   ]);
   const { incluidos, excluidos, ctx, problema } = preparo;
+  // Imóvel e modelo ligados ficam nas opções mesmo fora da lista (mais de 2.000 imóveis,
+  // modelo desativado): senão o salvamento automático trocaria o vínculo por "nenhum".
+  type OpImovel = { id: string; codigo: string; bairro: string | null; status: string };
+  let opcoesImovel = (imoveis ?? []) as OpImovel[];
+  if (c.imovel_id && !opcoesImovel.some((i) => i.id === c.imovel_id)) {
+    const { data: atual } = await supabase.from("imoveis").select("id, codigo, bairro, status").eq("id", c.imovel_id).maybeSingle();
+    if (atual) opcoesImovel = [atual as OpImovel, ...opcoesImovel];
+  }
+  type OpModelo = { id: string; nome: string; canal: string };
+  let opcoesModelo = (modelos ?? []) as OpModelo[];
+  if (c.modelo_id && !opcoesModelo.some((m) => m.id === c.modelo_id)) {
+    const { data: atual } = await supabase.from("mkt_modelos").select("id, nome, canal").eq("id", c.modelo_id).maybeSingle();
+    if (atual) opcoesModelo = [atual as OpModelo, ...opcoesModelo];
+  }
   const porMotivo = new Map<string, number>();
   for (const e of excluidos) porMotivo.set(e.motivo, (porMotivo.get(e.motivo) ?? 0) + 1);
   const exemplo = incluidos[0];
@@ -76,7 +90,7 @@ export default async function CampanhaPage({ params }: PageProps<"/marketing/cam
             <Campo rotulo="Modelo" dica="Trocar o modelo troca o texto abaixo.">
               <Selecao name="modelo_id" defaultValue={c.modelo_id ?? ""}>
                 <option value="">— texto livre —</option>
-                {(modelos ?? []).map((m) => (
+                {opcoesModelo.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.nome} ({m.canal})
                   </option>
@@ -101,7 +115,7 @@ export default async function CampanhaPage({ params }: PageProps<"/marketing/cam
               <Campo rotulo="Imóvel da campanha" dica="Usado em {{imovel}}, {{preco}} e no filtro de perfil.">
                 <Selecao name="imovel_id" defaultValue={c.imovel_id ?? ""}>
                   <option value="">— nenhum —</option>
-                  {(imoveis ?? []).map((i) => (
+                  {opcoesImovel.map((i) => (
                     <option key={i.id} value={i.id}>
                       {i.codigo}
                       {i.bairro ? ` — ${i.bairro}` : ""}

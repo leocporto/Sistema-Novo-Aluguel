@@ -14,13 +14,21 @@ function origemDe(req: Request): string {
  * Feed XML do portal (ZAP/Viva Real em VRSync; OLX em XML de carga), gerado na
  * hora a partir do cadastro: preço, fotos e disponibilidade sempre atuais.
  * O portal busca este endereço de tempos em tempos; cada busca fica registrada
- * (Site → Portais → Histórico de envios). Aceita ".../zap" e ".../zap.xml".
+ * (Site → Portais → Envios e falhas). Aceita ".../zap" e ".../zap.xml".
+ * - Portal desligado ou pausado: feed válido e VAZIO (o portal tira os anúncios);
+ * - "?previa=1" (o "ver o arquivo" do sistema): mostra o arquivo sem registrar
+ *   nada — não conta como busca do portal nem abre anúncio no Histórico.
  */
 export async function GET(req: Request, ctx: RouteContext<"/api/portais/[token]/[portal]">) {
   const { token, portal: bruto } = await ctx.params;
   const portal = bruto.replace(/\.xml$/i, "").toLowerCase();
   if (!/^[0-9a-f-]{36}$/i.test(token) || !ehPortal(portal)) return new Response("Não encontrado", { status: 404 });
-  const feed = await montarFeed(clienteAnonimo(), token, portal, { origem: origemDe(req), registro: "portal", agente: req.headers.get("user-agent") });
+  const previa = new URL(req.url).searchParams.has("previa");
+  const feed = await montarFeed(clienteAnonimo(), token, portal, {
+    origem: origemDe(req),
+    registro: previa ? null : "portal",
+    agente: req.headers.get("user-agent"),
+  });
   if (!feed) return new Response("Não encontrado", { status: 404 });
   return new Response(feed.xml, {
     headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },

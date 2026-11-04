@@ -4,8 +4,7 @@ import { promises as dns } from "node:dns";
 import { revalidatePath } from "next/cache";
 import { obterContexto } from "@/lib/contexto";
 import { NOME_TXT, RE_COR, codigoTxt, dnsApontaCerto, ga4Valido, normalizarDominio, slugValido, txtConfere } from "@/lib/dominio/site";
-import { hojeISO } from "@/lib/dominio/datas";
-import { LISTA_PORTAIS, NOME_ANUNCIO, ehPortal } from "@/lib/dominio/site-portais";
+import { LISTA_PORTAIS, ehPortal } from "@/lib/dominio/site-portais";
 import { type EstadoAcao, ErroValidacao, inteiro, mensagemErro, texto, textoObrigatorio } from "@/lib/form";
 import { montarFeed } from "@/lib/servicos/portais";
 import { origemAtual, podeAdministrar } from "./dados";
@@ -175,7 +174,9 @@ export async function removerLogo(id: string): Promise<Resultado> {
  */
 export async function verificarDominio(id: string): Promise<Resultado> {
   try {
-    const { supabase } = await contexto();
+    const { supabase, papel } = await contexto();
+    // O banco também confere (gatilho site_config_regras_trg).
+    if (!podeAdministrar(papel)) throw new ErroValidacao("Só administradores e gestores confirmam o domínio do site.");
     const { data } = await supabase.from("site_config").select("id, dominio").eq("id", id).maybeSingle();
     if (!data?.dominio) throw new ErroValidacao("Informe o domínio primeiro.");
     const resolvedor = new dns.Resolver({ timeout: 4000, tries: 2 });
@@ -203,6 +204,11 @@ export async function verificarDominio(id: string): Promise<Resultado> {
   return { ok: true };
 }
 
+/**
+ * Exclui o site. O banco (gatilho site_config_regras_trg) confere o papel, guarda o
+ * endereço antigo reservado para esta imobiliária, encerra hoje os anúncios abertos
+ * pelo feed e faz o endereço antigo do feed responder vazio (o portal tira os anúncios).
+ */
 export async function excluirSite(id: string): Promise<Resultado> {
   try {
     const { supabase, papel } = await contexto();
@@ -215,15 +221,19 @@ export async function excluirSite(id: string): Promise<Resultado> {
     return falha(e);
   }
   revalidar();
+  revalidatePath("/imoveis", "layout");
   return { ok: true };
 }
 
-/** Novo endereço secreto dos portais (o antigo para de funcionar: atualize no painel dos portais). */
+/** Novos endereços secretos dos portais (feed e leads; os antigos param de funcionar: atualize no painel dos portais). */
 export async function novoTokenPortais(id: string): Promise<Resultado> {
   try {
     const { supabase, papel } = await contexto();
     if (!podeAdministrar(papel)) throw new ErroValidacao("Só administradores e gestores trocam o endereço dos portais.");
-    const { error } = await supabase.from("site_config").update({ portais_token: crypto.randomUUID() }).eq("id", id);
+    const { error } = await supabase
+      .from("site_config")
+      .update({ portais_token: crypto.randomUUID(), leads_portais_token: crypto.randomUUID() })
+      .eq("id", id);
     if (error) throw error;
   } catch (e) {
     return falha(e);
@@ -379,28 +389,21 @@ export async function salvarPortal(_: EstadoAcao, fd: FormData): Promise<EstadoA
   return { ok: "Salvo." };
 }
 
+/**
+ * Desliga o portal. O feed continua respondendo, VAZIO (o portal tira os anúncios);
+ * o banco (gatilho site_portais_desligar_trg) apaga as escolhas por imóvel desse
+ * portal e encerra hoje os anúncios abertos pelo feed (aba Histórico do imóvel).
+ */
 export async function excluirPortal(id: string): Promise<Resultado> {
   try {
     const { supabase } = await contexto();
-    const { data } = await supabase.from("site_portais").select("portal").eq("id", id).maybeSingle();
     const { error } = await supabase.from("site_portais").delete().eq("id", id);
     if (error) throw error;
-    if (data?.portal && ehPortal(data.portal)) {
-      // As escolhas por imóvel desse portal saem junto, e os anúncios abertos pelo feed
-      // (aba Histórico do imóvel) ficam encerrados hoje.
-      await supabase.from("portal_imoveis").delete().eq("portal", data.portal);
-      await supabase
-        .from("imovel_anuncios")
-        .update({ fim: hojeISO() })
-        .eq("origem", "feed")
-        .eq("portal", NOME_ANUNCIO[data.portal])
-        .is("fim", null);
-      revalidatePath("/imoveis", "layout");
-    }
   } catch (e) {
     return falha(e);
   }
   revalidar();
+  revalidatePath("/imoveis", "layout");
   return { ok: true };
 }
 
@@ -436,7 +439,11 @@ export async function salvarPortalImovel(_: EstadoAcao, fd: FormData): Promise<E
   return { ok: "Salvo." };
 }
 
-/** Gera o feed agora (como o portal faria), confere as falhas e registra no histórico. */
+/**
+ * Gera o feed agora (como o portal faria) e confere as falhas. Fica registrado como
+ * conferência: NÃO conta como envio (só o portal buscando marca "enviado" e abre o
+ * anúncio na aba Histórico do imóvel).
+ */
 export async function conferirPortal(portal: string): Promise<Resultado> {
   try {
     const { supabase } = await contexto();
@@ -444,7 +451,7 @@ export async function conferirPortal(portal: string): Promise<Resultado> {
     const { data: cfg } = await supabase.from("site_config").select("portais_token").maybeSingle();
     if (!cfg) throw new ErroValidacao("Crie o site primeiro (aba Configuração).");
     const feed = await montarFeed(supabase, cfg.portais_token as string, portal, { origem: await origemAtual(), registro: "manual", agente: "Conferido no sistema" });
-    if (!feed) throw new ErroValidacao("Configure este portal primeiro.");
+    if (!feed || !feed.configurado) throw new ErroValidacao("Configure este portal primeiro.");
     if (!feed.registrado) throw new ErroValidacao("Muitas conferências na última hora. Tente de novo mais tarde.");
   } catch (e) {
     return falha(e);

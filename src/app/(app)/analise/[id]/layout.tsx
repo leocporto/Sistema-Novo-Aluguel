@@ -5,7 +5,7 @@ import { BotaoExcluir } from "@/components/botao-excluir";
 import { SubAbas } from "@/components/sub-abas";
 import { BotaoLink, Selo, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
-import { COR_STATUS_ANALISE, ROTULO_STATUS_ANALISE, aprovacaoVencida, linkNovoContrato } from "@/lib/dominio/analise";
+import { COR_STATUS_ANALISE, ROTULO_STATUS_ANALISE, aprovacaoVencida, linkNovoContrato, podeVirarContrato } from "@/lib/dominio/analise";
 import { formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais } from "@/lib/dominio/dinheiro";
 import { linkWhatsapp } from "@/lib/whatsapp";
@@ -17,7 +17,7 @@ export default async function AnaliseLayout({ children, params }: LayoutProps<"/
   const { supabase } = await obterContexto();
   const { data } = await supabase
     .from("analises")
-    .select("id, numero, status, excecao, validade_ate, valor_aluguel, valor_encargos, imovel_id, candidato_id, contrato_id, candidato:pessoas!analises_candidato_id_fkey(nome, telefone), imovel:imoveis(id, codigo), contrato:contratos(id, numero)")
+    .select("id, numero, status, decisao, excecao, validade_ate, valor_aluguel, valor_encargos, imovel_id, candidato_id, contrato_id, candidato:pessoas!analises_candidato_id_fkey(nome, telefone), imovel:imoveis(id, codigo), contrato:contratos(id, numero)")
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
@@ -25,6 +25,7 @@ export default async function AnaliseLayout({ children, params }: LayoutProps<"/
     id: string;
     numero: number;
     status: string;
+    decisao: string | null;
     excecao: boolean;
     validade_ate: string | null;
     valor_aluguel: number;
@@ -78,7 +79,7 @@ export default async function AnaliseLayout({ children, params }: LayoutProps<"/
               <MessageCircle className="size-4" /> WhatsApp
             </a>
           )}
-          {aprovada && !a.contrato_id && (
+          {podeVirarContrato(a, hojeISO()) && (
             <BotaoLink href={linkNovoContrato(a)} variante="primario">
               <FileSignature className="size-4" /> Criar contrato
             </BotaoLink>

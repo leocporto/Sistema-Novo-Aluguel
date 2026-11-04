@@ -7,7 +7,7 @@ import { clienteAnonimo } from "@/lib/supabase/anonimo";
 const campo = (fd: FormData, k: string, max = 200) => String(fd.get(k) ?? "").trim().slice(0, max);
 
 /** Mensagens do banco que podem ir direto para o visitante. */
-const AMIGAVEIS = [/^Escolha /, /^Informe /, /^Esse horário/, /^O imóvel não/, /^Este site/, /^Muitas mensagens/, /^O agendamento/, /^Empreendimento não/];
+const AMIGAVEIS = [/^Escolha /, /^Informe /, /^Esse horário/, /^Este site/, /^Muitas mensagens/, /^O agendamento/, /^Empreendimento não/, /^Você já tem/];
 
 /**
  * Formulários do site público: contato, agendamento de visita, interesse em

@@ -4,8 +4,10 @@
  * isolamento por organização e as rotas públicas por token (landing page,
  * preferências, pesquisa, webhook do WhatsApp e Lead Ads).
  */
+import { createHmac } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
+import { lerWebhookWhatsapp } from "@/lib/dominio/marketing";
 import { comoAnonimo, comoUsuario, criarBanco } from "./pglite";
 
 const ADMIN = "00000000-0000-0000-0000-000000017a01";
@@ -133,17 +135,34 @@ describe("eventos de imóvel para as automações", () => {
 });
 
 describe("configuração", () => {
-  it("só admin/gestor mudam tokens e integrações; o horário das automações qualquer um grava", async () => {
+  it("tokens e integrações só para admin/gestor; o resto da equipe lê sem tokens e marca o relógio das automações", async () => {
     const cfg = await comoUsuario(db, ADMIN, async () => um<{ id: string; webhook_token: string }>(`insert into mkt_config default values returning id, webhook_token`));
     const r = await comoUsuario(db, CORRETOR, async () => ({
-      token: await erroDe(() => db.query(`update mkt_config set whatsapp_verify_token = 'x' where id = $1`, [cfg.id])),
-      pixel: await erroDe(() => db.query(`update mkt_config set meta_pixel_id = '123456789' where id = $1`, [cfg.id])),
-      horario: await erroDe(() => db.query(`update mkt_config set automacoes_em = now() where id = $1`, [cfg.id])),
+      ler: (await todos(`select webhook_token, google_lead_key from mkt_config`)).length,
+      token: (await db.query(`update mkt_config set whatsapp_verify_token = 'x' where id = $1`, [cfg.id])).affectedRows,
+      pixel: (await db.query(`update mkt_config set meta_pixel_id = '123456789' where id = $1`, [cfg.id])).affectedRows,
+      cfg: (await um<{ r: Record<string, unknown> }>(`select public.mkt_config_ler() as r`)).r,
+      vez1: (await um<{ r: boolean }>(`select public.mkt_automacoes_vez(10) as r`)).r,
+      vez2: (await um<{ r: boolean }>(`select public.mkt_automacoes_vez(10) as r`)).r,
+      forcar: (await um<{ r: boolean }>(`select public.mkt_automacoes_vez(0) as r`)).r,
     }));
-    expect(r.token).toContain("Só administradores e gestores");
-    expect(r.pixel).toContain("Só administradores e gestores");
-    expect(r.horario).toBe("");
-    await comoUsuario(db, ADMIN, () => db.query(`update mkt_config set meta_pixel_id = '123456789', whatsapp_numero = '13999990000' where id = $1`, [cfg.id]));
+    expect(r.ler).toBe(0);
+    expect(r.token).toBe(0);
+    expect(r.pixel).toBe(0);
+    expect(r.cfg.id).toBe(cfg.id);
+    expect(r.cfg).not.toHaveProperty("webhook_token");
+    expect(r.cfg).not.toHaveProperty("google_lead_key");
+    expect(r.cfg).not.toHaveProperty("whatsapp_verify_token");
+    expect(r.cfg).not.toHaveProperty("whatsapp_app_secret");
+    expect(r.cfg.whatsapp_assinatura).toBe(false);
+    expect([r.vez1, r.vez2, r.forcar]).toEqual([true, false, true]);
+    const admin = await comoUsuario(db, ADMIN, async () => {
+      await db.query(`update mkt_config set meta_pixel_id = '123456789', whatsapp_numero = '13999990000' where id = $1`, [cfg.id]);
+      return (await um<{ r: Record<string, unknown> }>(`select public.mkt_config_ler() as r`)).r;
+    });
+    expect(admin.webhook_token).toBe(cfg.webhook_token);
+    expect(admin.meta_pixel_id).toBe("123456789");
+    expect(admin).not.toHaveProperty("whatsapp_app_secret");
   });
 });
 
@@ -160,13 +179,13 @@ describe("rotas públicas por token", () => {
       const info = (await um<{ r: { titulo: string; imobiliaria: string; meta_pixel_id: string; imovel: { codigo: string; valor_aluguel: number } } }>(`select public.info_landing('casa-centro', true) as r`)).r;
       const fora = (await um<{ r: unknown }>(`select public.info_landing('fora') as r`)).r;
       const pessoal = (await um<{ r: unknown }>(`select public.info_landing('pessoal') as r`)).r;
-      const l1 = (await um<{ r: { id: string; duplicado: boolean } }>(`select public.receber_lead_landing('casa-centro', $1) as r`, [
+      const l1 = (await um<{ r: unknown }>(`select public.receber_lead_landing('casa-centro', $1) as r`, [
         JSON.stringify({ nome: "Vera", telefone: "11955554444", origem: "facebook", utm_source: "facebook", utm_medium: "cpc", utm_campaign: "black-friday", fbclid: "FB1" }),
       ])).r;
-      const l2 = (await um<{ r: { id: string; duplicado: boolean } }>(`select public.receber_lead_landing('casa-centro', $1) as r`, [
+      const l2 = (await um<{ r: unknown }>(`select public.receber_lead_landing('casa-centro', $1) as r`, [
         JSON.stringify({ nome: "Vera", telefone: "(11) 95555-4444", utm_source: "google", gclid: "G1" }),
       ])).r;
-      const l3 = (await um<{ r: { id: string } }>(`select public.receber_lead_landing('casa-centro', $1) as r`, [JSON.stringify({ nome: "Ivo", email: "ivo@x.com" })])).r;
+      const l3 = (await um<{ r: unknown }>(`select public.receber_lead_landing('casa-centro', $1) as r`, [JSON.stringify({ nome: "Ivo", email: "ivo@x.com" })])).r;
       const erroFora = await erroDe(() => db.query(`select public.receber_lead_landing('fora', '{"nome":"x","email":"a@a"}')`));
       const lerTabela = await erroDe(() => db.query(`select * from mkt_landing_pages`));
       return { info, fora, pessoal, l1, l2, l3, erroFora, lerTabela };
@@ -174,19 +193,23 @@ describe("rotas públicas por token", () => {
     expect(r.info).toMatchObject({ titulo: "Casa no Centro", imobiliaria: "Imob Mkt", meta_pixel_id: "123456789", imovel: { codigo: "LP-1" } });
     expect(r.fora).toBeNull();
     expect(r.pessoal).toBeNull();
-    expect(r.l2).toEqual({ id: r.l1.id, duplicado: true });
+    // A resposta é a mesma para contato novo ou repetido (não revela quem já é cliente nem o id).
+    expect(r.l1).toEqual({ ok: true });
+    expect(r.l2).toEqual({ ok: true });
+    expect(r.l3).toEqual({ ok: true });
     expect(r.erroFora).toContain("Página não encontrada");
     expect(r.lerTabela).toContain("permission denied");
     const v = await comoUsuario(db, ADMIN, async () => ({
+      vera: (await todos(`select id from leads where telefone = '11955554444'`)).length,
       lead: await um<Record<string, string | null>>(
         `select l.origem, l.utm_source, l.utm_medium, l.utm_campaign, l.fbclid, l.gclid, l.funil, lp.slug, c.nome as campanha
-           from leads l join mkt_landing_pages lp on lp.id = l.landing_id left join mkt_campanhas c on c.id = l.campanha_id where l.id = $1`,
-        [r.l1.id],
+           from leads l join mkt_landing_pages lp on lp.id = l.landing_id left join mkt_campanhas c on c.id = l.campanha_id where l.telefone = '11955554444'`,
       ),
-      semUtm: await um<{ utm_campaign: string | null }>(`select utm_campaign from leads where id = $1`, [r.l3.id]),
+      semUtm: await um<{ utm_campaign: string | null }>(`select utm_campaign from leads where email = 'ivo@x.com'`),
       lp: await um<{ visitas: number; leads: number }>(`select visitas, leads from mkt_landing_pages where slug = 'casa-centro'`),
-      imovel: (await todos(`select 1 from lead_imoveis li join imoveis i on i.id = li.imovel_id where li.lead_id = $1 and i.codigo = 'LP-1'`, [r.l1.id])).length,
+      imovel: (await todos(`select 1 from lead_imoveis li join imoveis i on i.id = li.imovel_id join leads l on l.id = li.lead_id where l.telefone = '11955554444' and i.codigo = 'LP-1'`)).length,
     }));
+    expect(v.vera).toBe(1);
     // Primeiro toque fica (o segundo envio veio do Google, mas a origem é Facebook)
     expect(v.lead).toEqual({ origem: "facebook", utm_source: "facebook", utm_medium: "cpc", utm_campaign: "black-friday", fbclid: "FB1", gclid: "G1", funil: "locacao", slug: "casa-centro", campanha: "Black Friday" });
     expect(v.semUtm.utm_campaign).toBe("padrao-lp");
@@ -196,10 +219,10 @@ describe("rotas públicas por token", () => {
 
   it("landing page de quem quer anunciar vira captação (sem UTM no lead)", async () => {
     await comoUsuario(db, ADMIN, () => db.query(`insert into mkt_landing_pages (slug, titulo, funil) values ('anuncie', 'Anuncie seu imóvel', 'captacao')`));
-    const r = await comoAnonimo(db, async () => (await um<{ r: { captacao: boolean; id: string } }>(`select public.receber_lead_landing('anuncie', $1) as r`, [JSON.stringify({ nome: "Seu Jorge", telefone: "11922221111", utm_source: "instagram" })])).r);
-    expect(r.captacao).toBe(true);
+    const r = await comoAnonimo(db, async () => (await um<{ r: unknown }>(`select public.receber_lead_landing('anuncie', $1) as r`, [JSON.stringify({ nome: "Seu Jorge", telefone: "11922221111", utm_source: "instagram" })])).r);
+    expect(r).toEqual({ ok: true });
     const v = await comoUsuario(db, ADMIN, async () => ({
-      cap: await um<{ proprietario_nome: string }>(`select proprietario_nome from captacoes where id = $1`, [r.id]),
+      cap: await um<{ proprietario_nome: string }>(`select proprietario_nome from captacoes where proprietario_telefone = '11922221111'`),
       lp: await um<{ leads: number }>(`select leads from mkt_landing_pages where slug = 'anuncie'`),
     }));
     expect(v).toEqual({ cap: { proprietario_nome: "Seu Jorge" }, lp: { leads: 1 } });
@@ -235,9 +258,10 @@ describe("rotas públicas por token", () => {
       mudaLog: (await db.query(`update mkt_preferencias_log set concedido = true where pessoa_id = $1`, [pessoa])).affectedRows,
     }));
     expect(v.pessoa).toEqual({ aceita_whatsapp: false, aceita_email: true, consentimento_origem: "Página de preferências (pela própria pessoa)" });
-    // Aba Comunicação: só o que mudou nas caixas (WhatsApp desmarcado, ofertas autorizadas agora)
+    // Aba Comunicação e registro: só o que mudou em relação ao que a pessoa viu (WhatsApp e SMS
+    // desmarcados). Ofertas já aparecia marcada e continuou: não vira autorização nova.
     expect(v.consent).toEqual([
-      { canal: "marketing", concedido: true },
+      { canal: "sms", concedido: false },
       { canal: "whatsapp", concedido: false },
     ]);
     expect(v.desc).toEqual([
@@ -245,7 +269,6 @@ describe("rotas públicas por token", () => {
       { canal: "whatsapp", origem: "link" },
     ]);
     expect(v.log).toEqual([
-      { canal: "ofertas", concedido: true },
       { canal: "sms", concedido: false },
       { canal: "whatsapp", concedido: false },
     ]);
@@ -342,16 +365,17 @@ describe("rotas públicas por token", () => {
     const r = await comoAnonimo(db, async () => {
       const lead = { nome: "Teo", telefone: "11933332222", utm_source: "google", utm_medium: "cpc", gclid: "GCL-9", origem: "site" };
       const semChave = await erroDe(() => db.query(`select public.lead_ads_receber($1, $2)`, [token, JSON.stringify({ plataforma: "google", chave: "errada", lead })]));
-      const g = (await um<{ r: { id: string } }>(`select public.lead_ads_receber($1, $2) as r`, [token, JSON.stringify({ plataforma: "google", chave, externo_id: "L1", lead })])).r;
+      const g = (await um<{ r: unknown }>(`select public.lead_ads_receber($1, $2) as r`, [token, JSON.stringify({ plataforma: "google", chave, externo_id: "L1", lead })])).r;
       const m = (await um<{ r: Record<string, boolean> }>(`select public.lead_ads_receber($1, $2) as r`, [token, JSON.stringify({ plataforma: "meta", externo_id: "444" })])).r;
       const t = (await um<{ r: Record<string, boolean> }>(`select public.lead_ads_receber($1, $2) as r`, [token, JSON.stringify({ plataforma: "google", chave, teste: true, lead })])).r;
       return { semChave, g, m, t };
     });
     expect(r.semChave).toContain("Chave do Google Ads não confere");
+    expect(r.g).toEqual({ ok: true });
     expect(r.m).toEqual({ pendente: true });
     expect(r.t).toEqual({ teste: true });
     const v = await comoUsuario(db, ADMIN, async () => ({
-      lead: await um<{ gclid: string; utm_source: string }>(`select gclid, utm_source from leads where id = $1`, [r.g.id]),
+      lead: await um<{ gclid: string; utm_source: string }>(`select gclid, utm_source from leads where telefone = '11933332222'`),
       log: await todos<{ plataforma: string; status: string }>(`select plataforma, status from mkt_lead_ads order by recebido_em, status`),
     }));
     expect(v.lead).toEqual({ gclid: "GCL-9", utm_source: "google" });
@@ -388,37 +412,38 @@ describe("correções da revisão", () => {
     expect(r.gravarNaOutra).toContain("row-level security");
   });
 
-  it("configuração: corretor só cria com valores padrão e não apaga", async () => {
+  it("configuração: corretor só cria com valores padrão (pelo mkt_config_ler) e não apaga", async () => {
     const orgC = await comoUsuario(db, ADMIN2, async () => (await um<{ id: string }>(`select public.criar_organizacao('Imob Config') as id`)).id);
     await db.query(`insert into membros (organizacao_id, user_id, papel) values ($1, $2, 'corretor')`, [orgC, CORRETOR2]);
     const r = await comoUsuario(db, CORRETOR2, async () => {
-      const criada = await um<{ id: string; webhook_token: string; whatsapp_verify_token: string; meta_pixel_id: string | null; google_lead_key: string }>(
-        `insert into mkt_config (webhook_token, whatsapp_verify_token, meta_pixel_id, google_lead_key)
-         values ('11111111-1111-1111-1111-111111111111', 'meu-token', '999999999', 'minha-chave') returning id, webhook_token, whatsapp_verify_token, meta_pixel_id, google_lead_key`,
+      const inserir = await erroDe(() =>
+        db.query(`insert into mkt_config (webhook_token, whatsapp_verify_token, meta_pixel_id, google_lead_key)
+                  values ('11111111-1111-1111-1111-111111111111', 'meu-token', '999999999', 'minha-chave')`),
       );
-      const apagar = await erroDe(() => db.query(`delete from mkt_config where id = $1`, [criada.id]));
-      const horario = await erroDe(() => db.query(`update mkt_config set automacoes_em = now() where id = $1`, [criada.id]));
-      return { criada, apagar, horario };
+      const criada = (await um<{ r: { id: string; meta_pixel_id: string | null } }>(`select public.mkt_config_ler() as r`)).r;
+      const apagar = (await db.query(`delete from mkt_config where id = $1`, [criada.id])).affectedRows;
+      return { inserir, criada, apagar };
     });
-    expect(r.criada.webhook_token).not.toBe("11111111-1111-1111-1111-111111111111");
-    expect(r.criada.whatsapp_verify_token).not.toBe("meu-token");
-    expect(r.criada.google_lead_key).not.toBe("minha-chave");
+    expect(r.inserir).toContain("row-level security");
     expect(r.criada.meta_pixel_id).toBeNull();
-    expect(r.apagar).toContain("Só administradores e gestores");
-    expect(r.horario).toBe("");
+    expect(r.criada).not.toHaveProperty("webhook_token");
+    expect(r.apagar).toBe(0);
     // Administrador apaga (e o recriado pelo admin guarda o que ele escolher)
     const admin = await comoUsuario(db, ADMIN2, async () => {
+      const antes = await um<{ webhook_token: string }>(`select webhook_token from mkt_config where id = $1`, [r.criada.id]);
       await db.query(`delete from mkt_config where id = $1`, [r.criada.id]);
-      return um<{ meta_pixel_id: string }>(`insert into mkt_config (meta_pixel_id) values ('123123123') returning meta_pixel_id`);
+      const nova = await um<{ meta_pixel_id: string }>(`insert into mkt_config (meta_pixel_id) values ('123123123') returning meta_pixel_id`);
+      return { antes, nova };
     });
-    expect(admin.meta_pixel_id).toBe("123123123");
+    expect(admin.antes.webhook_token).not.toBe("11111111-1111-1111-1111-111111111111");
+    expect(admin.nova.meta_pixel_id).toBe("123123123");
   });
 
-  it("bloqueio: corretor bloqueia mas não retira nem muda; a própria pessoa muda pelo link mesmo logada", async () => {
-    const { desc, token } = await comoUsuario(db, ADMIN, async () => {
+  it("bloqueio: corretor bloqueia mas não retira nem muda — nem pelo link (logado ou com o token)", async () => {
+    const { desc, token, pessoa } = await comoUsuario(db, ADMIN, async () => {
       const p = await um<{ id: string; preferencias_token: string }>(`insert into pessoas (nome, telefone) values ('Lia', '13955550009') returning id, preferencias_token`);
-      const d = await um<{ id: string }>(`insert into mkt_descadastros (pessoa_id, telefone, canal) values ($1, '13955550009', 'todos') returning id`, [p.id]);
-      return { desc: d.id, token: p.preferencias_token };
+      const d = await um<{ id: string }>(`insert into mkt_descadastros (pessoa_id, telefone, canal, motivo) values ($1, '13955550009', 'todos', 'Pediu por telefone') returning id`, [p.id]);
+      return { desc: d.id, token: p.preferencias_token, pessoa: p.id };
     });
     const r = await comoUsuario(db, CORRETOR, async () => ({
       bloquear: await erroDe(() => db.query(`insert into mkt_descadastros (telefone, canal) values ('13900000001', 'whatsapp')`)),
@@ -429,9 +454,23 @@ describe("correções da revisão", () => {
     expect(r.bloquear).toBe("");
     expect(r.apagar).toContain("Só administradores e gestores");
     expect(r.mudar).toContain("Só administradores e gestores");
-    expect(r.peloLink).toBe("");
-    const sobrou = await comoUsuario(db, ADMIN, async () => (await todos(`select id from mkt_descadastros where id = $1`, [desc])).length);
-    expect(sobrou).toBe(0); // a pessoa liberou pelo link
+    expect(r.peloLink).toContain("permission denied");
+    // Com o token na mão, pela página pública (anônimo): o bloqueio da equipe continua.
+    const anon = await comoAnonimo(db, async () => {
+      const info = (await um<{ r: { whatsapp: boolean; travado: Record<string, boolean> } }>(`select public.info_preferencias($1) as r`, [token])).r;
+      const depois = (await um<{ r: Record<string, boolean> }>(`select public.salvar_preferencias($1, '{"whatsapp": true, "sms": true, "ofertas": true}') as r`, [token])).r;
+      return { info, depois };
+    });
+    expect(anon.info.whatsapp).toBe(false);
+    expect(anon.info.travado).toEqual({ whatsapp: true, email: true, sms: true, ofertas: true });
+    expect(anon.depois).toEqual({ whatsapp: false, email: false, sms: false, ofertas: false });
+    const v = await comoUsuario(db, ADMIN, async () => ({
+      sobrou: (await todos(`select id from mkt_descadastros where id = $1`, [desc])).length,
+      pessoa: await um<{ aceita_whatsapp: boolean; aceita_marketing: boolean }>(`select aceita_whatsapp, aceita_marketing from pessoas where id = $1`, [pessoa]),
+      consent: (await todos(`select id from pessoa_consentimentos where pessoa_id = $1 and concedido`, [pessoa])).length,
+      log: (await todos(`select id from mkt_preferencias_log where pessoa_id = $1 and concedido`, [pessoa])).length,
+    }));
+    expect(v).toEqual({ sobrou: 1, pessoa: { aceita_whatsapp: false, aceita_marketing: false }, consent: 0, log: 0 });
     const admin = await comoUsuario(db, ADMIN, async () => {
       const d = await um<{ id: string }>(`insert into mkt_descadastros (telefone, canal) values ('13900000002', 'todos') returning id`);
       return erroDe(() => db.query(`delete from mkt_descadastros where id = $1`, [d.id]));
@@ -487,14 +526,17 @@ describe("correções da revisão", () => {
     const token = await comoUsuario(db, ADMIN, async () => (await um<{ leads_token: string }>(`select leads_token from organizacoes where id = $1`, [org])).leads_token);
     const r = await comoAnonimo(db, async () =>
       (
-        await um<{ r: { id: string } }>(`select public.receber_lead_marketing($1, $2) as r`, [
+        await um<{ r: unknown }>(`select public.receber_lead_marketing($1, $2) as r`, [
           token,
           JSON.stringify({ nome: "Sara", telefone: "11966661111", origem: "instagram", utm_source: "instagram", utm_medium: "stories", utm_campaign: "Black-Friday", gclid: "GC-77" }),
         ])
       ).r,
     );
+    expect(r).toEqual({ ok: true });
     const v = await comoUsuario(db, ADMIN, async () =>
-      um<Record<string, string | null>>(`select l.origem, l.utm_source, l.utm_medium, l.gclid, c.nome as campanha from leads l left join mkt_campanhas c on c.id = l.campanha_id where l.id = $1`, [r.id]),
+      um<Record<string, string | null>>(
+        `select l.origem, l.utm_source, l.utm_medium, l.gclid, c.nome as campanha from leads l left join mkt_campanhas c on c.id = l.campanha_id where l.telefone = '11966661111'`,
+      ),
     );
     expect(v).toEqual({ origem: "instagram", utm_source: "instagram", utm_medium: "stories", gclid: "GC-77", campanha: "Black Friday" });
   });
@@ -520,5 +562,314 @@ describe("correções da revisão", () => {
     ]);
     const anon = await comoAnonimo(db, () => erroDe(() => db.query(`select public.mkt_marcar_enviados($1)`, [ids])));
     expect(anon).toContain("permission denied");
+  });
+});
+
+describe("correções da revisão (rodada 2)", () => {
+  const ADMIN3 = "00000000-0000-0000-0000-000000017e01";
+
+  it("autorização retirada na aba Comunicação bloqueia na hora o envio pendente; exportar CSV confere o descadastro", async () => {
+    const r = await comoUsuario(db, ADMIN, async () => {
+      const p = (await um<{ id: string }>(`insert into pessoas (nome, telefone, email) values ('Xavier', '13911110001', 'xavier@x.com') returning id`)).id;
+      const em = (await um<{ id: string }>(`insert into mkt_envios (chave, pessoa_id, canal, email, mensagem) values ('x-em', $1, 'email', 'xavier@x.com', 'Oferta') returning id`, [p])).id;
+      const wa = (await um<{ id: string }>(`insert into mkt_envios (chave, pessoa_id, telefone, mensagem) values ('x-wa', $1, '13911110001', 'Oferta') returning id`, [p])).id;
+      await db.query(`insert into pessoa_consentimentos (pessoa_id, canal, concedido, origem) values ($1, 'email', false, 'Pediu por telefone')`, [p]);
+      const st = async (id: string) => (await um<{ status: string }>(`select status from mkt_envios where id = $1`, [id])).status;
+      // Descadastro gravado direto (sem passar pela ação que limpa a fila): o envio continua pendente…
+      const y = (await um<{ id: string }>(`insert into mkt_envios (chave, canal, email, mensagem) values ('y-em', 'email', 'yara@x.com', 'Oferta') returning id`)).id;
+      const z = (await um<{ id: string }>(`insert into mkt_envios (chave, canal, email, mensagem) values ('z-em', 'email', 'zeca@x.com', 'Oferta') returning id`)).id;
+      await db.query(`insert into mkt_descadastros (email, canal) values ('yara@x.com', 'email')`);
+      const antes = await st(y);
+      return { em: await st(em), wa: await st(wa), antes, y, z };
+    });
+    expect(r).toMatchObject({ em: "bloqueado", wa: "pendente", antes: "pendente" });
+    // …e o CSV confere de novo: quem se descadastrou vira "bloqueado" e fica fora.
+    const deOutro = await comoUsuario(db, OUTRO, async () => (await um<{ r: string[] }>(`select public.mkt_conferir_envios($1) as r`, [[r.y, r.z]])).r);
+    expect(deOutro).toEqual([]);
+    const ok = await comoUsuario(db, ADMIN, async () => ({
+      ids: (await um<{ r: string[] }>(`select public.mkt_conferir_envios($1) as r`, [[r.y, r.z]])).r,
+      y: (await um<{ status: string }>(`select status from mkt_envios where id = $1`, [r.y])).status,
+    }));
+    expect(ok).toEqual({ ids: [r.z], y: "bloqueado" });
+    expect(await comoAnonimo(db, () => erroDe(() => db.query(`select public.mkt_conferir_envios($1)`, [[r.z]])))).toContain("permission denied");
+  });
+
+  it("registro LGPD: quem está logado não grava origem link/whatsapp, data retroativa nem outro usuário", async () => {
+    const p = await comoUsuario(db, ADMIN, async () => (await um<{ id: string }>(`insert into pessoas (nome) values ('Fábio') returning id`)).id);
+    await comoUsuario(db, CORRETOR, async () => {
+      await db.query(`insert into mkt_preferencias_log (pessoa_id, canal, concedido, origem, em, usuario_id) values ($1, 'whatsapp', true, 'link', '2025-01-01', null)`, [p]);
+      await db.query(`insert into mkt_descadastros (pessoa_id, canal, origem, em, usuario_id) values ($1, 'sms', 'whatsapp', '2025-01-01', $2)`, [p, ADMIN]);
+    });
+    const v = await comoUsuario(db, ADMIN, async () => ({
+      log: await um<{ origem: string; usuario_id: string; recente: boolean }>(`select origem, usuario_id, em > now() - interval '1 minute' as recente from mkt_preferencias_log where pessoa_id = $1`, [p]),
+      desc: await um<{ origem: string; usuario_id: string; recente: boolean }>(`select origem, usuario_id, em > now() - interval '1 minute' as recente from mkt_descadastros where pessoa_id = $1`, [p]),
+    }));
+    expect(v.log).toEqual({ origem: "manual", usuario_id: CORRETOR, recente: true });
+    expect(v.desc).toEqual({ origem: "manual", usuario_id: CORRETOR, recente: true });
+  });
+
+  it("link de preferências: só muda o que a pessoa viu; sem telefone não autoriza WhatsApp nem SMS", async () => {
+    const { token, pessoa } = await comoUsuario(db, ADMIN, async () => {
+      const x = await um<{ id: string; preferencias_token: string }>(`insert into pessoas (nome, email) values ('Duda', 'duda@x.com') returning id, preferencias_token`);
+      return { token: x.preferencias_token, pessoa: x.id };
+    });
+    const info = await comoAnonimo(db, async () => {
+      const i = (await um<{ r: { tem_telefone: boolean; tem_email: boolean } }>(`select public.info_preferencias($1) as r`, [token])).r;
+      // A página manda só os canais que mostrou (e-mail e ofertas): ela só desmarcou "ofertas".
+      await db.query(`select public.salvar_preferencias($1, $2)`, [token, JSON.stringify({ email: true, ofertas: false })]);
+      return i;
+    });
+    expect(info).toMatchObject({ tem_telefone: false, tem_email: true });
+    const v1 = await comoUsuario(db, ADMIN, async () => ({
+      pessoa: await um<Record<string, boolean>>(`select aceita_whatsapp, aceita_sms, aceita_email, aceita_marketing from pessoas where id = $1`, [pessoa]),
+      consent: await todos<{ canal: string; concedido: boolean }>(`select canal, concedido from pessoa_consentimentos where pessoa_id = $1 order by canal`, [pessoa]),
+    }));
+    expect(v1.pessoa).toEqual({ aceita_whatsapp: false, aceita_sms: false, aceita_email: false, aceita_marketing: false });
+    expect(v1.consent).toEqual([{ canal: "marketing", concedido: false }]);
+    // Mesmo chamando direto com WhatsApp/SMS marcados, quem não tem telefone não ganha autorização.
+    await comoAnonimo(db, async () => {
+      await db.query(`select public.salvar_preferencias($1, '{"nada": true}')`, [token]);
+      await db.query(`select public.salvar_preferencias($1, '{"whatsapp": true, "sms": true, "email": true}')`, [token]);
+    });
+    const v2 = await comoUsuario(db, ADMIN, async () => ({
+      pessoa: await um<Record<string, boolean>>(`select aceita_whatsapp, aceita_sms, aceita_email from pessoas where id = $1`, [pessoa]),
+      sim: await todos<{ canal: string }>(`select canal from pessoa_consentimentos where pessoa_id = $1 and concedido order by canal`, [pessoa]),
+    }));
+    expect(v2.pessoa).toEqual({ aceita_whatsapp: false, aceita_sms: false, aceita_email: true });
+    expect(v2.sim).toEqual([{ canal: "email" }]);
+  });
+
+  it("link de um lead com o telefone de outra pessoa não apaga o bloqueio dela", async () => {
+    const { vitima, tokenVitima, leadsToken } = await comoUsuario(db, ADMIN, async () => {
+      const x = await um<{ id: string; preferencias_token: string }>(`insert into pessoas (nome, telefone) values ('Vitória', '13922220001') returning id, preferencias_token`);
+      const o = await um<{ leads_token: string }>(`select leads_token from organizacoes where id = $1`, [org]);
+      return { vitima: x.id, tokenVitima: x.preferencias_token, leadsToken: o.leads_token };
+    });
+    await comoAnonimo(db, async () => {
+      await db.query(`select public.salvar_preferencias($1, '{"whatsapp": false}')`, [tokenVitima]);
+      await db.query(`select public.receber_lead_marketing($1, $2)`, [leadsToken, JSON.stringify({ nome: "Atacante", telefone: "13922220001", email: "atk@x.com" })]);
+    });
+    const tokenLead = await comoUsuario(db, ADMIN, async () => (await um<{ t: string }>(`select preferencias_token as t from leads where email = 'atk@x.com'`)).t);
+    const depois = await comoAnonimo(db, async () =>
+      (await um<{ r: Record<string, boolean> }>(`select public.salvar_preferencias($1, '{"whatsapp": true, "email": true, "sms": true, "ofertas": true}') as r`, [tokenLead])).r,
+    );
+    expect(depois.whatsapp).toBe(false); // o bloqueio é da Vitória: o link do lead não libera
+    const v = await um<{ b: boolean; n: number }>(
+      `select privado.mkt_bloqueado($1, $2, null, null, '13922220001', 'whatsapp', 'ofertas') as b,
+              (select count(*)::int from mkt_descadastros where pessoa_id = $2) as n`,
+      [org, vitima],
+    );
+    expect(v).toEqual({ b: true, n: 1 });
+  });
+
+  it("limite: a 11ª alteração na mesma hora pelo mesmo link é recusada", async () => {
+    const token = await comoUsuario(db, ADMIN, async () => (await um<{ t: string }>(`insert into pessoas (nome, telefone) values ('Rafa', '13933330001') returning preferencias_token as t`)).t);
+    const erros = await comoAnonimo(db, async () => {
+      for (let i = 0; i < 10; i++) await db.query(`select public.salvar_preferencias($1, $2)`, [token, JSON.stringify({ ofertas: i % 2 === 1 })]);
+      return erroDe(() => db.query(`select public.salvar_preferencias($1, '{"ofertas": false}')`, [token]));
+    });
+    expect(erros).toContain("Muitas alterações agora");
+  });
+
+  it("juntar repetidos: o link do cadastro removido continua abrindo e salvando para o que fica", async () => {
+    const { a, tokenB } = await comoUsuario(db, ADMIN, async () => {
+      const a = (await um<{ id: string }>(`insert into pessoas (nome, telefone) values ('Célia Prado', '13944449999') returning id`)).id;
+      const b = await um<{ id: string; preferencias_token: string }>(`insert into pessoas (nome, telefone) values ('Célia P', '13944449999') returning id, preferencias_token`);
+      await db.query(`select public.juntar_pessoas($1, $2)`, [a, b.id]);
+      return { a, tokenB: b.preferencias_token };
+    });
+    const r = await comoAnonimo(db, async () => {
+      const info = (await um<{ r: { nome: string } | null }>(`select public.info_preferencias($1) as r`, [tokenB])).r;
+      await db.query(`select public.salvar_preferencias($1, '{"whatsapp": false}')`, [tokenB]);
+      return info;
+    });
+    expect(r?.nome).toBe("Célia Prado");
+    const desc = await comoUsuario(db, ADMIN, async () => todos<{ canal: string; origem: string }>(`select canal, origem from mkt_descadastros where pessoa_id = $1`, [a]));
+    expect(desc).toEqual([{ canal: "whatsapp", origem: "link" }]);
+  });
+
+  it("preço que baixou de imóvel indisponível não vira evento (não ocupa a fila das automações)", async () => {
+    const r = await comoUsuario(db, ADMIN, async () => {
+      const alugado = (await um<{ id: string }>(`insert into imoveis (codigo, valor_aluguel, status) values ('MKT-AL', 3000, 'alugado') returning id`)).id;
+      const livre = (await um<{ id: string }>(`insert into imoveis (codigo, valor_aluguel) values ('MKT-LV', 3000) returning id`)).id;
+      await db.query(`update imoveis set valor_aluguel = 2500 where id in ($1, $2)`, [alugado, livre]);
+      const ev = async (id: string) => (await todos<{ tipo: string }>(`select tipo from mkt_eventos where imovel_id = $1 order by criado_em, tipo`, [id])).map((e) => e.tipo);
+      return { alugado: await ev(alugado), livre: await ev(livre) };
+    });
+    expect(r).toEqual({ alugado: [], livre: ["novo_imovel", "reducao_preco"] });
+  });
+
+  it("voltar para a fila: desfaz o histórico nos primeiros minutos sem duplicar; depois disso ou com campanha cancelada, não volta", async () => {
+    const r = await comoUsuario(db, ADMIN, async () => {
+      const l = (await um<{ id: string }>(`insert into leads (nome, telefone) values ('Hugo', '13955551111') returning id`)).id;
+      const e = (await um<{ id: string }>(`insert into mkt_envios (chave, lead_id, telefone, mensagem) values ('h1', $1, '13955551111', 'Olá Hugo') returning id`, [l])).id;
+      const eventos = async () => (await todos(`select id from lead_eventos where lead_id = $1 and descricao like 'WhatsApp enviado%'`, [l])).length;
+      await db.query(`update mkt_envios set status = 'enviado' where id = $1`, [e]);
+      const n1 = await eventos();
+      await db.query(`update mkt_envios set status = 'pendente' where id = $1`, [e]);
+      const n2 = await eventos();
+      await db.query(`update mkt_envios set status = 'enviado' where id = $1`, [e]);
+      const n3 = await eventos();
+      // A data do envio não muda depois de gravada (senão daria para "renovar" os 10 minutos).
+      await db.query(`update mkt_envios set enviado_em = now() + interval '1 day' where id = $1`, [e]);
+      const fixo = (await um<{ ok: boolean }>(`select enviado_em <= now() as ok from mkt_envios where id = $1`, [e])).ok;
+      const velho = (
+        await um<{ id: string }>(
+          `insert into mkt_envios (chave, lead_id, telefone, mensagem, status, enviado_em) values ('h2', $1, '13955551111', 'Antigo', 'enviado', now() - interval '1 hour') returning id`,
+          [l],
+        )
+      ).id;
+      const voltarVelho = await erroDe(() => db.query(`update mkt_envios set status = 'pendente' where id = $1`, [velho]));
+      const camp = (await um<{ id: string }>(`insert into mkt_campanhas (nome, mensagem, status) values ('Cancelada', 'Oi', 'fila') returning id`)).id;
+      const ec = (await um<{ id: string }>(`insert into mkt_envios (chave, campanha_id, lead_id, telefone, mensagem) values ('h3', $1, $2, '13955551111', 'Oi') returning id`, [camp, l])).id;
+      await db.query(`update mkt_campanhas set status = 'cancelada' where id = $1`, [camp]);
+      await db.query(`update mkt_envios set status = 'cancelado' where id = $1`, [ec]);
+      const voltarCancelada = await erroDe(() => db.query(`update mkt_envios set status = 'pendente' where id = $1`, [ec]));
+      return { n1, n2, n3, fixo, voltarVelho, voltarCancelada };
+    });
+    expect([r.n1, r.n2, r.n3]).toEqual([1, 0, 1]);
+    expect(r.fixo).toBe(true);
+    expect(r.voltarVelho).toContain("10 minutos");
+    expect(r.voltarCancelada).toContain("Campanha cancelada");
+  });
+
+  it("pesquisa: a tarefa da nota baixa vence no dia de Brasília (o banco roda em UTC)", async () => {
+    const token = await comoUsuario(db, ADMIN, async () => (await um<{ token: string }>(`insert into mkt_pesquisas (nome) values ('Paulo Fuso') returning token`)).token);
+    await db.exec(`set timezone = 'UTC'`);
+    await comoAnonimo(db, () => db.query(`select public.responder_pesquisa($1, 3, null)`, [token]));
+    const v = await comoUsuario(db, ADMIN, async () =>
+      um<{ ok: boolean }>(`select vencimento = (now() at time zone 'America/Sao_Paulo')::date as ok from tarefas where titulo like 'Retornar para Paulo Fuso%'`),
+    );
+    expect(v.ok).toBe(true);
+  });
+
+  it("outra organização: conversa, envio, pesquisa e mensagem com cadastro de outra imobiliária são recusados", async () => {
+    const a = await comoUsuario(db, ADMIN, async () => {
+      const lead = (await um<{ id: string }>(`insert into leads (nome, telefone) values ('Lead da A', '13966660001') returning id`)).id;
+      const pessoa = (await um<{ id: string }>(`insert into pessoas (nome) values ('Pessoa da A') returning id`)).id;
+      const conv = (await um<{ id: string }>(`insert into mkt_conversas (canal, contato, lead_id) values ('whatsapp', '5513966660001', $1) returning id`, [lead])).id;
+      return { lead, pessoa, conv };
+    });
+    const r = await comoUsuario(db, OUTRO, async () => ({
+      conversa: await erroDe(() => db.query(`insert into mkt_conversas (canal, contato, lead_id) values ('whatsapp', '5513966660001', $1)`, [a.lead])),
+      envio: await erroDe(() => db.query(`insert into mkt_envios (chave, lead_id, telefone, mensagem) values ('b1', $1, '13966660001', 'x')`, [a.lead])),
+      pesquisa: await erroDe(() => db.query(`insert into mkt_pesquisas (pessoa_id, nome) values ($1, 'x')`, [a.pessoa])),
+      mensagem: await erroDe(() => db.query(`insert into mkt_mensagens (conversa_id, direcao, texto, data) values ($1, 'entrada', 'x', '2099-01-01')`, [a.conv])),
+    }));
+    expect(r.conversa).toContain("outra organização");
+    expect(r.envio).toContain("outra organização");
+    expect(r.pesquisa).toContain("outra organização");
+    expect(r.mensagem).toContain("outra organização");
+    // Mensagem com data no futuro (da própria imobiliária) não joga o último contato para depois de hoje.
+    const v = await comoUsuario(db, ADMIN, async () => {
+      await db.query(`insert into mkt_mensagens (conversa_id, direcao, texto, data) values ($1, 'entrada', 'Oi', '2099-01-01')`, [a.conv]);
+      return um<{ ok: boolean; conv: boolean }>(
+        `select l.ultimo_contato <= now() as ok, (select ultima_em <= now() from mkt_conversas where id = $2) as conv from leads l where l.id = $1`,
+        [a.lead, a.conv],
+      );
+    });
+    expect(v).toEqual({ ok: true, conv: true });
+  });
+
+  it("webhook do WhatsApp: assinatura conferida no banco, corpo lido no banco, lote e SAIR limitados", async () => {
+    const SEGREDO = "segredo-do-app-da-meta-123";
+    await comoUsuario(db, ADMIN3, () => db.query(`select public.criar_organizacao('Imob Zap')`));
+    const token = await comoUsuario(db, ADMIN3, async () => {
+      const t = (await um<{ r: { webhook_token: string } }>(`select public.mkt_config_ler() as r`)).r.webhook_token;
+      await db.query(`update mkt_config set whatsapp_app_secret = $1`, [SEGREDO]);
+      await db.query(`insert into mkt_envios (chave, telefone, mensagem) values ('z1', '13999990000', 'Oferta')`);
+      return t;
+    });
+    // HMAC do banco = HMAC do Node (chave curta e chave maior que o bloco de 64 bytes)
+    const hm = (msg: string, chave: string) => createHmac("sha256", chave).update(msg, "utf8").digest("hex");
+    const banco = async (msg: string, chave: string) =>
+      (await um<{ h: string }>(`select encode(privado.mkt_hmac_sha256(convert_to($1, 'UTF8'), convert_to($2, 'UTF8')), 'hex') as h`, [msg, chave])).h;
+    expect(await banco("Olá, ação!", SEGREDO)).toBe(hm("Olá, ação!", SEGREDO));
+    expect(await banco("x", "k".repeat(100))).toBe(hm("x", "k".repeat(100)));
+
+    const corpo = (mensagens: unknown[]) =>
+      JSON.stringify({
+        object: "whatsapp_business_account",
+        entry: [{ id: "1", changes: [{ field: "messages", value: { contacts: [{ profile: { name: "Carla" }, wa_id: "5513999990000" }], messages: mensagens } }] }],
+      });
+    const c1 = corpo([
+      { from: "5513999990000", id: "wamid.A", timestamp: "1762182000", type: "text", text: { body: "Oi, quero visitar" } },
+      { from: "5513999990000", id: "wamid.B", timestamp: "4102444800", type: "image", image: { caption: "foto da sala" } },
+      { from: "12", id: "x", type: "text", text: { body: "curto" } },
+    ]);
+    const sair = corpo([
+      { from: "5513999990000", id: "wamid.S1", timestamp: "1762182100", type: "text", text: { body: "SAIR" } },
+      { from: "5513999990000", id: "wamid.S2", timestamp: "1762182200", type: "text", text: { body: "sair" } },
+    ]);
+    const grande = corpo(Array.from({ length: 101 }, (_, i) => ({ from: "5513988880000", id: `g${i}`, type: "text", text: { body: "oi" } })));
+    const r = await comoAnonimo(db, async () => ({
+      ok: (await um<{ r: Record<string, number> }>(`select public.whatsapp_receber_assinado($1, $2, $3) as r`, [token, c1, `sha256=${hm(c1, SEGREDO)}`])).r,
+      errada: await erroDe(() => db.query(`select public.whatsapp_receber_assinado($1, $2, $3)`, [token, c1, `sha256=${hm(c1, "outro-segredo-qualquer")}`])),
+      semAssinatura: await erroDe(() => db.query(`select public.whatsapp_receber_assinado($1, $2, null)`, [token, c1])),
+      // Chamar a versão antiga direto (com a chave anon e o token) não pula a assinatura.
+      direto: await erroDe(() => db.query(`select public.whatsapp_receber($1, $2)`, [token, JSON.stringify({ mensagens: [{ telefone: "5513977770000", texto: "SAIR" }] })])),
+      lote: await erroDe(() => db.query(`select public.whatsapp_receber_assinado($1, $2, $3)`, [token, grande, `sha256=${hm(grande, SEGREDO)}`])),
+      sair: (await um<{ r: Record<string, number> }>(`select public.whatsapp_receber_assinado($1, $2, $3) as r`, [token, sair, `sha256=${hm(sair, SEGREDO)}`])).r,
+    }));
+    expect(r.ok).toEqual({ mensagens: 2, status: 0 });
+    expect(r.errada).toContain("Assinatura inválida");
+    expect(r.semAssinatura).toContain("Assinatura inválida");
+    expect(r.direto).toContain("Assinatura inválida");
+    expect(r.lote).toContain("Lote grande demais");
+    expect(r.sair).toEqual({ mensagens: 2, status: 0 });
+    const v = await comoUsuario(db, ADMIN3, async () => ({
+      conversa: await um<{ nome: string; contato: string }>(`select nome, contato from mkt_conversas`),
+      msgs: await todos<{ texto: string; tipo: string; futuro: boolean }>(
+        `select texto, tipo, data > now() as futuro from mkt_mensagens where externo_id in ('wamid.A','wamid.B') order by externo_id`,
+      ),
+      desc: (await todos(`select id from mkt_descadastros where canal = 'whatsapp'`)).length,
+      envio: (await um<{ status: string }>(`select status from mkt_envios where chave = 'z1'`)).status,
+      leads: (await todos(`select id from leads where telefone = '5513988880000'`)).length,
+    }));
+    expect(v.conversa).toEqual({ nome: "Carla", contato: "5513999990000" });
+    expect(v.msgs).toEqual([
+      { texto: "Oi, quero visitar", tipo: "texto", futuro: false },
+      { texto: "foto da sala", tipo: "imagem", futuro: false },
+    ]);
+    expect(v.desc).toBe(1); // "SAIR" e "sair" na mesma rajada: um descadastro só
+    expect(v.envio).toBe("bloqueado");
+    expect(v.leads).toBe(0); // o lote grande foi recusado inteiro
+  });
+
+  it("o banco lê o corpo do WhatsApp igual ao lerWebhookWhatsapp (mesma regra nos dois lados)", async () => {
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "1",
+          changes: [
+            {
+              field: "messages",
+              value: {
+                contacts: [{ profile: { name: "Carla" }, wa_id: "5513999990000" }, { profile: { name: "  " }, wa_id: "5513888880000" }],
+                messages: [
+                  { from: "5513999990000", id: "m1", timestamp: "1762182000", type: "text", text: { body: "Oi, quero visitar" } },
+                  { from: "+55 (13) 88888-0000", id: "m2", timestamp: 1762182060, type: "interactive", interactive: { list_reply: { title: "Visita sábado" } } },
+                  { from: "5513999990000", id: "m3", timestamp: "1762182120", type: "document", document: { filename: "rg.pdf" } },
+                  { from: "5513999990000", id: "m4", timestamp: "1762182180", type: "location", location: { name: "Casa", latitude: -23.5, longitude: -46.6 } },
+                  { from: "5513999990000", id: "m5", timestamp: "1762182240", type: "reaction", reaction: { emoji: "👍" } },
+                  { from: "5513999990000", id: "m6", timestamp: "1762182300", type: "contacts" },
+                  { from: "5513999990000", id: "m7", timestamp: "1762182360", type: "button", button: { text: "Quero" } },
+                  { from: "12", id: "x", type: "text", text: { body: "curto" } },
+                  "lixo",
+                ],
+                statuses: [{ id: "wamid.Z", status: "read" }, { id: "wamid.Y", status: "desconhecido" }, { status: "sent" }],
+              },
+            },
+            { field: "outro", value: "não é objeto" },
+          ],
+        },
+      ],
+    };
+    const ts = lerWebhookWhatsapp(payload);
+    const sql = (await um<{ r: { mensagens: { data: string }[]; status: unknown[] } }>(`select privado.mkt_whatsapp_ler($1) as r`, [JSON.stringify(payload)])).r;
+    const semData = <T extends { data: string }>(l: T[]) => l.map(({ data, ...resto }) => ({ ...resto, data: Date.parse(data) }));
+    expect(semData(sql.mensagens)).toEqual(semData(ts.mensagens));
+    expect(sql.status).toEqual(ts.status);
   });
 });

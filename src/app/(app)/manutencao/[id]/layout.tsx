@@ -8,7 +8,7 @@ import { SubAbas } from "@/components/sub-abas";
 import { AreaTexto, BotaoLink, Campo, Selecao, Selo, classeBotao } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
 import { agoraMs } from "@/lib/dominio/datas";
-import { COR_STATUS_CHAMADO, COR_URGENCIA, ROTULO_STATUS_CHAMADO, ROTULO_URGENCIA, podeIrPara, situacaoPrazo, textoPrazo } from "@/lib/dominio/manutencao";
+import { COR_STATUS_CHAMADO, COR_URGENCIA, ROTULO_STATUS_CHAMADO, ROTULO_URGENCIA, podeDecidirChamado, podeIrPara, situacaoPrazo, textoPrazo } from "@/lib/dominio/manutencao";
 import { linkWhatsapp } from "@/lib/whatsapp";
 import { encerrarChamado, excluirChamado, iniciarAnalise, iniciarExecucao, reabrirChamado } from "../actions";
 import { carregarChamado, contatoDoSolicitante } from "../dados";
@@ -17,7 +17,7 @@ import { carregarChamado, contatoDoSolicitante } from "../dados";
 export default async function ChamadoLayout({ children, params }: LayoutProps<"/manutencao/[id]">) {
   const { id } = await params;
   const { supabase, papel } = await obterContexto();
-  const decide = papel !== "corretor";
+  const decide = podeDecidirChamado(papel);
   const c = await carregarChamado(supabase, id);
   if (!c) notFound();
   const contato = await contatoDoSolicitante(supabase, c);
@@ -78,7 +78,7 @@ export default async function ChamadoLayout({ children, params }: LayoutProps<"/
               <Play className="size-4" /> Iniciar execução
             </BotaoAcao>
           )}
-          {["recusado", "cancelado"].includes(c.status) && (
+          {decide && ["recusado", "cancelado"].includes(c.status) && (
             <BotaoAcao acao={reabrirChamado} id={id} confirmar="Reabrir o chamado (volta para análise)?">
               <RotateCcw className="size-4" /> Reabrir
             </BotaoAcao>

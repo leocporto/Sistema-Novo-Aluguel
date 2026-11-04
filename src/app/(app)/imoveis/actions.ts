@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { obterContexto } from "@/lib/contexto";
+import { hojeISO } from "@/lib/dominio/datas";
 import { ROTULO_MOTIVO_DUPLICADO, duplicadosDe } from "@/lib/dominio/imoveis";
 import { type EstadoAcao, booleano, ErroValidacao, inteiro, lista, mensagemErro, numero, texto, textoObrigatorio } from "@/lib/form";
 
@@ -390,7 +391,8 @@ export async function criarAnuncio(_: EstadoAcao, fd: FormData): Promise<EstadoA
 export async function encerrarAnuncio(fd: FormData) {
   const { supabase } = await obterContexto();
   const imovel_id = String(fd.get("imovel_id"));
-  await supabase.from("imovel_anuncios").update({ fim: new Date().toISOString().slice(0, 10) }).eq("id", String(fd.get("id")));
+  // Data de hoje em Brasília (a de UTC já é amanhã depois das 21h).
+  await supabase.from("imovel_anuncios").update({ fim: hojeISO() }).eq("id", String(fd.get("id")));
   revalidarImovel(imovel_id);
 }
 

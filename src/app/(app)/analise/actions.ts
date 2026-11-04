@@ -225,7 +225,10 @@ export async function desativarFicha(id: string): Promise<Resultado> {
   return { ok: true };
 }
 
-/** Troca o link (o antigo para de funcionar). */
+/**
+ * Troca o link (o antigo para de funcionar). O valor mandado é só o sinal da
+ * troca: o banco gera o token novo (ninguém escolhe um token já usado).
+ */
 export async function novoLinkFicha(id: string): Promise<Resultado> {
   const { supabase } = await obterContexto();
   const { error } = await supabase.from("analises").update({ token: crypto.randomUUID() }).eq("id", id);
@@ -235,6 +238,8 @@ export async function novoLinkFicha(id: string): Promise<Resultado> {
 }
 
 // LGPD: autorização de consulta ------------------------------------------------------------
+// O banco guarda data, origem, IP e texto juntos: registro manual fica sem IP/texto
+// (eles só vêm da ficha online) e a retirada limpa os quatro.
 export async function registrarConsentimento(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   const { supabase } = await obterContexto();
   try {
@@ -768,12 +773,18 @@ export async function vincularContratoSugerido(chave: string): Promise<Resultado
   return { ok: true };
 }
 
+/**
+ * Desvincula pela RPC (papel conferido no banco): as garantias levadas ficam
+ * encerradas no contrato antigo (com aviso) e voltam a "aprovada" aqui, para
+ * irem ao contrato certo no próximo vínculo.
+ */
 export async function desvincularContrato(id: string): Promise<Resultado> {
   const { supabase, papel } = await obterContexto();
   if (!papelAprovaExcecao(papel)) return { ok: false, erro: "Só administradores e gestores desvinculam o contrato." };
-  const { error } = await supabase.from("analises").update({ contrato_id: null }).eq("id", id);
+  const { error } = await supabase.rpc("desvincular_contrato_analise", { p_analise: id });
   if (error) return { ok: false, erro: mensagemErro(error) };
   revalidar();
+  revalidatePath("/contratos", "layout");
   return { ok: true };
 }
 

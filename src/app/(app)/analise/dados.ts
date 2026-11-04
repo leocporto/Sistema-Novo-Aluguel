@@ -47,8 +47,11 @@ export type Analise = {
   consentimento_em: string | null;
   consentimento_origem: string | null;
   consentimento_ip: string | null;
+  /** IP da conexão que chegou ao banco (o consentimento_ip é o informado pelo site). */
+  consentimento_ip_rede: string | null;
   consentimento_texto: string | null;
   token: string;
+  token_desde: string | null;
   ficha_ativa: boolean;
   ficha_expira_em: string | null;
   ficha_enviada_em: string | null;

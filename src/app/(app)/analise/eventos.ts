@@ -19,6 +19,7 @@ export const ROTULO_EVENTO: Record<string, string> = {
   fiador: "Fiador",
   garantia: "Garantia",
   ficha_enviada: "Ficha online",
+  ficha_link: "Link da ficha",
   regras: "Regras alteradas",
   renovacao_solicitada: "Renovação pedida",
   renovacao_renovada: "Renovada",
@@ -47,7 +48,7 @@ export const COR_EVENTO: Record<string, "azul" | "verde" | "amarelo" | "vermelho
 export const GRUPOS_EVENTO: Record<string, { rotulo: string; tipos: string[] }> = {
   decisoes: { rotulo: "Decisões", tipos: ["decisao", "excecao", "reaberta", "convertida", "contrato_desvinculado", "desistencia", "retomada"] },
   excecoes: { rotulo: "Exceções", tipos: ["excecao"] },
-  documentos: { rotulo: "Documentos", tipos: ["documento", "arquivo", "identidade", "ficha_enviada"] },
+  documentos: { rotulo: "Documentos", tipos: ["documento", "arquivo", "identidade", "ficha_enviada", "ficha_link"] },
   credito: { rotulo: "Crédito e LGPD", tipos: ["consulta", "consulta_excluida", "consentimento", "renda"] },
   garantias: { rotulo: "Garantias", tipos: ["garantia", "fiador", "renovacao_solicitada", "renovacao_renovada", "renovacao_recusada", "renovacao_cancelada"] },
   exclusoes: { rotulo: "Exclusões e regras", tipos: ["excluida", "consulta_excluida", "regras"] },

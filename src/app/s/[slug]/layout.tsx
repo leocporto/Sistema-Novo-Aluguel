@@ -2,10 +2,10 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Script from "next/script";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Mail, MessageCircle, Phone } from "lucide-react";
 import { ga4Valido, jsonLdImobiliaria, jsonSeguro, paletaMarca } from "@/lib/dominio/site";
-import { carregarSite, enderecosDoSite, urlLogo } from "@/lib/servicos/site";
+import { carregarSite, enderecosDoSite, slugAtualDoSite, urlLogo } from "@/lib/servicos/site";
 import { linkWhatsapp } from "@/lib/whatsapp";
 import { BarraComparar, ContadorFavoritos } from "./interativo";
 import { TEMA_CLARO } from "./tema";
@@ -31,7 +31,12 @@ export async function generateMetadata({ params }: LayoutProps<"/s/[slug]">): Pr
 export default async function SiteLayout({ children, params }: LayoutProps<"/s/[slug]">) {
   const { slug } = await params;
   const site = await carregarSite(slug);
-  if (!site) notFound();
+  if (!site) {
+    // Endereço antigo (a imobiliária trocou o endereço): leva para o novo.
+    const novo = await slugAtualDoSite(slug);
+    if (novo) redirect(`/s/${novo}`);
+    notFound();
+  }
   const { base, origem } = await enderecosDoSite(site);
   const logo = urlLogo(site.logo_path);
   const estilo = { ...TEMA_CLARO, ...paletaMarca(site.cor_primaria, site.cor_secundaria) } as CSSProperties;

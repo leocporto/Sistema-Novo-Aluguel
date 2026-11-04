@@ -201,7 +201,8 @@ export default async function CreditoAnalise({ params }: PageProps<"/analise/[id
               <details className="mt-3 text-xs text-texto-2">
                 <summary className="cursor-pointer text-acento">Texto que o candidato aceitou na ficha online</summary>
                 <p className="mt-2">{a.consentimento_texto}</p>
-                {a.consentimento_ip && <p className="mt-1 text-mudo">IP: {a.consentimento_ip}</p>}
+                {a.consentimento_ip && <p className="mt-1 text-mudo">IP informado pelo site: {a.consentimento_ip}</p>}
+                {a.consentimento_ip_rede && <p className="mt-1 text-mudo">Conexão que chegou ao sistema: {a.consentimento_ip_rede}</p>}
               </details>
             )}
           </Cartao>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Celula, LinhaVazia, Tabela } from "@/components/ui";
-import { formatarDataHora } from "@/lib/dominio/marketing";
+import { agoraMs } from "@/lib/dominio/datas";
+import { formatarDataHora, podeVoltarParaFila } from "@/lib/dominio/marketing";
 import { AcoesEnvio } from "./acoes-envio";
 import { SeloCanal, SeloEnvio } from "./campos";
 import type { Envio } from "./dados";
@@ -11,6 +12,7 @@ const ORIGEM: Record<string, string> = { automacao: "Automação", recomendacao:
 
 /** Lista da fila com o envio assistido em cada linha. */
 export function TabelaEnvios({ envios, mostrarCampanha = true, vazio }: { envios: EnvioLista[]; mostrarCampanha?: boolean; vazio: string }) {
+  const agora = agoraMs();
   return (
     <Tabela colunas={["Para", "Mensagem", ...(mostrarCampanha ? ["De onde veio"] : []), "Situação", ""]}>
       {envios.map((e) => (
@@ -58,7 +60,19 @@ export function TabelaEnvios({ envios, mostrarCampanha = true, vazio }: { envios
             </span>
           </Celula>
           <Celula>
-            <AcoesEnvio envio={{ id: e.id, canal: e.canal, telefone: e.telefone, email: e.email, assunto: e.assunto, mensagem: e.mensagem, status: e.status, nome: e.nome }} />
+            <AcoesEnvio
+              envio={{
+                id: e.id,
+                canal: e.canal,
+                telefone: e.telefone,
+                email: e.email,
+                assunto: e.assunto,
+                mensagem: e.mensagem,
+                status: e.status,
+                nome: e.nome,
+                podeVoltar: podeVoltarParaFila(e.status, e.enviado_em, agora),
+              }}
+            />
           </Celula>
         </tr>
       ))}

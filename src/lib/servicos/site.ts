@@ -17,6 +17,16 @@ export const carregarSite = cache(async (slug: string): Promise<InfoSite | null>
   return (data as InfoSite | null) ?? null;
 });
 
+/**
+ * Endereço novo de um site que trocou de endereço (o antigo fica reservado para a
+ * mesma imobiliária por 12 meses e os links antigos redirecionam). null se não houver.
+ */
+export const slugAtualDoSite = cache(async (slugAntigo: string): Promise<string | null> => {
+  if (!slugOk(slugAntigo)) return null;
+  const { data } = await clienteAnonimo().rpc("site_slug_atual", { p_slug: slugAntigo });
+  return typeof data === "string" && slugOk(data) ? data : null;
+});
+
 export const carregarImoveis = cache(async (slug: string): Promise<ImovelSite[]> => {
   if (!slugOk(slug)) return [];
   const { data } = await clienteAnonimo().rpc("site_imoveis", { p_slug: slug });

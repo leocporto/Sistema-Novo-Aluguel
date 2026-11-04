@@ -9,6 +9,7 @@ import { LinhaLink } from "@/components/linha-link";
 import { PilulasLink } from "@/components/pilulas-link";
 import { Cabecalho, Celula, Entrada, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
+import { diaLocal } from "@/lib/dominio/agenda";
 import { agoraMs, fimDoMes, formatarDataBR, hojeISO, inicioDoMes } from "@/lib/dominio/datas";
 import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import {
@@ -18,6 +19,7 @@ import {
   ROTULO_STATUS_CHAMADO,
   ROTULO_URGENCIA,
   STATUS_EM_ANDAMENTO,
+  podeDecidirChamado,
   situacaoPrazo,
   textoPrazo,
 } from "@/lib/dominio/manutencao";
@@ -25,7 +27,7 @@ import { todas } from "../financeiro/dados";
 import { AbasManutencao } from "./abas";
 import { excluirChamado, criarChamado } from "./actions";
 import { CamposNovoChamado, OpcoesCategoria } from "./campos";
-import { SELECT_LISTA, opcoesChamado, type ChamadoLista } from "./dados";
+import { SELECT_LISTA, contratoOpcao, opcoesChamado, type ChamadoLista } from "./dados";
 
 export const metadata: Metadata = { title: "Manutenção" };
 
@@ -68,6 +70,10 @@ export default async function ManutencaoPage({ searchParams }: PageProps<"/manut
     todas<{ valor_final: number | null }>(() => supabase.from("chamados").select("valor_final").in("status", ["concluido", "avaliado"]).gte("concluido_em", ini).lte("concluido_em", fimDoMes(hoje)).order("id")),
   ]);
   const lista = (data ?? []) as unknown as ChamadoLista[];
+  // "Abrir chamado" vindo de um contrato que não está ativo (encerrado, rescindido…): ele entra nas opções e traz o imóvel.
+  const contratoPedido = s("contrato") && !opcoes.contratos.some((c) => c.id === s("contrato")) ? await contratoOpcao(supabase, s("contrato")) : null;
+  if (contratoPedido) opcoes.contratos.push(contratoPedido);
+  const imovelPadrao = s("imovel") || (s("contrato") ? opcoes.contratos.find((c) => c.id === s("contrato"))?.imovel_id : undefined) || undefined;
   const atrasados = andamento.filter((c) => situacaoPrazo(c, agora).situacao === "atrasado").length;
   const aguardando = andamento.filter((c) => c.status === "aguardando_aprovacao").length;
   const agendados = andamento.filter((c) => ["agendado", "em_execucao"].includes(c.status)).length;
@@ -100,7 +106,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps<"/manut
             <CamposNovoChamado
               opcoes={opcoes}
               pessoal={pessoal}
-              padrao={{ imovelId: s("imovel") || undefined, contratoId: s("contrato") || undefined, origemId: s("origem") || undefined, categoria: s("categoria") || undefined, prestadorId: s("prestador") || undefined, titulo: s("titulo") || undefined }}
+              padrao={{ imovelId: imovelPadrao, contratoId: s("contrato") || undefined, origemId: s("origem") || undefined, categoria: s("categoria") || undefined, prestadorId: s("prestador") || undefined, titulo: s("titulo") || undefined }}
             />
           </JanelaCadastro>
         }
@@ -194,9 +200,9 @@ export default async function ManutencaoPage({ searchParams }: PageProps<"/manut
               <Celula>
                 <span className="text-sm text-texto-2">{c.prestador?.nome ?? "—"}</span>
               </Celula>
-              <Celula className="text-sm text-texto-2">{formatarDataBR(c.created_at.slice(0, 10))}</Celula>
+              <Celula className="text-sm text-texto-2">{formatarDataBR(diaLocal(c.created_at))}</Celula>
               <Celula>
-                {papel !== "corretor" && <BotaoExcluir acao={excluirChamado} id={c.id} rotulo="Excluir chamado" confirmar={`Excluir o chamado #${c.numero} (${c.titulo})? Fotos, orçamentos e lançamentos ainda em aberto no financeiro saem junto.`} />}
+                {podeDecidirChamado(papel) && <BotaoExcluir acao={excluirChamado} id={c.id} rotulo="Excluir chamado" confirmar={`Excluir o chamado #${c.numero} (${c.titulo})? Fotos, orçamentos e lançamentos ainda em aberto no financeiro saem junto.`} />}
               </Celula>
             </LinhaLink>
           );

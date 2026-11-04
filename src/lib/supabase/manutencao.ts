@@ -15,7 +15,23 @@ function validar(arquivo: File) {
   if (arquivo.size > max) throw new Error(`"${arquivo.name}" passa de ${max / 1024 / 1024} MB.`);
 }
 
-const nomeSeguro = (arquivo: File) => arquivo.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80);
+/** Extensão pelo tipo do arquivo (o banco só aceita foto/vídeo com a extensão certa no envio pelo link). */
+const EXTENSAO: Record<string, string[]> = {
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/webp": ["webp"],
+  "image/heic": ["heic"],
+  "video/mp4": ["mp4"],
+  "video/quicktime": ["mov"],
+  "video/webm": ["webm"],
+};
+
+function nomeSeguro(arquivo: File) {
+  const nome = arquivo.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80);
+  const ext = EXTENSAO[arquivo.type];
+  const atual = nome.split(".").pop()?.toLowerCase() ?? "";
+  return ext && !(nome.includes(".") && ext.includes(atual)) ? `${nome.slice(0, 74)}.${ext[0]}` : nome;
+}
 
 /**
  * Envia para a pasta informada (sem barra no fim) e devolve o caminho gravado.

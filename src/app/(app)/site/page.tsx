@@ -104,7 +104,15 @@ export default async function SitePage() {
               <ExternalLink className="size-4" /> Abrir o site
             </a>
             <Copiar texto={linkSite} rotulo="Copiar link" />
-            {admin && <BotaoExcluir acao={excluirSite} id={config.id} variante="botao" rotulo="Excluir site" confirmar="Excluir o site? Ele sai do ar e os feeds dos portais param. Os imóveis e os contatos recebidos continuam no sistema." />}
+            {admin && (
+              <BotaoExcluir
+                acao={excluirSite}
+                id={config.id}
+                variante="botao"
+                rotulo="Excluir site"
+                confirmar="Excluir o site? Ele sai do ar, os feeds dos portais passam a vir vazios (os portais tiram os anúncios) e os anúncios abertos pelo feed são encerrados hoje. O endereço fica reservado para a sua imobiliária por 12 meses. Os imóveis e os contatos recebidos continuam no sistema."
+              />
+            )}
           </>
         }
       />
@@ -244,7 +252,7 @@ export default async function SitePage() {
                 <Entrada name="dominio" defaultValue={config.dominio ?? ""} disabled={!admin} placeholder="minhaimobiliaria.com.br" />
               </Campo>
               {admin ? (
-                <BotaoEnviar variante="secundario" confirmar="Salvar o endereço? Se você mudou o endereço, os links antigos do site deixam de funcionar.">
+                <BotaoEnviar variante="secundario" confirmar="Salvar o endereço? Se você mudou o endereço, os links antigos passam a abrir a página inicial do novo (o endereço antigo fica reservado para a sua imobiliária por 12 meses).">
                   Salvar endereço
                 </BotaoEnviar>
               ) : (
@@ -256,9 +264,11 @@ export default async function SitePage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-texto">{config.dominio}</span>
                   {config.dominio_verificado_em ? <Selo cor="verde">CONFIRMADO EM {formatarDataBR(config.dominio_verificado_em)}</Selo> : <Selo cor="amarelo">AGUARDANDO DNS</Selo>}
-                  <BotaoAcao acao={verificarDominio} id={config.id} tamanho="sm">
-                    Verificar agora
-                  </BotaoAcao>
+                  {admin && (
+                    <BotaoAcao acao={verificarDominio} id={config.id} tamanho="sm">
+                      Verificar agora
+                    </BotaoAcao>
+                  )}
                 </div>
                 <p className="text-sm text-texto-2">
                   No painel onde você comprou o domínio (Registro.br, GoDaddy, Hostinger…), crie estes três registros de DNS. O TXT prova que o domínio é seu: sem ele o

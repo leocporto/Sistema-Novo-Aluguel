@@ -33,7 +33,10 @@ export type ConfigSite = {
   mostrar_endereco: boolean;
   captacao_ativa: boolean;
   agendamento_ativo: boolean;
+  /** Código do feed (só leitura: vai na URL que o portal busca). */
   portais_token: string;
+  /** Código do webhook de leads (diferente do feed). Ausente se a migração 20261107000004 não rodou. */
+  leads_portais_token?: string | null;
   atualizado_em: string;
 };
 

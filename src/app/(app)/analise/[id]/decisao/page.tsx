@@ -14,11 +14,13 @@ import {
   aprovacaoVencida,
   comprometimentoPct,
   contratoSugerido,
+  contratosVinculaveis,
   foraDaRegra,
   linkNovoContrato,
   mensagemProprietario,
   papelAprovaExcecao,
   papelDecide,
+  podeVirarContrato,
   rendaComprovada,
   type ContratoPossivel,
 } from "@/lib/dominio/analise";
@@ -68,26 +70,31 @@ export default async function DecisaoAnalise({ params }: PageProps<"/analise/[id
   const aprovada = a.decisao === "aprovado" || a.decisao === "aprovado_condicoes";
   const renda = rendaComprovada(rendas);
   const pct = comprometimentoPct(a.valor_aluguel, a.valor_encargos, renda);
-  const garantiaOk = garantias.find((g) => (GARANTIA_APROVADA as readonly string[]).includes(g.status));
+  // Fiança conta pelo fiador aprovado (igual à regra do banco), não pela garantia marcada.
+  const garantiaOk = garantias.find((g) => g.tipo !== "fiador" && (GARANTIA_APROVADA as readonly string[]).includes(g.status));
   const fiadorOk = fiadores.find((f) => f.status === "aprovado");
   const textoGarantia = garantiaOk ? `${ROTULO_TIPO_GARANTIA[garantiaOk.tipo]}${garantiaOk.garantidora ? ` (${garantiaOk.garantidora})` : ""}` : fiadorOk ? `fiador ${fiadorOk.pessoa?.nome ?? ""}` : null;
 
-  // Contratos que podem ser desta análise: do mesmo imóvel ou com o candidato como locatário.
+  // Contratos que podem receber esta análise (mesma conferência do banco): o candidato é
+  // locatário, é do imóvel da análise e está ativo ou em rascunho.
   type ContratoLinha = { id: string; numero: number; status: string; data_inicio: string; imovel_id: string | null; created_at: string };
   const COLS = "id, numero, status, data_inicio, imovel_id, created_at";
-  const [{ data: doImovel }, { data: partes }] = await Promise.all([
-    a.imovel_id
-      ? supabase.from("contratos").select(COLS).eq("imovel_id", a.imovel_id).in("status", ["rascunho", "ativo"]).order("created_at", { ascending: false }).limit(20)
-      : Promise.resolve({ data: [] as ContratoLinha[] }),
-    supabase.from("contrato_partes").select(`contrato:contratos(${COLS})`).eq("pessoa_id", a.candidato_id).eq("papel", "locatario").limit(20),
-  ]);
+  const { data: partes } = await supabase
+    .from("contrato_partes")
+    .select(`contrato:contratos(${COLS})`)
+    .eq("pessoa_id", a.candidato_id)
+    .eq("papel", "locatario")
+    .limit(50);
   const doCandidato = ((partes ?? []) as unknown as { contrato: ContratoLinha | null }[]).map((p) => p.contrato).filter(Boolean) as ContratoLinha[];
-  const ehLocatario = new Set(doCandidato.map((k) => k.id));
-  const candidatos = new Map<string, ContratoLinha & ContratoPossivel>();
-  for (const k of [...((doImovel ?? []) as ContratoLinha[]), ...doCandidato])
-    if (k.status === "rascunho" || k.status === "ativo") candidatos.set(k.id, { ...k, candidatoLocatario: ehLocatario.has(k.id) });
+  const candidatos = contratosVinculaveis(
+    doCandidato.map((k) => ({ ...k, candidatoLocatario: true }) as ContratoLinha & ContratoPossivel),
+    a,
+  );
+  const hoje = hojeISO();
+  // Aprovada, sem contrato, sem desistência e no prazo (o banco confere de novo).
+  const podeContratar = podeVirarContrato(a, hoje);
   // O contrato criado depois da aprovação, com o candidato como locatário: um clique para vincular.
-  const sugerido = aprovada && !a.contrato_id ? contratoSugerido([...candidatos.values()], a) : null;
+  const sugerido = podeContratar ? contratoSugerido(candidatos, a) : null;
 
   // Proprietários (imobiliária): mensagem de ciência
   const { data: props } =
@@ -182,7 +189,7 @@ export default async function DecisaoAnalise({ params }: PageProps<"/analise/[id
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <Selo cor={COR_DECISAO[a.decisao as keyof typeof COR_DECISAO] ?? "cinza"}>{ROTULO_DECISAO[a.decisao]}</Selo>
               {a.excecao && <Selo cor="amarelo">Exceção (fora da regra)</Selo>}
-              {aprovacaoVencida(a, hojeISO()) && <Selo cor="vermelho">Aprovação vencida</Selo>}
+              {aprovacaoVencida(a, hoje) && <Selo cor="vermelho">Aprovação vencida</Selo>}
             </div>
             <Definicao
               itens={[
@@ -263,11 +270,23 @@ export default async function DecisaoAnalise({ params }: PageProps<"/analise/[id
                 . As garantias aprovadas e os fiadores foram levados para a ficha do contrato.
               </p>
               {excecao && (
-                <BotaoAcao acao={desvincularContrato} id={id} tamanho="sm" variante="fantasma" confirmar="Desvincular o contrato desta análise? As garantias já levadas continuam no contrato.">
+                <BotaoAcao
+                  acao={desvincularContrato}
+                  id={id}
+                  tamanho="sm"
+                  variante="fantasma"
+                  confirmar="Desvincular o contrato desta análise? As garantias levadas ficam encerradas nesse contrato (com aviso) e voltam a “Aprovada” aqui, para irem ao contrato certo. Os fiadores continuam como partes dele: confira o contrato."
+                >
                   Desvincular
                 </BotaoAcao>
               )}
             </div>
+          ) : aprovada && !podeContratar ? (
+            <Aviso tipo="alerta">
+              {a.status === "desistencia"
+                ? "O candidato desistiu. Para seguir com o contrato, retome a análise."
+                : `A aprovação venceu${a.validade_ate ? ` em ${formatarDataBR(a.validade_ate)}` : ""}. Para criar o contrato, um administrador ou gestor reabre a análise e decide de novo (com a consulta de crédito em dia).`}
+            </Aviso>
           ) : aprovada ? (
             <div className="space-y-3 text-sm">
               {sugerido ? (
@@ -297,13 +316,13 @@ export default async function DecisaoAnalise({ params }: PageProps<"/analise/[id
               </BotaoLink>
               <JanelaCadastro rotuloBotao={<><Link2 className="size-3.5" /> Vincular contrato já criado</>} tamanho="sm" variante="secundario" titulo="Vincular contrato" acao={vincularContrato} rotuloSalvar="Vincular" icone={<Link2 />}>
                 <input type="hidden" name="id" value={id} />
-                {candidatos.size ? (
+                {candidatos.length ? (
                   <Campo rotulo="Contrato">
                     <Selecao name="contrato_id" required defaultValue="">
                       <option value="" disabled>
                         Escolha…
                       </option>
-                      {[...candidatos.values()].map((k) => (
+                      {candidatos.map((k) => (
                         <option key={k.id} value={k.id}>
                           #{k.numero} — início {formatarDataBR(k.data_inicio)} ({k.status})
                         </option>
@@ -311,7 +330,10 @@ export default async function DecisaoAnalise({ params }: PageProps<"/analise/[id
                     </Selecao>
                   </Campo>
                 ) : (
-                  <p className="text-sm text-mudo">Nenhum contrato ativo ou em rascunho deste imóvel ou com este candidato como locatário.</p>
+                  <p className="text-sm text-mudo">
+                    Nenhum contrato ativo ou em rascunho {a.imovel ? `do imóvel ${a.imovel.codigo} ` : ""}com {a.candidato?.nome ?? "o candidato"} como locatário. Crie o contrato
+                    (botão acima) ou inclua o candidato como locatário no contrato.
+                  </p>
                 )}
                 <p className="text-xs text-mudo">As garantias aprovadas (seguro, caução, título, carta-fiança) e os fiadores aprovados entram na ficha do contrato.</p>
               </JanelaCadastro>

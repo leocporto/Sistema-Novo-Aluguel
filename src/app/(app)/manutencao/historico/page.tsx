@@ -7,6 +7,7 @@ import { BotaoImprimir } from "@/components/formulario";
 import { LinhaLink } from "@/components/linha-link";
 import { Cabecalho, Celula, Indicador, LinhaVazia, Selecao, Selo, Tabela } from "@/components/ui";
 import { obterContexto } from "@/lib/contexto";
+import { diaLocal } from "@/lib/dominio/agenda";
 import { formatarDataBR, hojeISO } from "@/lib/dominio/datas";
 import { formatarReais, paraCentavos, paraReais } from "@/lib/dominio/dinheiro";
 import { COR_STATUS_CHAMADO, ROTULO_CATEGORIA_CURTO, ROTULO_GARANTIA, ROTULO_STATUS_CHAMADO, resumoPorImovel, situacaoGarantia } from "@/lib/dominio/manutencao";
@@ -75,7 +76,7 @@ export default async function HistoricoReparos({ searchParams }: PageProps<"/man
               const g = situacaoGarantia(c.garantia_ate, hoje);
               return (
                 <LinhaLink key={c.id} href={`/manutencao/${c.id}`}>
-                  <Celula className="text-sm text-texto-2">{formatarDataBR(c.concluido_em ?? c.created_at.slice(0, 10))}</Celula>
+                  <Celula className="text-sm text-texto-2">{formatarDataBR(c.concluido_em ?? diaLocal(c.created_at))}</Celula>
                   <Celula className="tabular-nums text-mudo">#{c.numero}</Celula>
                   <Celula>
                     <span className="font-medium text-texto">{c.titulo}</span>
