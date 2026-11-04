@@ -674,6 +674,78 @@ select[size]:not([size="1"]) option:checked {
 .tela > *:nth-child(4) { animation-delay: 0.06s; }
 .tela > *:nth-child(n + 5) { animation-delay: 0.08s; }
 
+/* ── Troca de aba (SubAbas): cabeçalho e abas ficam parados; só o conteúdo desliza
+   para o lado da aba escolhida (--aba-dir: 1 = vem da direita, -1 = da esquerda) ── */
+@keyframes aba-entrar {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--aba-dir, 0) * 22px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tela[data-entrada="aba"] > *,
+.tela[data-entrada="aba"] .entrar-cascata > * {
+  animation: none;
+}
+.tela[data-entrada="aba"] .subabas ~ *,
+.tela[data-entrada="aba"] > :has(.subabas) ~ * {
+  animation: aba-entrar 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* ── Enquanto a próxima tela carrega: a atual continua na frente, o conteúdo esmaece
+   de leve (cabeçalho e abas não) e uma linha azul corre no pé da barra do topo.
+   Só aparece se demorar (atraso de 120–150ms), para não piscar em troca rápida. ── */
+/* (filter, e não opacity: a animação de entrada segura a opacidade em 1) */
+.tela > * {
+  transition: filter 0.2s ease;
+}
+.casca-conteudo[data-carregando] .tela > :not(.cabecalho):not(:has(.abas, .cabecalho)) {
+  filter: opacity(0.5);
+  transition-delay: 0.12s;
+}
+.barra-navegacao {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  animation: barra-aparecer 0.2s ease 0.15s both;
+}
+.barra-navegacao::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: barra-correr 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes barra-aparecer {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes barra-correr {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+/* Engrenagem (Configurações) do topo: acesa na própria tela; no celular vai para o menu */
+.topo-config.on {
+  color: var(--accent);
+  border-color: var(--accent-bd, var(--accent));
+  background: var(--accent-bg, var(--bg-card));
+}
+@media (max-width: 1023px) {
+  .topo-config {
+    display: none !important;
+  }
+}
+
 /* ── Movimento (nada que responde a clique/hover passa de 340ms) ── */
 @keyframes subir {
   from {
