@@ -255,3 +255,30 @@ describe("app de campo (fila offline)", () => {
     expect(descreverOp({ op: "status", status: "concluida" }, amb, med)).toBe("Concluir a vistoria");
   });
 });
+
+describe("custo do reparo no Financeiro", () => {
+  const base = { status: "resolvida", valorAprovado: 560000, valorEstimado: 50000, descricao: "Piso (AP-101)" };
+  it("reparo do proprietário resolvido vira conta a pagar descontada do repasse (imobiliária)", async () => {
+    const { custoDoReparo } = await import("@/lib/dominio/vistorias");
+    const c = custoDoReparo({ ...base, responsavel: "proprietario", modo: "imobiliaria" });
+    expect(c?.pagar).toEqual([{ tipo: "pagar", parte: "proprietario", valor: 560000, descontarRepasse: true, descricao: "Reparo de vistoria — Piso (AP-101)" }]);
+  });
+  it("vale o orçamento aprovado; sem ele, o valor estimado", async () => {
+    const { custoDoReparo } = await import("@/lib/dominio/vistorias");
+    expect(custoDoReparo({ ...base, valorAprovado: null, responsavel: "proprietario", modo: "imobiliaria" })?.total).toBe(50000);
+  });
+  it("da imobiliária é despesa dela (sem desconto no repasse); no pessoal é despesa do dono", async () => {
+    const { custoDoReparo } = await import("@/lib/dominio/vistorias");
+    expect(custoDoReparo({ ...base, responsavel: "imobiliaria", modo: "imobiliaria" })?.pagar[0].descontarRepasse).toBe(false);
+    const pessoal = custoDoReparo({ ...base, responsavel: "proprietario", modo: "pessoal" });
+    expect(pessoal?.pagar).toHaveLength(1);
+    expect(pessoal?.pagar[0].descontarRepasse).toBe(false);
+  });
+  it("não lança nada se não resolvida, se for do locatário (vai ao acerto), desgaste natural ou sem valor", async () => {
+    const { custoDoReparo } = await import("@/lib/dominio/vistorias");
+    expect(custoDoReparo({ ...base, status: "em_reparo", responsavel: "proprietario", modo: "imobiliaria" })).toBeNull();
+    expect(custoDoReparo({ ...base, responsavel: "locatario", modo: "imobiliaria" })).toBeNull();
+    expect(custoDoReparo({ ...base, responsavel: "ninguem", modo: "imobiliaria" })).toBeNull();
+    expect(custoDoReparo({ ...base, valorAprovado: null, valorEstimado: null, responsavel: "proprietario", modo: "imobiliaria" })).toBeNull();
+  });
+});

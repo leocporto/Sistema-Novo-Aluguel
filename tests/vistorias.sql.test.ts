@@ -49,6 +49,26 @@ async function novaVistoria(tipo = "entrada") {
 }
 
 describe("vistorias — banco", () => {
+  it("custo de reparo vai para contas a pagar ligado à pendência (um lançamento valendo por vez)", async () => {
+    const v = await novaVistoria();
+    await comoUsuario(db, USER_A, async () => {
+      const pend = (await um<{ id: string }>(`insert into vistoria_pendencias (vistoria_id, tipo, descricao, responsavel, status) values ($1, 'dano', 'Piso', 'proprietario', 'resolvida') returning id`, [v.id])).id;
+      const ins = `insert into lancamentos (tipo, descricao, categoria, valor, vencimento, status, imovel_id, vistoria_pendencia_id, descontar_repasse)
+                   values ('pagar', 'Reparo de vistoria — Piso', 'Manutenção', 560000, '2026-11-04', 'aberto', $1, $2, true)`;
+      await db.query(ins, [imovel, pend]);
+      // Não deixa duplicar enquanto o primeiro vale; depois de cancelado, pode lançar de novo.
+      await expect(db.query(ins, [imovel, pend])).rejects.toThrow();
+      await db.query(`update lancamentos set status = 'cancelado' where vistoria_pendencia_id = $1`, [pend]);
+      await db.query(ins, [imovel, pend]);
+      const n = await um<{ n: number }>(`select count(*)::int as n from lancamentos where vistoria_pendencia_id = $1 and status <> 'cancelado'`, [pend]);
+      expect(n.n).toBe(1);
+      // Excluir a pendência não apaga o lançamento (só solta o vínculo).
+      await db.query(`delete from vistoria_pendencias where id = $1`, [pend]);
+      const l = await um<{ n: number }>(`select count(*)::int as n from lancamentos where descricao = 'Reparo de vistoria — Piso' and vistoria_pendencia_id is null`);
+      expect(l.n).toBe(2);
+    });
+  });
+
   it("salva o checklist de uma vez e recusa estado inválido", async () => {
     const v = await novaVistoria();
     await comoUsuario(db, USER_A, async () => {
