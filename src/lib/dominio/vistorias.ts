@@ -7,6 +7,7 @@
  */
 import { formatarDataBR, somarDias, type DataISO } from "./datas";
 import { formatarReais, paraCentavos, paraReais, type Centavos } from "./dinheiro";
+import { planoFinanceiro, type Modo } from "./manutencao";
 
 // Tipos e situações ---------------------------------------------------------------
 export const TIPOS_VISTORIA = ["entrada", "saida", "periodica"] as const;
@@ -519,3 +520,32 @@ export function resumoFila(fila: OpCampo[]) {
 }
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Custo do reparo no Financeiro ---------------------------------------------------
+/**
+ * Reparo resolvido por conta do proprietário ou da imobiliária vira conta a
+ * pagar ao prestador — mesma regra da Manutenção (`planoFinanceiro`): na
+ * imobiliária a parte do proprietário é descontada do próximo repasse. Vale o
+ * orçamento aprovado; sem orçamento, o valor estimado. O reparo do locatário
+ * vai para o acerto de saída e "ninguém" (desgaste natural) não gera custo.
+ * Devolve null quando não há nada a lançar.
+ */
+export function custoDoReparo(p: {
+  status: string;
+  responsavel: string;
+  valorAprovado: number | null | undefined;
+  valorEstimado: number | null | undefined;
+  modo: Modo;
+  descricao: string;
+}): ReturnType<typeof planoFinanceiro> | null {
+  if (p.status !== "resolvida") return null;
+  if (p.responsavel !== "proprietario" && p.responsavel !== "imobiliaria") return null;
+  if (p.modo === "pessoal" && p.responsavel === "imobiliaria") return null;
+  const valor = Number(p.valorAprovado ?? p.valorEstimado ?? 0);
+  if (!(valor > 0)) return null;
+  const plano = planoFinanceiro({ modo: p.modo, valor, responsabilidade: p.responsavel, titulo: p.descricao });
+  return {
+    ...plano,
+    pagar: plano.pagar.map((l) => ({ ...l, descricao: l.descricao.replace(/^Manutenção/, "Reparo de vistoria") })),
+  };
+}

@@ -20,6 +20,7 @@ import {
   ambientesSugeridos,
   chaveOp,
   checklistDoAmbiente,
+  custoDoReparo,
   compararVistorias,
   prazoContestacao,
   proximosStatus,
@@ -51,6 +52,74 @@ async function evento(supabase: Supabase, vistoriaId: string, tipo: string, desc
 }
 
 const novoId = () => crypto.randomUUID();
+
+/**
+ * Leva para o Financeiro o custo do reparo resolvido por conta do proprietário
+ * ou da imobiliária (regra em `custoDoReparo`): conta a pagar ao prestador do
+ * orçamento aprovado, ligada à pendência; a do proprietário é descontada do
+ * repasse. Se a pendência volta a ficar aberta, muda de responsável ou o
+ * orçamento muda, a conta ainda em aberto é cancelada (e refeita, se for o caso).
+ * Devolve um aviso para mostrar na tela.
+ */
+async function sincronizarCustoReparo(supabase: Supabase, pendenciaId: string, modo: "imobiliaria" | "pessoal"): Promise<string | null> {
+  const { data: p } = await supabase
+    .from("vistoria_pendencias")
+    .select("id, status, responsavel, descricao, valor_estimado, vistoria:vistorias(id, numero, imovel_id, contrato_id, imovel:imoveis(codigo)), vistoria_orcamentos(valor, aprovado, prestador_id)")
+    .eq("id", pendenciaId)
+    .maybeSingle();
+  if (!p) return null;
+  const vist = p.vistoria as unknown as { id: string; numero: number; imovel_id: string; contrato_id: string | null; imovel: { codigo: string } | null } | null;
+  const orc = ((p.vistoria_orcamentos ?? []) as { valor: number; aprovado: boolean; prestador_id: string | null }[]).find((o) => o.aprovado);
+  const plano = custoDoReparo({
+    status: p.status as string,
+    responsavel: p.responsavel as string,
+    valorAprovado: orc?.valor ?? null,
+    valorEstimado: p.valor_estimado as number | null,
+    modo,
+    descricao: `${p.descricao}${vist?.imovel?.codigo ? ` (${vist.imovel.codigo})` : ""}`,
+  });
+  const { data: atuais } = await supabase.from("lancamentos").select("id, valor, status, descontar_repasse").eq("vistoria_pendencia_id", pendenciaId).neq("status", "cancelado");
+  const existentes = (atuais ?? []) as { id: string; valor: number; status: string; descontar_repasse: boolean }[];
+  const desejado = plano?.pagar ?? [];
+  const igual =
+    existentes.length === desejado.length &&
+    desejado.every((d) => existentes.some((e) => Math.round(Number(e.valor) * 100) === Math.round(d.valor * 100) && e.descontar_repasse === d.descontarRepasse));
+  if (igual) return null;
+  // Algo mudou: cancela o que ainda está em aberto (pago não se mexe).
+  const pagos = existentes.filter((e) => e.status !== "aberto");
+  if (pagos.length) return "O custo deste reparo já foi pago no Financeiro: ajuste por lá, se precisar.";
+  if (existentes.length) {
+    const { error } = await supabase
+      .from("lancamentos")
+      .update({ status: "cancelado", cancelado_motivo: "Reparo da vistoria alterado ou reaberto" })
+      .in("id", existentes.map((e) => e.id));
+    if (error) throw error;
+  }
+  if (!plano || !desejado.length || !vist) return existentes.length ? "A conta deste reparo no Financeiro foi cancelada." : null;
+  const { data: planoConta } = await supabase.from("plano_contas").select("id").eq("tipo", "despesa").eq("ativo", true).ilike("nome", "%manuten%").limit(1).maybeSingle();
+  const hoje = hojeISO();
+  const { error } = await supabase.from("lancamentos").insert(
+    desejado.map((l) => ({
+      tipo: "pagar",
+      descricao: `${l.descricao} · vistoria #${vist.numero}`,
+      categoria: "Manutenção",
+      valor: l.valor,
+      vencimento: hoje,
+      status: "aberto",
+      pessoa_id: orc?.prestador_id ?? null,
+      imovel_id: vist.imovel_id,
+      contrato_id: vist.contrato_id,
+      vistoria_pendencia_id: pendenciaId,
+      descontar_repasse: l.descontarRepasse,
+      // Despesa do proprietário paga pela imobiliária e descontada no repasse: dinheiro de terceiros (fora do resultado).
+      terceiros: l.descontarRepasse,
+      plano_id: l.descontarRepasse ? null : ((planoConta?.id as string | undefined) ?? null),
+    })),
+  );
+  if (error) throw error;
+  await evento(supabase, vist.id, "orcamento", `Custo do reparo "${p.descricao}" lançado no Financeiro: ${formatarReais(plano.total)}`);
+  return `${formatarReais(plano.total)} lançado em contas a pagar.${plano.avisos.length ? " " + plano.avisos.join(" ") : ""}`;
+}
 
 /** Cria ambientes com os itens do checklist (ids gerados aqui para não depender da ordem de retorno). */
 async function criarAmbientes(supabase: Supabase, vistoriaId: string, lista: { nome: string; tipo: string; itens: string[] }[], ordemInicial = 0) {
@@ -756,6 +825,7 @@ export async function gerarPendenciasDoQuePiorou(vistoriaId: string) {
 export async function atualizarPendencia(_: EstadoAcao, fd: FormData): Promise<EstadoAcao> {
   const { supabase, organizacao } = await obterContexto();
   const id = String(fd.get("id"));
+  let aviso: string | null = null;
   try {
     const d: Record<string, unknown> = {};
     if (fd.has("descricao")) d.descricao = textoObrigatorio(fd, "descricao", "a descrição");
@@ -775,16 +845,23 @@ export async function atualizarPendencia(_: EstadoAcao, fd: FormData): Promise<E
     }
     const { error } = await supabase.from("vistoria_pendencias").update(d).eq("id", id);
     if (error) throw error;
+    aviso = await sincronizarCustoReparo(supabase, id, organizacao.modo);
   } catch (e) {
     return { erro: mensagemErro(e) };
   }
-  revalidar();
-  return { ok: "Salvo." };
+  revalidar(aviso ? ["/financeiro", "/despesas", "/repasses"] : []);
+  return { ok: aviso ? `Salvo. ${aviso}` : "Salvo." };
 }
 
 export async function excluirPendencia(id: string): Promise<Resultado> {
   const { supabase } = await obterContexto();
   const { data: p } = await supabase.from("vistoria_pendencias").select("vistoria_id, descricao").eq("id", id).single();
+  // A conta do reparo ainda em aberto deixa de valer junto com a pendência.
+  await supabase
+    .from("lancamentos")
+    .update({ status: "cancelado", cancelado_motivo: "Pendência da vistoria excluída" })
+    .eq("vistoria_pendencia_id", id)
+    .eq("status", "aberto");
   const { error } = await supabase.from("vistoria_pendencias").delete().eq("id", id);
   if (error) return { ok: false, erro: mensagemErro(error) };
   if (p) await evento(supabase, p.vistoria_id, "pendencia", `Pendência excluída: ${p.descricao}`);
@@ -821,7 +898,7 @@ export async function criarOrcamento(_: EstadoAcao, fd: FormData): Promise<Estad
 
 /** Aprova o orçamento (os outros da mesma pendência deixam de valer). Só admin, gestor ou financeiro. */
 export async function aprovarOrcamento(id: string): Promise<Resultado> {
-  const { supabase, papel } = await obterContexto();
+  const { supabase, papel, organizacao } = await obterContexto();
   if (!podeDecidir(papel)) return { ok: false, erro: "Só administrador, gestor ou financeiro aprovam orçamentos." };
   try {
     const { data: o } = await supabase.from("vistoria_orcamentos").select("pendencia_id, valor, prestador_nome, prestador:pessoas(nome), pendencia:vistoria_pendencias(vistoria_id, descricao)").eq("id", id).single();
@@ -832,6 +909,7 @@ export async function aprovarOrcamento(id: string): Promise<Resultado> {
     const pend = o.pendencia as unknown as { vistoria_id: string; descricao: string } | null;
     const prest = (o.prestador as unknown as { nome: string } | null)?.nome ?? o.prestador_nome ?? "prestador";
     if (pend) await evento(supabase, pend.vistoria_id, "orcamento", `Orçamento aprovado: ${pend.descricao} — ${prest}, ${formatarReais(o.valor)}`);
+    await sincronizarCustoReparo(supabase, o.pendencia_id as string, organizacao.modo);
   } catch (e) {
     return { ok: false, erro: mensagemErro(e) };
   }
@@ -840,18 +918,30 @@ export async function aprovarOrcamento(id: string): Promise<Resultado> {
 }
 
 export async function desaprovarOrcamento(id: string): Promise<Resultado> {
-  const { supabase, papel } = await obterContexto();
+  const { supabase, papel, organizacao } = await obterContexto();
   if (!podeDecidir(papel)) return { ok: false, erro: "Só administrador, gestor ou financeiro mexem na aprovação." };
+  const { data: o } = await supabase.from("vistoria_orcamentos").select("pendencia_id").eq("id", id).maybeSingle();
   const { error } = await supabase.from("vistoria_orcamentos").update({ aprovado: false, aprovado_em: null }).eq("id", id);
   if (error) return { ok: false, erro: mensagemErro(error) };
+  try {
+    if (o) await sincronizarCustoReparo(supabase, o.pendencia_id as string, organizacao.modo);
+  } catch (e) {
+    return { ok: false, erro: mensagemErro(e) };
+  }
   revalidar();
   return { ok: true };
 }
 
 export async function excluirOrcamento(id: string): Promise<Resultado> {
-  const { supabase } = await obterContexto();
+  const { supabase, organizacao } = await obterContexto();
+  const { data: o } = await supabase.from("vistoria_orcamentos").select("pendencia_id").eq("id", id).maybeSingle();
   const { error } = await supabase.from("vistoria_orcamentos").delete().eq("id", id);
   if (error) return { ok: false, erro: mensagemErro(error) };
+  try {
+    if (o) await sincronizarCustoReparo(supabase, o.pendencia_id as string, organizacao.modo);
+  } catch (e) {
+    return { ok: false, erro: mensagemErro(e) };
+  }
   revalidar();
   return { ok: true };
 }

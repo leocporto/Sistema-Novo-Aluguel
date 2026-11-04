@@ -169,7 +169,16 @@ export default async function PendenciasVistoria({ params }: PageProps<"/vistori
               <Formulario acao={atualizarPendencia} automatico className="space-y-4">
                 <input type="hidden" name="id" value={p.id} />
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <Campo rotulo="Situação">
+                  <Campo
+                    rotulo="Situação"
+                    dica={
+                      p.responsavel === "proprietario" || p.responsavel === "imobiliaria"
+                        ? p.status === "resolvida"
+                          ? "Custo lançado em contas a pagar."
+                          : "Ao resolver, o custo vai para contas a pagar."
+                        : undefined
+                    }
+                  >
                     <Selecao name="status" defaultValue={p.status}>
                       {Object.entries(ROTULO_STATUS_PENDENCIA).map(([k, r]) => (
                         <option key={k} value={k}>
