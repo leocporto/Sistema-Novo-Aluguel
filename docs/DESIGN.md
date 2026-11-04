@@ -54,8 +54,8 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
 - **Barra do topo (76px)**: ☰ (só em telas < 1024px), marca (quadrado azul em gradiente +
   "Novo Aluguel" + nome da imobiliária), relógio (≥ 1280px), **navegação principal só com nomes**
   (Painel, Imóveis, Pessoas, Contratos, Aluguéis, Repasses) em pílula, sininho (avisos de
-  cobrança), **engrenagem de Configurações** (acesa na própria tela; no celular vai para o fim do
-  menu), sol/lua e cartão do usuário (avatar, nome/e-mail ≥ 1367px, Sair).
+  cobrança), **atalhos de ícone Equipe e Configurações** (`ATALHOS`; acesos na própria tela; no
+  celular vão para o fim do menu), sol/lua e cartão do usuário (avatar, nome/e-mail ≥ 1367px, Sair).
 - **Menu lateral**: recolhido em **69px só com ícones**; ao passar o mouse abre para **236px
   empurrando o conteúdo**, com rótulos e grupos entrando em fade + 6px. Em telas < 1024px vira
   gaveta (260px) aberta pelo ☰, com fundo desfocado, e recebe também os itens do topo.
@@ -64,7 +64,7 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
 - **Menu lateral na ordem da operação**: Locação (Análise cadastral → Vistorias → Chaves →
   Cobranças → Reajustes e índices → Manutenção), Atendimento (Agenda, Documentos, Portal de
   clientes), Comercial (Leads e propostas, Captação, Vendas, Empreendimentos, Comissões, Meu portal),
-  Divulgação (Site e portais, Marketing) e Gestão (Financeiro, Despesas, Relatórios, Equipe).
+  Divulgação (Site e portais, Marketing) e Gestão (Financeiro, Despesas, Relatórios e DIMOB).
 - **Não duplique**: o que já é aba de uma tela não vira item de menu (Propostas/Tarefas/Metas são
   abas de Leads; Índices é aba de Reajustes; Aprovações é aba de Equipe e só aparece no menu para
   quem não vê a Equipe — `seNaoVer`). Tela fora do menu que pertence a um item: `PERTENCE_A`.

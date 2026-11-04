@@ -71,8 +71,11 @@ const TOPO: Item[] = [
   { href: "/repasses", rotulo: "Repasses", icone: ArrowLeftRight },
 ];
 
-/** Configurações: engrenagem no canto direito do topo. */
-const CONFIGURACOES = "/configuracoes";
+/** Atalhos de ícone no canto direito do topo (no celular vão para o fim do menu). */
+const ATALHOS: Item[] = [
+  { href: "/equipe", rotulo: "Equipe", icone: UsersRound },
+  { href: "/configuracoes", rotulo: "Configurações", icone: Settings },
+];
 
 /**
  * Menu lateral, em grupos, na ordem da operação: o ciclo do aluguel
@@ -123,7 +126,6 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
       { href: "/financeiro", rotulo: "Financeiro", icone: Wallet },
       { href: "/despesas", rotulo: "Despesas", icone: TrendingDown },
       { href: "/relatorios", rotulo: "Relatórios e DIMOB", icone: BarChart3 },
-      { href: "/equipe", rotulo: "Equipe", icone: UsersRound },
       { href: "/equipe/aprovacoes", rotulo: "Aprovações", icone: Gavel, seNaoVer: "/equipe" },
     ],
   },
@@ -132,7 +134,10 @@ const LATERAL: { titulo: string; itens: Item[] }[] = [
 /** Telas que não estão no menu, mas pertencem a um item dele (acendem o item). */
 const PERTENCE_A: Record<string, string> = { "/indices": "/reajustes" };
 
-const TODOS = [...TOPO, ...LATERAL.flatMap((g) => g.itens), { href: CONFIGURACOES, rotulo: "Configurações", icone: Settings }];
+const TODOS = [...TOPO, ...LATERAL.flatMap((g) => g.itens), ...ATALHOS];
+
+/** A rota está dentro deste item (ele ou uma tela abaixo dele)? */
+const dentro = (rota: string, href: string) => rota === href || rota.startsWith(`${href}/`);
 
 function normalizar(caminho: string): string {
   for (const [de, para] of Object.entries(PERTENCE_A)) if (caminho === de || caminho.startsWith(`${de}/`)) return para + caminho.slice(de.length);
@@ -224,7 +229,7 @@ export function CascaApp({
       ),
     [mostrar],
   );
-  const verConfiguracoes = mostrar(CONFIGURACOES);
+  const atalhos = useMemo(() => ATALHOS.filter((i) => mostrar(i.href)), [mostrar]);
   const caminho = usePathname();
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
@@ -279,9 +284,9 @@ export function CascaApp({
       g.itens.forEach((i) => linhas.push(linhaLateral(i)));
     }
     // No celular a engrenagem do topo some: Configurações vem para o fim do menu.
-    if (!telaGrande && verConfiguracoes) linhas.push(linhaLateral(TODOS[TODOS.length - 1]));
+    if (!telaGrande) atalhos.forEach((i) => linhas.push(linhaLateral(i)));
     return linhas;
-  }, [telaGrande, topo, lateral, verConfiguracoes]);
+  }, [telaGrande, topo, lateral, atalhos]);
 
   const ir = (href: string) => {
     setGavetaAberta(false);
@@ -339,19 +344,24 @@ export function CascaApp({
             <Bell className="size-[18px]" />
             {emAtraso > 0 && <span className="topo-sino-num">{emAtraso > 99 ? "99+" : emAtraso}</span>}
           </button>
-          {verConfiguracoes && (
-            <button
-              type="button"
-              className={`topo-btn topo-config${ativa === CONFIGURACOES ? " on" : ""}`}
-              onClick={() => ir(CONFIGURACOES)}
-              onMouseEnter={() => router.prefetch(CONFIGURACOES)}
-              title="Configurações"
-              aria-label="Configurações"
-              aria-current={ativa === CONFIGURACOES ? "page" : undefined}
-            >
-              <Settings className="size-[18px]" />
-            </button>
-          )}
+          {atalhos.map((i) => {
+            const Icone = i.icone;
+            const aceso = dentro(ativa, i.href);
+            return (
+              <button
+                key={i.href}
+                type="button"
+                className={`topo-btn topo-config${aceso ? " on" : ""}`}
+                onClick={() => ir(i.href)}
+                onMouseEnter={() => router.prefetch(i.href)}
+                title={i.rotulo}
+                aria-label={i.rotulo}
+                aria-current={aceso ? "page" : undefined}
+              >
+                <Icone className="size-[18px]" />
+              </button>
+            );
+          })}
           <BotaoTema className="topo-btn" />
           <div className="topo-usuario">
             <span className="topo-av">{inicial}</span>
@@ -375,7 +385,7 @@ export function CascaApp({
             <AbasSegmentadas
               variante="lateral"
               rotuloAcessivel="Menu"
-              valor={telaGrande && (noTopo || ativa === CONFIGURACOES) ? null : ativa}
+              valor={telaGrande && (noTopo || atalhos.some((i) => dentro(ativa, i.href))) ? null : ativa}
               aoMudar={ir}
               aoPassar={(href) => router.prefetch(href)}
               itens={itensLateral}
