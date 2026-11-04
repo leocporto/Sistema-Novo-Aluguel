@@ -8,6 +8,7 @@ import { calcularReajuste, proximoReajuste } from "@/lib/dominio/reajuste";
 import { paraCentavos } from "@/lib/dominio/dinheiro";
 import type { Contrato } from "@/lib/tipos";
 import { LinhaLink } from "@/components/linha-link";
+import { AbasReajustes } from "./abas";
 
 export const metadata: Metadata = { title: "Reajustes" };
 
@@ -40,6 +41,7 @@ export default async function ReajustesPage() {
         titulo="Reajustes"
         descricao="Contratos com aniversário de reajuste vencido ou nos próximos 60 dias. Aplique o reajuste na página do contrato."
       />
+      <AbasReajustes />
       <Tabela colunas={["Contrato", "Data do reajuste", "Índice", "Acumulado", "Aluguel atual", "Novo aluguel", "Situação"]}>
         {lista.length === 0 && <LinhaVazia colunas={7}>Nenhum reajuste nos próximos 60 dias.</LinhaVazia>}
         {lista.map(({ c, data, r, dias }) => (

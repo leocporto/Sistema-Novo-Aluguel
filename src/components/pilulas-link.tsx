@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AbasSegmentadas } from "./abas-segmentadas";
+import { useNavegacao } from "@/lib/navegacao";
 
 /**
  * Grupo de escolha única que muda a URL (funil, período, filtro…), com a
@@ -21,6 +22,7 @@ export function PilulasLink({
   className?: string;
 }) {
   const router = useRouter();
+  const { navegar } = useNavegacao();
   // A pílula anda na hora do clique; depois acompanha a URL.
   const [selecionado, setSelecionado] = useState(ativo);
   const [anterior, setAnterior] = useState(ativo);
@@ -34,8 +36,9 @@ export function PilulasLink({
         variante="seg"
         valor={selecionado}
         aoMudar={(href) => {
+          if (href === selecionado) return;
           setSelecionado(href);
-          router.push(href, { scroll: false });
+          navegar(href, { scroll: false });
         }}
         aoPassar={(href) => router.prefetch(href)}
         rotuloAcessivel={rotulo}

@@ -9,7 +9,7 @@
  * - uma seleção só no app: se a tela é do topo, a pílula do menu some, e vice-versa;
  * - entrada da tela a cada troca e janelas animadas (useMovimentoJanelas).
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
@@ -21,7 +21,6 @@ import {
   Megaphone,
   LogOut,
   Menu,
-  Percent,
   Settings,
   BarChart3,
   TrendingUp,
@@ -35,9 +34,6 @@ import {
   ArrowLeftRight,
   Building,
   CalendarDays,
-  Handshake,
-  ListTodo,
-  Target,
   TrendingDown,
   UserPlus,
   HousePlus,
@@ -55,82 +51,107 @@ import { BotaoTema } from "./menu-lateral";
 import { useMovimentoJanelas } from "@/lib/movimento/useMovimentoJanelas";
 import { rotaPermitida } from "@/lib/modos";
 import { rotaVisivel, type Permissoes } from "@/lib/dominio/equipe";
+import { ProvedorNavegacao, soCaminho, type OpcoesNavegar } from "@/lib/navegacao";
 
-type Item = { href: string; rotulo: string; icone: LucideIcon };
+type Item = {
+  href: string;
+  rotulo: string;
+  icone: LucideIcon;
+  /** Atalho que só aparece para quem NÃO vê esta outra tela (onde ele já é uma aba). */
+  seNaoVer?: string;
+};
 
 /** Barra do topo: as telas do dia a dia. */
 const TOPO: Item[] = [
   { href: "/", rotulo: "Painel", icone: LayoutDashboard },
   { href: "/imoveis", rotulo: "Imóveis", icone: Building2 },
+  { href: "/pessoas", rotulo: "Pessoas", icone: Users },
   { href: "/contratos", rotulo: "Contratos", icone: FileText },
-  { href: "/faturas", rotulo: "Aluguéis do mês", icone: Receipt },
+  { href: "/faturas", rotulo: "Aluguéis", icone: Receipt },
   { href: "/repasses", rotulo: "Repasses", icone: ArrowLeftRight },
 ];
 
-/** Menu lateral: o restante, em grupos. */
+/** Configurações: engrenagem no canto direito do topo. */
+const CONFIGURACOES = "/configuracoes";
+
+/**
+ * Menu lateral, em grupos, na ordem da operação: o ciclo do aluguel
+ * (da análise do inquilino à manutenção), o atendimento do dia, a parte
+ * comercial, a divulgação e, por último, a gestão do escritório.
+ */
 const LATERAL: { titulo: string; itens: Item[] }[] = [
   {
-    titulo: "Cadastros",
+    titulo: "Locação",
     itens: [
-      { href: "/pessoas", rotulo: "Pessoas", icone: Users },
-      { href: "/empreendimentos", rotulo: "Empreendimentos", icone: Building },
+      { href: "/analise", rotulo: "Análise cadastral", icone: UserCheck },
+      { href: "/vistorias", rotulo: "Vistorias", icone: ClipboardCheck },
+      { href: "/chaves", rotulo: "Chaves", icone: KeyRound },
+      { href: "/cobrancas", rotulo: "Cobranças", icone: Bell },
+      { href: "/reajustes", rotulo: "Reajustes e índices", icone: TrendingUp },
+      { href: "/manutencao", rotulo: "Manutenção", icone: Wrench },
+    ],
+  },
+  {
+    titulo: "Atendimento",
+    itens: [
+      { href: "/agenda", rotulo: "Agenda", icone: CalendarDays },
       { href: "/documentos", rotulo: "Documentos", icone: FolderOpen },
       { href: "/portais", rotulo: "Portal de clientes", icone: DoorOpen },
     ],
   },
   {
-    titulo: "Agenda",
-    itens: [
-      { href: "/agenda", rotulo: "Agenda", icone: CalendarDays },
-      { href: "/chaves", rotulo: "Chaves", icone: KeyRound },
-      { href: "/vistorias", rotulo: "Vistorias", icone: ClipboardCheck },
-    ],
-  },
-  {
     titulo: "Comercial",
     itens: [
-      { href: "/comercial", rotulo: "Leads", icone: UserPlus },
-      { href: "/corretor", rotulo: "Meu portal (corretor)", icone: IdCard },
+      { href: "/comercial", rotulo: "Leads e propostas", icone: UserPlus },
       { href: "/captacao", rotulo: "Captação de imóveis", icone: HousePlus },
       { href: "/vendas", rotulo: "Vendas", icone: BadgeDollarSign },
+      { href: "/empreendimentos", rotulo: "Empreendimentos", icone: Building },
       { href: "/comissoes", rotulo: "Comissões", icone: BadgePercent },
-      { href: "/site", rotulo: "Site e portais", icone: Globe },
-      { href: "/marketing", rotulo: "Marketing", icone: Megaphone },
-      { href: "/comercial/propostas", rotulo: "Propostas", icone: Handshake },
-      { href: "/comercial/tarefas", rotulo: "Tarefas", icone: ListTodo },
-      { href: "/comercial/metas", rotulo: "Metas", icone: Target },
+      { href: "/corretor", rotulo: "Meu portal (corretor)", icone: IdCard },
     ],
   },
   {
-    titulo: "Locação",
+    titulo: "Divulgação",
     itens: [
-      { href: "/reajustes", rotulo: "Reajustes", icone: TrendingUp },
-      { href: "/cobrancas", rotulo: "Cobranças", icone: Bell },
-      { href: "/analise", rotulo: "Análise cadastral", icone: UserCheck },
-      { href: "/manutencao", rotulo: "Manutenção", icone: Wrench },
+      { href: "/site", rotulo: "Site e portais", icone: Globe },
+      { href: "/marketing", rotulo: "Marketing", icone: Megaphone },
     ],
   },
   {
     titulo: "Gestão",
     itens: [
-      { href: "/despesas", rotulo: "Despesas", icone: TrendingDown },
       { href: "/financeiro", rotulo: "Financeiro", icone: Wallet },
+      { href: "/despesas", rotulo: "Despesas", icone: TrendingDown },
       { href: "/relatorios", rotulo: "Relatórios e DIMOB", icone: BarChart3 },
-      { href: "/indices", rotulo: "Índices econômicos", icone: Percent },
       { href: "/equipe", rotulo: "Equipe", icone: UsersRound },
-      { href: "/equipe/aprovacoes", rotulo: "Aprovações", icone: Gavel },
-      { href: "/configuracoes", rotulo: "Configurações", icone: Settings },
+      { href: "/equipe/aprovacoes", rotulo: "Aprovações", icone: Gavel, seNaoVer: "/equipe" },
     ],
   },
 ];
 
-const TODOS = [...TOPO, ...LATERAL.flatMap((g) => g.itens)];
+/** Telas que não estão no menu, mas pertencem a um item dele (acendem o item). */
+const PERTENCE_A: Record<string, string> = { "/indices": "/reajustes" };
 
-function rotaAtiva(caminho: string): string {
+const TODOS = [...TOPO, ...LATERAL.flatMap((g) => g.itens), { href: CONFIGURACOES, rotulo: "Configurações", icone: Settings }];
+
+function normalizar(caminho: string): string {
+  for (const [de, para] of Object.entries(PERTENCE_A)) if (caminho === de || caminho.startsWith(`${de}/`)) return para + caminho.slice(de.length);
+  return caminho;
+}
+
+function rotaAtiva(caminhoBruto: string): string {
+  const caminho = normalizar(caminhoBruto);
   if (caminho === "/") return "/";
   const achado = TODOS.filter((i) => i.href !== "/" && caminho.startsWith(i.href)).sort((a, b) => b.href.length - a.href.length)[0];
   return achado?.href ?? "";
 }
+
+/** Seção da tela (primeiro trecho do caminho): trocar de seção = tela nova. */
+function secao(caminho: string): string {
+  return "/" + (normalizar(caminho).split("/")[1] ?? "");
+}
+
+type Entrada = { tipo: "tela" | "aba"; dir: number };
 
 function linhaLateral(i: Item): ItemAba {
   const Icone = i.icone;
@@ -197,12 +218,38 @@ export function CascaApp({
   );
   const topo = useMemo(() => TOPO.filter((i) => mostrar(i.href)), [mostrar]);
   const lateral = useMemo(
-    () => LATERAL.map((g) => ({ ...g, itens: g.itens.filter((i) => mostrar(i.href)) })).filter((g) => g.itens.length > 0),
+    () =>
+      LATERAL.map((g) => ({ ...g, itens: g.itens.filter((i) => mostrar(i.href) && !(i.seNaoVer && mostrar(i.seNaoVer))) })).filter(
+        (g) => g.itens.length > 0,
+      ),
     [mostrar],
   );
+  const verConfiguracoes = mostrar(CONFIGURACOES);
   const caminho = usePathname();
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
+
+  // Navegação numa transição: a tela atual fica na frente até a próxima estar pronta.
+  const [pendente, iniciar] = useTransition();
+  const [pedidoAba, setPedidoAba] = useState<{ caminho: string; dir: number } | null>(null);
+  const navegar = useCallback(
+    (href: string, opcoes: OpcoesNavegar = {}) => {
+      setPedidoAba(opcoes.aba ? { caminho: soCaminho(href), dir: opcoes.dir ?? 0 } : null);
+      iniciar(() => router.push(href, { scroll: opcoes.scroll ?? !opcoes.aba }));
+    },
+    [router],
+  );
+  const navegacao = useMemo(() => ({ navegar, pendente }), [navegar, pendente]);
+
+  // Como a nova tela entra: troca de aba = cabeçalho parado e só o conteúdo desliza;
+  // o resto = a tela sobe em cascata. Decidido na renderização para valer já no 1º quadro.
+  const [caminhoAnterior, setCaminhoAnterior] = useState(caminho);
+  const [entrada, setEntrada] = useState<Entrada>({ tipo: "tela", dir: 0 });
+  if (caminho !== caminhoAnterior) {
+    setCaminhoAnterior(caminho);
+    setEntrada(pedidoAba?.caminho === caminho ? { tipo: "aba", dir: pedidoAba.dir } : { tipo: "tela", dir: 0 });
+    setPedidoAba(null);
+  }
   const [telaGrande, setTelaGrande] = useState(true);
   useMovimentoJanelas();
 
@@ -231,12 +278,14 @@ export function CascaApp({
       linhas.push({ id: "g_" + g.titulo, ehRotulo: true, className: "lateral-grupo", rotulo: g.titulo });
       g.itens.forEach((i) => linhas.push(linhaLateral(i)));
     }
+    // No celular a engrenagem do topo some: Configurações vem para o fim do menu.
+    if (!telaGrande && verConfiguracoes) linhas.push(linhaLateral(TODOS[TODOS.length - 1]));
     return linhas;
-  }, [telaGrande, topo, lateral]);
+  }, [telaGrande, topo, lateral, verConfiguracoes]);
 
   const ir = (href: string) => {
     setGavetaAberta(false);
-    if (href !== caminho) router.push(href);
+    if (href !== caminho) navegar(href);
   };
 
   const inicial = (email || "?").slice(0, 1).toUpperCase();
@@ -244,6 +293,7 @@ export function CascaApp({
   return (
     <div className="casca">
       <header className="topo nao-imprimir">
+        {pendente && <div className="barra-navegacao" aria-hidden="true" />}
         <div className="topo-esq">
           <button
             type="button"
@@ -289,6 +339,19 @@ export function CascaApp({
             <Bell className="size-[18px]" />
             {emAtraso > 0 && <span className="topo-sino-num">{emAtraso > 99 ? "99+" : emAtraso}</span>}
           </button>
+          {verConfiguracoes && (
+            <button
+              type="button"
+              className={`topo-btn topo-config${ativa === CONFIGURACOES ? " on" : ""}`}
+              onClick={() => ir(CONFIGURACOES)}
+              onMouseEnter={() => router.prefetch(CONFIGURACOES)}
+              title="Configurações"
+              aria-label="Configurações"
+              aria-current={ativa === CONFIGURACOES ? "page" : undefined}
+            >
+              <Settings className="size-[18px]" />
+            </button>
+          )}
           <BotaoTema className="topo-btn" />
           <div className="topo-usuario">
             <span className="topo-av">{inicial}</span>
@@ -312,7 +375,7 @@ export function CascaApp({
             <AbasSegmentadas
               variante="lateral"
               rotuloAcessivel="Menu"
-              valor={noTopo && telaGrande ? null : ativa}
+              valor={telaGrande && (noTopo || ativa === CONFIGURACOES) ? null : ativa}
               aoMudar={ir}
               aoPassar={(href) => router.prefetch(href)}
               itens={itensLateral}
@@ -320,9 +383,14 @@ export function CascaApp({
           </nav>
         </aside>
 
-        <main className="casca-conteudo">
-          <div key={ativa || caminho} className="tela">
-            {children}
+        <main className="casca-conteudo" data-carregando={pendente ? "1" : undefined}>
+          <div
+            key={secao(caminho)}
+            className="tela"
+            data-entrada={entrada.tipo}
+            style={{ "--aba-dir": entrada.dir } as CSSProperties}
+          >
+            <ProvedorNavegacao valor={navegacao}>{children}</ProvedorNavegacao>
           </div>
         </main>
       </div>

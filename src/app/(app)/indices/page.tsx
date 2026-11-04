@@ -8,6 +8,7 @@ import { formatarCompetencia } from "@/lib/dominio/datas";
 import { INDICES, NOME_INDICE, acumular } from "@/lib/dominio/reajuste";
 import { type EstadoAcao, ErroValidacao, mensagemErro, numero, textoObrigatorio } from "@/lib/form";
 import { FiltroAutomatico } from "@/components/filtro-automatico";
+import { AbasReajustes } from "../reajustes/abas";
 
 export const metadata: Metadata = { title: "Índices econômicos" };
 
@@ -80,6 +81,7 @@ export default async function IndicesPage({ searchParams }: PageProps<"/indices"
         titulo="Índices econômicos"
         descricao="Variações mensais usadas no cálculo dos reajustes. Consulte os valores oficiais (FGV/IBGE) e cadastre aqui."
       />
+      <AbasReajustes />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div>
           <FiltroAutomatico className="mb-4 flex gap-2">
