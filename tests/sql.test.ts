@@ -241,8 +241,8 @@ describe("migração SQL", () => {
 });
 
 describe("comercial, comissões e preferências do painel", () => {
-  const USER_C = "00000000-0000-0000-0000-00000000000c";
-  const USER_D = "00000000-0000-0000-0000-00000000000d";
+  const USER_C = "00000000-0000-0000-0000-0000000000c1";
+  const USER_D = "00000000-0000-0000-0000-0000000000d1";
 
   it("aceitar proposta fecha o negócio, marca o imóvel e gera a comissão", async () => {
     const orgC = await comoUsuario(USER_C, async () => (await db.query<{ id: string }>(`select public.criar_organizacao('Imob C') as id`)).rows[0].id);
@@ -689,5 +689,38 @@ describe("financeiro: histórico, contas e isolamento", () => {
       hist: (await db.query(`select id from lancamento_historico`)).rows.length,
     }));
     expect(doOutro).toEqual({ contas: 0, hist: 0 });
+  });
+});
+
+describe("uma conta por vez", () => {
+  const USER_C = "00000000-0000-0000-0000-00000000ca5a";
+  const USER_D = "00000000-0000-0000-0000-00000000da5a";
+  it("quem é membro de duas imobiliárias vê só a primeira, sem misturar dados", async () => {
+    // C cria a imobiliária dele e cadastra um imóvel.
+    const orgC = await comoUsuario(USER_C, async () => {
+      const id = (await db.query<{ id: string }>(`select public.criar_organizacao('Imob C') as id`)).rows[0].id;
+      await db.query(`insert into imoveis (codigo, cidade) values ('C-1','São Paulo')`);
+      return id;
+    });
+    // D foi colocado na equipe de C e depois criou a própria imobiliária, com outro imóvel.
+    await db.query(`insert into membros (organizacao_id, user_id, papel) values ($1, $2, 'gestor')`, [orgC, USER_D]);
+    const orgD = (await db.query<{ id: string }>(`insert into organizacoes (nome) values ('Imob D') returning id`)).rows[0].id;
+    await db.query(`insert into membros (organizacao_id, user_id, papel, created_at) values ($1, $2, 'admin', now() + interval '1 minute')`, [orgD, USER_D]);
+    await db.query(`insert into imoveis (organizacao_id, codigo, cidade) values ($1, 'D-1', 'São Paulo')`, [orgD]);
+
+    // D enxerga só a conta atual (a primeira em que entrou): nada da outra aparece.
+    const visto = await comoUsuario(USER_D, async () => ({
+      orgs: (await db.query<{ id: string }>(`select id from organizacoes order by nome`)).rows.map((r) => r.id),
+      imoveis: (await db.query<{ codigo: string }>(`select codigo from imoveis order by codigo`)).rows.map((r) => r.codigo),
+    }));
+    expect(visto.orgs).toEqual([orgC]);
+    expect(visto.imoveis).toEqual(["C-1"]);
+
+    // Saindo da equipe de C, D passa a ver só a própria conta, e C continua sem ver nada de D.
+    await db.query(`delete from membros where organizacao_id = $1 and user_id = $2`, [orgC, USER_D]);
+    const depois = await comoUsuario(USER_D, async () => (await db.query<{ codigo: string }>(`select codigo from imoveis`)).rows.map((r) => r.codigo));
+    expect(depois).toEqual(["D-1"]);
+    const deC = await comoUsuario(USER_C, async () => (await db.query<{ codigo: string }>(`select codigo from imoveis order by codigo`)).rows.map((r) => r.codigo));
+    expect(deC).toEqual(["C-1"]);
   });
 });
