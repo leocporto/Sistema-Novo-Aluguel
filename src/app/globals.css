@@ -573,6 +573,22 @@ select[size]:not([size="1"]) option:checked {
   font-weight: 600;
   white-space: nowrap;
 }
+/* notebook (1024–1279px): abas do topo mais justas para caber os atalhos e o Sair */
+@media (max-width: 1279px) {
+  .v-nav > .abas-btn {
+    padding: 0 9px;
+  }
+  .topo {
+    gap: 10px;
+  }
+  .topo-esq,
+  .topo-dir {
+    flex: 0 1 auto;
+  }
+  .topo-dir {
+    gap: 6px;
+  }
+}
 .abas.v-nav > .abas-btn:hover {
   color: var(--text-primary);
 }
