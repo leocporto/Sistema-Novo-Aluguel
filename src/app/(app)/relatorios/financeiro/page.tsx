@@ -144,7 +144,7 @@ export default async function FinanceiroRelatorioPage({ searchParams }: PageProp
               { href: urlRent("contrato"), rotulo: "Por contrato" },
             ]}
           />
-          <Tabela colunas={[por === "imovel" ? "Imóvel" : "Contrato", "Receitas", ...(imob ? ["Taxas da imobiliária"] : []), "Despesas", "Resultado", "Rendimento ao ano"]}>
+          <Tabela colunas={[por === "imovel" ? "Imóvel" : "Contrato", "Receitas", ...(imob ? ["Taxas da imobiliária"] : []), "Despesas", "Resultado", "Rendimento ao ano"]} direita="resto">
             {rent.lista.length === 0 && <LinhaVazia colunas={imob ? 6 : 5}>Nenhuma receita ou despesa ligada a imóveis no período.</LinhaVazia>}
             {rent.lista.map((r) => {
               const rend = rendimentoAnual(r.resultado, r.valor_referencia, dias);
@@ -176,7 +176,7 @@ export default async function FinanceiroRelatorioPage({ searchParams }: PageProp
           </div>
         }
       >
-        <Tabela colunas={["Fatura", "Contrato", "Locatário", "Competência", "Vencimento", "Dias", "Saldo"]}>
+        <Tabela colunas={["Fatura", "Contrato", "Locatário", "Competência", "Vencimento", "Dias", "Saldo"]} direita={[5, 6]}>
           {inad.length === 0 && <LinhaVazia colunas={7}>Nenhuma cobrança em atraso.</LinhaVazia>}
           {inad.map((f) => {
             const loc = f.contrato?.contrato_partes.find((x) => x.papel === "locatario")?.pessoa;
@@ -198,7 +198,7 @@ export default async function FinanceiroRelatorioPage({ searchParams }: PageProp
                 </Celula>
                 <Celula>{formatarCompetencia(f.competencia)}</Celula>
                 <Celula>{formatarDataBR(f.vencimento)}</Celula>
-                <Celula className="text-ruim tabular-nums">{diasEntre(f.vencimento, hoje)}</Celula>
+                <Celula className="text-right text-ruim tabular-nums">{diasEntre(f.vencimento, hoje)}</Celula>
                 <Celula className="text-right tabular-nums">
                   {formatarReais(Math.max(0, Number(f.valor_total) - Number(f.valor_abatido)))}
                   {f.status === "renegociada" && <span className="block text-xs text-mudo">em acordo</span>}

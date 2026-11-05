@@ -105,7 +105,12 @@ export function Selo({ cor = "cinza", children }: { cor?: keyof typeof coresSelo
   );
 }
 
-export function Tabela({ colunas, children }: { colunas: ReactNode[]; children: ReactNode }) {
+/**
+ * Tabela padrão. `direita`: colunas de número/valor (alinhadas à direita, título junto) —
+ * a lista de índices ou "resto" (todas menos a primeira).
+ */
+export function Tabela({ colunas, children, direita }: { colunas: ReactNode[]; children: ReactNode; direita?: number[] | "resto" }) {
+  const aDireita = (i: number) => (direita === "resto" ? i > 0 : (direita?.includes(i) ?? false));
   return (
     <div className="entrar overflow-x-auto rounded-card border border-borda bg-card">
       <table className="min-w-full border-collapse text-sm">
@@ -114,7 +119,7 @@ export function Tabela({ colunas, children }: { colunas: ReactNode[]; children: 
             {colunas.map((c, i) => (
               <th
                 key={i}
-                className="whitespace-nowrap border-b border-borda bg-elev px-[18px] py-[13px] text-left font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-mudo"
+                className={`whitespace-nowrap border-b border-borda bg-elev px-[18px] py-[13px] font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-mudo ${aDireita(i) ? "text-right" : "text-left"}`}
               >
                 {c}
               </th>

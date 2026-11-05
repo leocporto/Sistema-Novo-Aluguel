@@ -58,7 +58,7 @@ export default async function ImoveisRelatorioPage({ searchParams }: PageProps<"
 
       <div className="mb-6 grid gap-6 xl:grid-cols-2">
         <Cartao titulo={`Vagos agora — ${vagos.total}`}>
-          <Tabela colunas={["Imóvel", "Aluguel", "Vago desde", "Dias"]}>
+          <Tabela colunas={["Imóvel", "Aluguel", "Vago desde", "Dias"]} direita={[1, 3]}>
             {vagos.lista.length === 0 && <LinhaVazia colunas={4}>Nenhum imóvel de locação vago hoje.</LinhaVazia>}
             {vagos.lista.map((v) => (
               <LinhaLink key={v.imovel_id} href={`/imoveis/${v.imovel_id}`}>
@@ -112,7 +112,7 @@ export default async function ImoveisRelatorioPage({ searchParams }: PageProps<"
             </div>
           }
         >
-          <Tabela colunas={["Imóvel", "Leads", "Visitas", "Propostas", "Contatos pelo site", "Total"]}>
+          <Tabela colunas={["Imóvel", "Leads", "Visitas", "Propostas", "Contatos pelo site", "Total"]} direita="resto">
             {procura.lista.length === 0 && <LinhaVazia colunas={6}>Nenhuma procura registrada no período.</LinhaVazia>}
             {procura.lista.map((v, i) => (
               <LinhaLink key={v.imovel_id} href={`/imoveis/${v.imovel_id}`}>

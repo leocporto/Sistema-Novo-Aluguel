@@ -88,7 +88,7 @@ export function BotoesExportar({ consulta, rotulo = "este relatório" }: { consu
 export function TabelaRelatorioView({ t, vazio = "Nada para mostrar no período." }: { t: TabelaRelatorio; vazio?: string }) {
   const alinha = (tipo: string) => (tipo === "texto" || tipo === "data" ? "" : "text-right tabular-nums");
   return (
-    <Tabela colunas={t.colunas.map((c) => c.rotulo)}>
+    <Tabela colunas={t.colunas.map((c) => c.rotulo)} direita={t.colunas.flatMap((c, i) => (alinha(c.tipo) ? [i] : []))}>
       {t.linhas.length === 0 && <LinhaVazia colunas={t.colunas.length}>{vazio}</LinhaVazia>}
       {t.linhas.map((l, i) => (
         <tr key={i}>
