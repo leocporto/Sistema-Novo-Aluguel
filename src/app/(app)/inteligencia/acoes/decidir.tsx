@@ -11,10 +11,11 @@ const campo =
   "w-full min-h-[46px] rounded-btn border border-borda-forte bg-input px-3.5 py-2.5 text-[15px] text-texto outline-none transition placeholder:text-fraco focus:border-acento focus:ring-4 focus:ring-acento-bg";
 
 /**
- * Aprovar ou recusar (com motivo). Aprovar pede confirmação mostrando o que
- * será feito e o valor — nada de caixinha disparando ação.
+ * Aprovar ou recusar (com motivo). Aprovar pede confirmação mostrando o
+ * registro que será alterado de verdade (lido do payload que será executado)
+ * e o valor — nada de caixinha disparando ação.
  */
-export function Decidir({ id, resumo, valor }: { id: string; resumo: string; valor: string | null }) {
+export function Decidir({ id, confirmacao }: { id: string; confirmacao: string }) {
   const [estado, executar, pendente] = useActionState<EstadoAcao, FormData>(decidirAcao, {});
   const [recusando, setRecusando] = useState(false);
   return (
@@ -36,7 +37,7 @@ export function Decidir({ id, resumo, valor }: { id: string; resumo: string; val
               disabled={pendente}
               className={classeBotao("primario")}
               onClick={(e) => {
-                if (!window.confirm(`Aprovar: ${resumo}${valor ? ` — ${valor}` : ""}?\n\nSe a ação roda sozinha, ela é feita agora pela via normal do sistema.`)) e.preventDefault();
+                if (!window.confirm(`Aprovar esta ação?\n\n${confirmacao}\n\nSe a ação roda sozinha, ela é feita agora pela via normal do sistema.`)) e.preventDefault();
               }}
             >
               {pendente ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />} Aprovar

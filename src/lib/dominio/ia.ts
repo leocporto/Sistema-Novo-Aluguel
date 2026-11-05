@@ -10,7 +10,7 @@
  *   bate com a lista fechada é descartado (nada é gravado a partir de texto livre).
  * - Versões por regra (sem IA) de cada recurso que permite.
  */
-import { COMODIDADES, TIPOS_IMOVEL } from "@/lib/tipos";
+import { COMODIDADES, ROTULO_STATUS_LEAD, TIPOS_IMOVEL } from "@/lib/tipos";
 import type { Modulo, Operacao } from "./equipe";
 import { dataLocal, diasEntre, formatarDataBR, somarDias, type DataISO } from "./datas";
 import { paraCentavos, paraReais } from "./dinheiro";
@@ -162,11 +162,30 @@ export const ACAO_AUTOMATICA: Record<TipoAcaoIA, boolean> = {
   criar_tarefa: true,
 };
 
-/** Módulo e operação de cada ação (espelho de privado.ia_acao_permissao). */
-export function permissaoAcao(tipo: TipoAcaoIA, imobiliaria: boolean): [Modulo, Operacao] {
+/**
+ * Módulo e operação de cada ação (espelho de privado.ia_acao_permissao).
+ * A mensagem ao cliente depende do registro a que se refere (referencia_tipo):
+ * na imobiliária, cobrança → Cobranças, contrato/garantia → Contratos, chamado →
+ * Manutenção, análise → Análise cadastral; lead, visita, conversa, pessoa ou sem
+ * registro → Comercial. No pessoal, sempre Pessoas → editar.
+ */
+export function permissaoAcao(tipo: TipoAcaoIA, imobiliaria: boolean, referenciaTipo?: string | null): [Modulo, Operacao] {
   switch (tipo) {
     case "mensagem_cliente":
-      return imobiliaria ? ["comercial", "editar"] : ["pessoas", "editar"];
+      if (!imobiliaria) return ["pessoas", "editar"];
+      switch (referenciaTipo) {
+        case "fatura":
+          return ["cobrancas", "editar"];
+        case "contrato":
+        case "garantia":
+          return ["contratos", "editar"];
+        case "chamado":
+          return ["manutencao", "editar"];
+        case "analise":
+          return ["analise", "editar"];
+        default:
+          return ["comercial", "editar"];
+      }
     case "mudar_etapa_lead":
     case "mudar_responsavel_lead":
       return ["comercial", "editar"];
@@ -521,6 +540,47 @@ export function validarPayloadAcao(tipo: string, p: unknown): string | null {
     default:
       return "Tipo de ação desconhecido.";
   }
+}
+
+/** Chaves do payload que apontam o registro de cada ação, em ordem (espelho de privado.ia_acao_referencia). */
+export const CHAVES_REFERENCIA_ACAO: Record<TipoAcaoIA, readonly string[]> = {
+  mensagem_cliente: ["conversa_id", "lead_id", "pessoa_id"],
+  mudar_etapa_lead: ["lead_id"],
+  mudar_responsavel_lead: ["lead_id"],
+  desconto: ["contrato_id"],
+  alterar_preco: ["imovel_id"],
+  cancelar_cobranca: ["fatura_id"],
+  renegociar_cobranca: ["fatura_id"],
+  criar_lancamento: ["contrato_id", "imovel_id"],
+  criar_tarefa: ["lead_id", "contrato_id", "imovel_id"],
+};
+
+/**
+ * Registro a que a ação se refere ([tipo, id]), tirado do PAYLOAD que será
+ * executado — é o que quem aprova vê. O banco grava o mesmo nas ações pedidas
+ * pela API (privado.ia_acao_referencia; o teste confere).
+ */
+export function referenciaDoPayload(tipo: TipoAcaoIA, p: Record<string, unknown>): [string, string] | null {
+  for (const k of CHAVES_REFERENCIA_ACAO[tipo] ?? []) {
+    const v = p[k];
+    if (typeof v === "string" && v.trim() !== "") return [k.slice(0, -3), v];
+  }
+  return null;
+}
+
+/** Arredonda a 2 casas como o round(numeric, 2) do banco (1,005 → 1,01; sem o erro do ponto flutuante). */
+const arredondar2 = (v: number) => {
+  const r = Number(`${Math.round(Number(`${v}e2`))}e-2`);
+  return Number.isFinite(r) ? r : paraReais(paraCentavos(v));
+};
+
+/** Valor em R$ da ação, tirado do PAYLOAD (desconto em reais, novo preço, lançamento). Espelho de privado.ia_acao_valor. */
+export function valorDoPayload(tipo: TipoAcaoIA, p: Record<string, unknown>): number | null {
+  if ((tipo === "desconto" && p.tipo === "valor") || tipo === "alterar_preco" || tipo === "criar_lancamento") {
+    const v = num(p.valor);
+    return v === null ? null : arredondar2(v);
+  }
+  return null;
 }
 
 export function validarCondicoes(gatilho: GatilhoIA, c: unknown): string | null {
@@ -1463,6 +1523,24 @@ export function explicarConsulta(r: ResultadoConsulta): string {
   return `${r.titulo}${periodo}: ${numeros || "nada encontrado"}. Fonte: ${r.fonte}.`;
 }
 
+/**
+ * O que vai para a IA das linhas de uma consulta (LGPD: minimizar e mascarar).
+ * Relatório personalizado pode ter nome, telefone e e-mail de clientes (a máscara
+ * não apaga nomes): vão só as colunas e a quantidade, nenhuma linha. As consultas
+ * fechadas (public.ia_consulta) trazem só códigos e números; mesmo assim, as
+ * primeiras linhas passam pela máscara.
+ */
+export function linhasParaIA(r: ResultadoConsulta): string {
+  if (r.consulta === "relatorio_salvo")
+    return `Colunas: ${r.colunas.join(" | ") || "—"}. Linhas: ${r.linhas.length} (não enviadas: relatório personalizado pode ter dados de pessoas; use só o resumo e os totais).`;
+  if (!r.linhas.length) return "Sem linhas.";
+  const texto = r.linhas
+    .slice(0, 12)
+    .map((l) => l.map((c) => (c === null || c === undefined ? "" : String(c))).join(" | "))
+    .join("\n");
+  return `Primeiras linhas (${r.colunas.join(" | ")}):\n${mascararDadosPessoais(texto)}`;
+}
+
 export function promptExplicarConsulta(pergunta: string, r: ResultadoConsulta): PedidoMontado {
   return {
     instrucoes: lista([
@@ -1474,11 +1552,10 @@ export function promptExplicarConsulta(pergunta: string, r: ResultadoConsulta): 
       delimitarDados(mascararDadosPessoais(pergunta).slice(0, 500), "Pergunta"),
       delimitarDados(
         lista([
-          `Consulta: ${r.titulo}. Fonte: ${r.fonte}.`,
+          mascararDadosPessoais(`Consulta: ${r.titulo}. Fonte: ${r.fonte}.`),
           `Parâmetros: ${JSON.stringify(r.parametros)}`,
           `Resumo: ${r.resumo.map((i) => `${i.rotulo} = ${formatarItem(i)}`).join("; ")}`,
-          // Só as primeiras linhas, sem nomes de pessoas (as consultas já trazem só códigos).
-          r.linhas.length ? `Primeiras linhas (${r.colunas.join(" | ")}):\n${r.linhas.slice(0, 12).map((l) => l.join(" | ")).join("\n")}` : "Sem linhas.",
+          linhasParaIA(r),
         ]),
         "Resultado",
       ),
@@ -1716,6 +1793,9 @@ export const ABAS_HISTORICO = { ia: "Chamadas à IA", automacoes: "Automações"
 /** Soma em centavos (para os totais do histórico). */
 export const somarReais = (valores: (number | null | undefined)[]) => paraReais(valores.reduce<number>((a, v) => a + paraCentavos(v ?? 0), 0));
 
+const rotuloEtapaLead = (v: unknown) => (typeof v === "string" && v in ROTULO_STATUS_LEAD ? ROTULO_STATUS_LEAD[v as keyof typeof ROTULO_STATUS_LEAD] : v ? String(v) : "—");
+const ROTULO_STATUS_FATURA_ACAO: Record<string, string> = { aberta: "em aberto", paga: "paga", cancelada: "cancelada", renegociada: "renegociada" };
+
 /** Dados de uma ação em linguagem simples (para a tela de aprovação). */
 export function detalhesAcao(tipo: TipoAcaoIA, p: Record<string, unknown>): [string, string][] {
   const t = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
@@ -1729,7 +1809,7 @@ export function detalhesAcao(tipo: TipoAcaoIA, p: Record<string, unknown>): [str
       ];
     case "mudar_etapa_lead":
       return [
-        ["Nova etapa", t(p.status)],
+        ["Nova etapa", rotuloEtapaLead(p.status)],
         ["Motivo", t(p.motivo)],
       ];
     case "mudar_responsavel_lead":
@@ -1765,4 +1845,174 @@ export function detalhesAcao(tipo: TipoAcaoIA, p: Record<string, unknown>): [str
         ["Prioridade", p.prioridade === "alta" ? "Alta" : "Normal"],
       ];
   }
+}
+
+// =============================================================================
+// Aprovação: o registro que a ação vai alterar DE VERDADE
+// =============================================================================
+/**
+ * Ids que a tela de aprovação lê do PAYLOAD (o que será executado), nunca das
+ * colunas de referência. novoCorretor: id do corretor que vai receber o lead
+ * (null = o lead fica sem corretor).
+ */
+export type IdsAlvoAcao = { fatura?: string; lead?: string; novoCorretor?: string | null; contrato?: string; imovel?: string; pessoa?: string | null };
+
+export function idsAlvoAcao(tipo: TipoAcaoIA, p: Record<string, unknown>): IdsAlvoAcao {
+  const id = (k: string) => (uuidValido(p[k]) ? (p[k] as string) : undefined);
+  switch (tipo) {
+    case "cancelar_cobranca":
+    case "renegociar_cobranca":
+      return { fatura: id("fatura_id") };
+    case "mudar_etapa_lead":
+      return { lead: id("lead_id") };
+    case "mudar_responsavel_lead":
+      return { lead: id("lead_id"), novoCorretor: id("corretor_id") ?? null };
+    case "desconto":
+      return { contrato: id("contrato_id") };
+    case "alterar_preco":
+      return { imovel: id("imovel_id") };
+    case "criar_lancamento":
+      // pessoa: credor (a pagar) ou devedor (a receber) gravado no lançamento; null = nenhuma.
+      return { contrato: id("contrato_id"), imovel: id("imovel_id"), pessoa: id("pessoa_id") ?? null };
+    case "criar_tarefa":
+      return { lead: id("lead_id"), contrato: id("contrato_id"), imovel: id("imovel_id") };
+    case "mensagem_cliente":
+      return {};
+  }
+}
+
+/**
+ * Registros lidos (com a sessão de quem aprova) a partir de idsAlvoAcao.
+ * null = não encontrado (apagado ou sem acesso); ausente = não se aplica.
+ */
+export type RegistrosAlvoAcao = {
+  fatura?: { numero: number | null; vencimento: string | null; valor: number | null; status: string | null; contrato: string | null; imovel: string | null } | null;
+  lead?: { nome: string | null; status: string | null; corretor: string | null } | null;
+  /** Nome do novo corretor (mudar responsável); null = não encontrado. */
+  novoCorretor?: string | null;
+  contrato?: { codigo: string | null; imovel: string | null; aluguel: number | null } | null;
+  imovel?: { codigo: string | null; bairro: string | null; aluguel: number | null; venda: number | null } | null;
+  /** Pessoa ligada ao lançamento (a quem pagar / de quem receber); null = não encontrada. */
+  pessoa?: { nome: string | null; documento: string | null } | null;
+};
+
+/** Só os 4 últimos dígitos do CPF/CNPJ (basta para distinguir homônimos na aprovação). */
+const finalDocumento = (doc: string | null | undefined) => {
+  const d = (doc ?? "").replace(/\D/g, "");
+  return d.length >= 4 ? `${d.length > 11 ? "CNPJ" : "CPF"} final ${d.slice(-4)}` : null;
+};
+
+/** Linhas "o que será alterado", uma frase para a confirmação e o que não foi encontrado. */
+export type AlvoAcao = { itens: [string, string][]; resumo: string; faltando: string[] };
+
+/**
+ * Descreve o registro que a ação vai alterar, a partir do payload e dos
+ * registros reais (cobrança nº/vencimento/valor, lead e novo corretor,
+ * contrato, imóvel e preço atual). Quem aprova confirma ISTO — não o título ou
+ * o valor que quem pediu escreveu.
+ */
+export function alvoDaAcao(tipo: TipoAcaoIA, p: Record<string, unknown>, r: RegistrosAlvoAcao): AlvoAcao {
+  const ids = idsAlvoAcao(tipo, p);
+  const itens: [string, string][] = [];
+  const partes: string[] = [];
+  const faltando: string[] = [];
+  const data = (v: string | null | undefined) => (v ? formatarDataBR(v.slice(0, 10)) : "—");
+  const moeda = (v: number | null | undefined) => (v === null || v === undefined ? "—" : moedaSimples(v));
+
+  if (ids.fatura) {
+    const f = r.fatura;
+    if (!f) {
+      itens.push(["Cobrança", "não encontrada (apagada ou sem acesso) — confira antes de decidir"]);
+      faltando.push("cobrança");
+    } else {
+      const desc = `nº ${f.numero ?? "—"} — vence ${data(f.vencimento)} — ${moeda(f.valor)} (${ROTULO_STATUS_FATURA_ACAO[f.status ?? ""] ?? f.status ?? "—"})`;
+      itens.push(["Cobrança", desc]);
+      if (f.contrato || f.imovel) itens.push(["Contrato e imóvel", `${f.contrato ?? "—"} · ${f.imovel ?? "—"}`]);
+      partes.push(`cobrança nº ${f.numero ?? "—"} (vence ${data(f.vencimento)}, ${moeda(f.valor)}${f.imovel ? `, imóvel ${f.imovel}` : ""})`);
+    }
+  }
+  if (ids.lead) {
+    const l = r.lead;
+    if (!l) {
+      itens.push(["Lead", "não encontrado (apagado ou sem acesso) — confira antes de decidir"]);
+      faltando.push("lead");
+    } else {
+      itens.push(["Lead", `${l.nome ?? "—"} (etapa atual: ${rotuloEtapaLead(l.status)}; corretor atual: ${l.corretor ?? "sem corretor"})`]);
+      partes.push(`lead ${l.nome ?? "—"}`);
+    }
+  }
+  if (tipo === "mudar_responsavel_lead") {
+    let novo: string;
+    if (!ids.novoCorretor) novo = "sem corretor (o lead fica sem responsável)";
+    else if (r.novoCorretor) novo = r.novoCorretor;
+    else {
+      novo = "não encontrado (apagado ou sem acesso) — confira antes de decidir";
+      faltando.push("novo corretor");
+    }
+    itens.push(["Novo responsável", novo]);
+    partes.push(`novo responsável: ${ids.novoCorretor ? (r.novoCorretor ?? "não encontrado") : "sem corretor"}`);
+  }
+  if (tipo === "mudar_etapa_lead") partes.push(`nova etapa: ${rotuloEtapaLead(p.status)}`);
+  if (ids.contrato) {
+    const c = r.contrato;
+    if (!c) {
+      itens.push(["Contrato", "não encontrado (apagado ou sem acesso) — confira antes de decidir"]);
+      faltando.push("contrato");
+    } else {
+      itens.push(["Contrato", `${c.codigo ?? "—"} (imóvel ${c.imovel ?? "—"}; aluguel atual ${moeda(c.aluguel)})`]);
+      partes.push(`contrato ${c.codigo ?? "—"}${c.imovel ? ` (imóvel ${c.imovel})` : ""}`);
+    }
+  }
+  if (ids.imovel) {
+    const i = r.imovel;
+    if (!i) {
+      itens.push(["Imóvel", "não encontrado (apagado ou sem acesso) — confira antes de decidir"]);
+      faltando.push("imóvel");
+    } else {
+      itens.push(["Imóvel", `${i.codigo ?? "—"}${i.bairro ? ` (${i.bairro})` : ""}`]);
+      if (tipo === "alterar_preco") {
+        const venda = p.campo === "valor_venda";
+        const atual = venda ? i.venda : i.aluguel;
+        itens.push([venda ? "Preço de venda atual" : "Aluguel atual", moeda(atual)]);
+        partes.push(`imóvel ${i.codigo ?? "—"}: ${venda ? "venda" : "aluguel"} de ${moeda(atual)} para ${moeda(num(p.valor))}`);
+      } else partes.push(`imóvel ${i.codigo ?? "—"}`);
+    }
+  }
+  if (tipo === "desconto") partes.push(`desconto de ${p.tipo === "pct" ? `${String(p.valor)}%` : moeda(num(p.valor))}`);
+  if (tipo === "criar_lancamento") {
+    // A quem o lançamento fica ligado (credor ou devedor): sai do payload e do cadastro real.
+    const receber = p.tipo === "receber";
+    const rotulo = receber ? "De quem receber" : "A quem pagar";
+    let quem: string;
+    if (!ids.pessoa) {
+      itens.push([rotulo, "nenhuma pessoa ligada ao lançamento"]);
+      quem = "(sem pessoa ligada)";
+    } else if (!r.pessoa) {
+      itens.push([rotulo, "não encontrada (apagada ou sem acesso) — confira antes de decidir"]);
+      faltando.push("pessoa");
+      quem = "(pessoa não encontrada)";
+    } else {
+      const doc = finalDocumento(r.pessoa.documento);
+      itens.push([rotulo, `${r.pessoa.nome ?? "—"}${doc ? ` (${doc})` : ""}`]);
+      quem = `${receber ? "de" : "a"} ${r.pessoa.nome ?? "—"}`;
+    }
+    partes.push(`${receber ? "a receber" : "a pagar"} ${moeda(num(p.valor))} ${quem}`);
+  }
+  if (tipo === "mensagem_cliente") partes.push(`para ${typeof p.nome === "string" && p.nome ? p.nome : "cliente"} (${typeof p.destino === "string" && p.destino ? p.destino : "sem contato"})`);
+  return { itens, resumo: partes.join("; "), faltando };
+}
+
+/**
+ * Texto da confirmação de aprovar/fazer: primeiro o registro real (do payload),
+ * depois o título que quem pediu escreveu e o valor (também tirado do payload).
+ */
+export function confirmacaoAcao(tipo: TipoAcaoIA, titulo: string, valor: number | null, alvo: AlvoAcao): string {
+  return [
+    `${ROTULO_TIPO_ACAO[tipo]}: ${alvo.resumo || titulo}`,
+    alvo.resumo ? `Pedido: “${titulo}”` : null,
+    valor !== null ? `Valor: ${moedaSimples(valor)}` : null,
+    alvo.faltando.length ? `Atenção: não encontrei ${alvo.faltando.join(", ")} — confira antes.` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

@@ -9,7 +9,7 @@ import { cancelarFatura } from "../faturas/actions";
 
 type Contexto = Awaited<ReturnType<typeof obterContexto>>;
 
-export type AcaoParaExecutar = { id: string; tipo: TipoAcaoIA; payload: Record<string, unknown>; titulo: string };
+export type AcaoParaExecutar = { id: string; tipo: TipoAcaoIA; payload: Record<string, unknown>; titulo: string; referencia_tipo: string | null };
 export type ResultadoExecucao = { ok: boolean; resultado?: string; erro?: string };
 
 const s = (v: unknown) => (v === null || v === undefined ? "" : String(v));
@@ -30,7 +30,8 @@ export async function executarAcao(ctx: Contexto, a: AcaoParaExecutar): Promise<
   if (!ACAO_AUTOMATICA[a.tipo]) return { ok: false, erro: "Esta ação é feita à mão (abra pelo botão e depois marque como feita)." };
   const p = a.payload;
   try {
-    const [modulo, operacao] = permissaoAcao(a.tipo, ctx.organizacao.modo !== "pessoal");
+    // Mesma regra do banco (privado.ia_acao_permissao): a mensagem depende do registro.
+    const [modulo, operacao] = permissaoAcao(a.tipo, ctx.organizacao.modo !== "pessoal", a.referencia_tipo);
     await exigirPermissao(modulo, operacao);
     switch (a.tipo) {
       case "mudar_etapa_lead": {

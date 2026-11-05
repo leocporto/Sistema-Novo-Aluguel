@@ -30,6 +30,9 @@ import {
   saidaParaHistorico,
   permissaoAcao,
   preencherModeloIA,
+  referenciaDoPayload,
+  valorDoPayload,
+  type TipoAcaoIA,
   validarCondicoes,
   validarConfigAcao,
   validarPayloadAcao,
@@ -145,11 +148,46 @@ describe("listas do banco = listas do app", () => {
     expect(l.ci).toEqual(CONSULTAS_IA.filter((c) => c.imob).map((c) => c.chave));
     expect(l.inc).toEqual([...TIPOS_INCONSISTENCIA]);
     for (const r of RECURSOS_IA) expect((await um<{ p: string[] }>(`select privado.ia_recurso_permissao($1) p`, [r])).p).toEqual(PERMISSAO_RECURSO[r]);
+    // A mensagem ao cliente muda de módulo conforme o registro (referencia_tipo): mesma regra nos dois.
     for (const t of TIPOS_ACAO_IA)
-      for (const imob of [true, false]) expect((await um<{ p: string[] }>(`select privado.ia_acao_permissao($1, $2) p`, [t, imob])).p).toEqual(permissaoAcao(t, imob));
+      for (const imob of [true, false]) {
+        expect((await um<{ p: string[] }>(`select privado.ia_acao_permissao($1, $2) p`, [t, imob])).p, `${t} ${imob}`).toEqual(permissaoAcao(t, imob));
+        for (const ref of ["fatura", "contrato", "garantia", "chamado", "analise", "lead", "visita", "conversa", "pessoa", "imovel", null])
+          expect((await um<{ p: string[] }>(`select privado.ia_acao_permissao($1, $2, $3) p`, [t, imob, ref])).p, `${t} ${imob} ${ref}`).toEqual(permissaoAcao(t, imob, ref));
+      }
     for (const c of CONSULTAS_IA.filter((x) => !x.soApp))
       expect((await um<{ p: string[] }>(`select privado.ia_consulta_permissao($1) p`, [c.chave])).p).toEqual([c.modulo, c.operacao]);
     for (const g of GATILHOS_IA) expect((await um<{ t: string }>(`select privado.ia_titulo_padrao($1) t`, [g])).t).toBe(TITULO_PADRAO_GATILHO[g]);
+  });
+
+  it("registro e valor da ação tirados do payload iguais (privado.ia_acao_referencia/ia_acao_valor)", async () => {
+    const A = "11111111-1111-1111-1111-111111111111";
+    const B = "22222222-2222-2222-2222-222222222222";
+    const C = "33333333-3333-3333-3333-333333333333";
+    const casos: [TipoAcaoIA, object][] = [
+      ["mensagem_cliente", { canal: "whatsapp", texto: "Oi", conversa_id: A, lead_id: B, pessoa_id: C }],
+      ["mensagem_cliente", { canal: "whatsapp", texto: "Oi", lead_id: null, pessoa_id: C }],
+      ["mensagem_cliente", { canal: "whatsapp", texto: "Oi" }],
+      ["mudar_etapa_lead", { lead_id: A, status: "visita" }],
+      ["mudar_responsavel_lead", { lead_id: A, corretor_id: B }],
+      ["desconto", { contrato_id: A, tipo: "valor", valor: "150.555", inicio: "2026-12" }],
+      ["desconto", { contrato_id: A, tipo: "pct", valor: 10, inicio: "2026-12" }],
+      ["alterar_preco", { imovel_id: A, campo: "valor_aluguel", valor: 2100 }],
+      ["alterar_preco", { imovel_id: A, campo: "valor_aluguel", valor: "1.005" }],
+      ["criar_lancamento", { tipo: "pagar", descricao: "Luz", valor: 0.125, vencimento: "2026-11-10" }],
+      ["cancelar_cobranca", { fatura_id: A, motivo: "x", valor: 50 }],
+      ["renegociar_cobranca", { fatura_id: A }],
+      ["criar_lancamento", { tipo: "pagar", descricao: "Luz", valor: 99.9, vencimento: "2026-11-10", imovel_id: B }],
+      ["criar_lancamento", { tipo: "pagar", descricao: "Luz", valor: 99.9, vencimento: "2026-11-10", contrato_id: A, imovel_id: B }],
+      ["criar_tarefa", { titulo: "Ligar", imovel_id: C }],
+      ["criar_tarefa", { titulo: "Ligar", contrato_id: B, lead_id: A }],
+      ["criar_tarefa", { titulo: "Ligar" }],
+    ];
+    for (const [tipo, p] of casos) {
+      const r = await um<{ r: string[] | null; v: string | number | null }>(`select privado.ia_acao_referencia($1, $2::jsonb) r, privado.ia_acao_valor($1, $2::jsonb) v`, [tipo, JSON.stringify(p)]);
+      expect(r.r, `${tipo} ${JSON.stringify(p)}`).toEqual(referenciaDoPayload(tipo, p as Record<string, unknown>));
+      expect(r.v === null ? null : Number(r.v), `${tipo} ${JSON.stringify(p)}`).toBe(valorDoPayload(tipo, p as Record<string, unknown>));
+    }
   });
 
   it("máscara de dados pessoais, modelo de texto e horário comercial iguais", async () => {
@@ -338,6 +376,50 @@ describe("ações sugeridas com aprovação humana", () => {
     ).toMatch(/só existe no modo imobiliária/);
   });
 
+  it("pela API, o registro e o valor mostrados a quem aprova saem do payload que será executado", async () => {
+    const X = "44444444-4444-4444-4444-444444444444";
+    const inserir = (user: string, cols: Record<string, unknown>) =>
+      comoUsuario(db, user, () =>
+        um<{ id: string; referencia_tipo: string | null; referencia_id: string | null; valor: string | null; regra_id: string | null; execucao_id: string | null; origem: string }>(
+          `insert into ia_acoes (tipo, titulo, origem, valor, referencia_tipo, referencia_id, regra_id, execucao_id, payload)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb) returning id, referencia_tipo, referencia_id, valor, regra_id, execucao_id, origem`,
+          [cols.tipo, cols.titulo ?? "Sugestão", cols.origem ?? "ia", cols.valor ?? null, cols.referencia_tipo ?? null, cols.referencia_id ?? null, cols.regra_id ?? null, cols.execucao_id ?? null, JSON.stringify(cols.payload)],
+        ),
+      );
+    // Quem só VÊ Cobranças aponta a cobrança X de R$ 50 nas colunas e a Y (a que seria cancelada) no payload.
+    const c = await inserir(FIN, {
+      tipo: "cancelar_cobranca",
+      titulo: "Cancelar cobrança duplicada",
+      valor: 50,
+      referencia_tipo: "fatura",
+      referencia_id: X,
+      regra_id: X,
+      execucao_id: X,
+      payload: { fatura_id: id.fatura, motivo: "duplicada" },
+    });
+    expect(c).toMatchObject({ referencia_tipo: "fatura", referencia_id: id.fatura, valor: null, regra_id: null, execucao_id: null, origem: "ia" });
+    // Preço: valor = novo preço do payload; imóvel do payload.
+    const p = await inserir(CORRETOR, { tipo: "alterar_preco", valor: 1, referencia_tipo: "imovel", referencia_id: X, origem: "usuario", payload: { imovel_id: id.imovel, campo: "valor_aluguel", valor: 2100.5 } });
+    expect(p).toMatchObject({ referencia_tipo: "imovel", referencia_id: id.imovel, origem: "usuario" });
+    expect(Number(p.valor)).toBe(2100.5);
+    // Desconto em %: sem valor em R$; responsável do lead: o lead do payload.
+    const d = await inserir(GESTOR, { tipo: "desconto", valor: 999, payload: { contrato_id: id.contrato, tipo: "pct", valor: 10, inicio: "2026-12" } });
+    expect(d).toMatchObject({ referencia_tipo: "contrato", referencia_id: id.contrato, valor: null });
+    const l = await inserir(CORRETOR, { tipo: "mudar_responsavel_lead", referencia_tipo: "lead", referencia_id: X, payload: { lead_id: id.lead, corretor_id: id.cor } });
+    expect(l).toMatchObject({ referencia_tipo: "lead", referencia_id: id.lead });
+    // Mensagem: quem pede não escolhe o registro (e com ele o módulo que decide); sai do payload.
+    const m = await inserir(CORRETOR, { tipo: "mensagem_cliente", referencia_tipo: "fatura", referencia_id: id.fatura, payload: { canal: "whatsapp", texto: "Oi", lead_id: id.lead } });
+    expect(m).toMatchObject({ referencia_tipo: "lead", referencia_id: id.lead });
+    // Ações criadas pelo próprio banco (automações) continuam com o registro que o banco deu.
+    const banco = await um<{ id: string; referencia_tipo: string; referencia_id: string }>(
+      `insert into ia_acoes (organizacao_id, tipo, origem, titulo, payload, referencia_tipo, referencia_id) values ($1, 'mensagem_cliente', 'automacao', 'Msg', '{"canal":"whatsapp","texto":"Oi"}'::jsonb, 'fatura', $2) returning id, referencia_tipo, referencia_id`,
+      [org, id.fatura],
+    );
+    expect(banco).toMatchObject({ referencia_tipo: "fatura", referencia_id: id.fatura });
+    // Limpa (para não pesar nas contagens dos outros testes).
+    await comoUsuario(db, ADMIN, () => db.query(`update ia_acoes set status = 'cancelada' where id = any ($1::uuid[]) and status = 'pendente'`, [[c.id, p.id, d.id, l.id, m.id, banco.id]]));
+  });
+
   it("quem pode decidir: não o corretor, nem quem pediu (a não ser o administrador); recusar pede motivo", async () => {
     const decidir = (user: string, acao: string, status: string, motivo: string | null = null) =>
       comoUsuario(db, user, () => db.query(`update ia_acoes set status = $2, motivo = $3 where id = $1`, [acao, status, motivo]));
@@ -516,6 +598,41 @@ describe("automações por regras", () => {
     expect(await comoUsuario(db, OUTRO, () => todos(`select * from automacoes_execucoes`))).toHaveLength(0);
   });
 
+  it("mensagem de cobrança da automação: o financeiro vê, aprova e conclui; o corretor (sem Cobranças → editar) não", async () => {
+    const sel = `select id, referencia_tipo, status from ia_acoes where regra_id = $1`;
+    expect(await comoUsuario(db, CORRETOR, () => todos(sel, [id.rMsg]))).toHaveLength(0);
+    const a = await comoUsuario(db, FIN, () => um<{ id: string; referencia_tipo: string; status: string }>(sel, [id.rMsg]));
+    expect(a).toMatchObject({ referencia_tipo: "fatura", status: "pendente" });
+    // Módulo pelo registro: cobrança e contrato com o financeiro; lead e conversa com o corretor.
+    const podeExecutar = (user: string, ref: string) =>
+      comoUsuario(db, user, async () => (await um<{ p: boolean }>(`select privado.ia_pode_executar($1, 'mensagem_cliente', $2) p`, [org, ref])).p);
+    for (const [ref, fin, cor] of [
+      ["fatura", true, false],
+      ["contrato", true, false],
+      ["garantia", true, false],
+      ["chamado", true, true],
+      ["analise", true, true],
+      ["lead", false, true],
+      ["conversa", false, true],
+    ] as const) {
+      expect(await podeExecutar(FIN, ref), `financeiro ${ref}`).toBe(fin);
+      expect(await podeExecutar(CORRETOR, ref), `corretor ${ref}`).toBe(cor);
+    }
+    // Nem com "exigir aprovação" desligado o corretor confirma a cobrança (nem enxerga).
+    await comoUsuario(db, ADMIN, () => db.query(`update ia_config set exigir_aprovacao = false where organizacao_id = $1`, [org]));
+    await comoUsuario(db, CORRETOR, () => db.query(`update ia_acoes set status = 'aprovada' where id = $1`, [a.id]));
+    expect((await comoUsuario(db, ADMIN, () => um<{ status: string }>(`select status from ia_acoes where id = $1`, [a.id]))).status).toBe("pendente");
+    await comoUsuario(db, ADMIN, () => db.query(`update ia_config set exigir_aprovacao = true where organizacao_id = $1`, [org]));
+    // O financeiro (tem "aprovar" em Cobranças) aprova e marca como enviada.
+    await comoUsuario(db, FIN, () => db.query(`update ia_acoes set status = 'aprovada' where id = $1 and status = 'pendente'`, [a.id]));
+    await comoUsuario(db, FIN, () => db.query(`update ia_acoes set status = 'executada', resultado = 'WhatsApp aberto' where id = $1`, [a.id]));
+    expect(await comoUsuario(db, FIN, () => um<Record<string, unknown>>(`select status, decidida_por, executada_por from ia_acoes where id = $1`, [a.id]))).toEqual({
+      status: "executada",
+      decidida_por: FIN,
+      executada_por: FIN,
+    });
+  });
+
   it("resposta fora do horário: uma por conversa e período; sugerida, ou pré-aprovada com o texto do administrador", async () => {
     // Sem dias úteis = sempre fora do horário.
     await comoUsuario(db, ADMIN, () =>
@@ -578,6 +695,38 @@ describe("assistente: consultas da lista fechada (RLS vale)", () => {
     await db.query(`update membros set perfil_id = $1 where user_id = $2`, [perfil, CORRETOR]);
     expect(await comoUsuario(db, CORRETOR, () => erroDe(() => db.query(`select public.ia_consulta('inadimplencia', '{}')`)))).toMatch(/não permite ver em Cobranças/);
     await db.query(`update membros set perfil_id = null where user_id = $1`, [CORRETOR]);
+  });
+});
+
+describe("assistente: leads do período respeitam o escopo do corretor", () => {
+  it("o corretor vê só os leads dele (como em Relatórios → Comercial); administrador e gestor veem todos", async () => {
+    await comoUsuario(db, ADMIN, async () => {
+      const outro = (await um<{ id: string }>(`insert into pessoas (nome, papeis) values ('Otávio Corretor','{corretor}') returning id`)).id;
+      await db.query(`insert into leads (nome, origem, funil, corretor_id, status) values ('Lead da Carla', 'site', 'locacao', $1, 'ganho'), ('Lead do Otávio', 'whatsapp', 'locacao', $2, 'novo')`, [
+        id.cor,
+        outro,
+      ]);
+    });
+    type Resp = { fonte: string; resumo: { rotulo: string; valor: number }[]; linhas: unknown[][] };
+    const consulta = (user: string) =>
+      comoUsuario(db, user, async () => (await um<{ r: Resp }>(`select public.ia_consulta('leads_periodo', $1::jsonb) r`, [JSON.stringify({ de: HOJE, ate: HOJE })])).r);
+    const total = (r: Resp) => r.resumo.find((i) => i.rotulo === "Leads")?.valor;
+    const adm = await consulta(ADMIN);
+    expect(total(adm)).toBe(3);
+    expect(total(await consulta(GESTOR))).toBe(3);
+    // Corretor sem cadastro ligado (membros.pessoa_id): nenhum lead.
+    expect(total(await consulta(CORRETOR))).toBe(0);
+    await db.query(`update membros set pessoa_id = $1 where organizacao_id = $2 and user_id = $3`, [id.cor, org, CORRETOR]);
+    try {
+      const cor = await consulta(CORRETOR);
+      expect(total(cor)).toBe(1);
+      expect(cor.resumo.find((i) => i.rotulo === "Fechados")?.valor).toBe(1);
+      expect(cor.linhas).toEqual([["site", 1, 1, 0]]);
+      expect(cor.fonte).toMatch(/só os seus leads/);
+      expect(adm.fonte).not.toMatch(/só os seus/);
+    } finally {
+      await db.query(`update membros set pessoa_id = null where organizacao_id = $1 and user_id = $2`, [org, CORRETOR]);
+    }
   });
 });
 

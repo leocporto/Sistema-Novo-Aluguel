@@ -32,7 +32,12 @@
 --   executa pela via normal (actions/RPC existentes, com a sessão do usuário)
 --   e marca executada/erro. Repetir a mesma situação pela API é recusado.
 --   "Criar tarefa" só existe na imobiliária (tarefas só aparecem no Comercial).
---   O que foi sugerido não muda depois.
+--   O que foi sugerido não muda depois. Pela API, o registro (referencia_*) e o
+--   valor que quem aprova vê saem do payload que será executado
+--   (privado.ia_acao_referencia/ia_acao_valor); regra/execução e origem
+--   'automacao' só nas ações criadas pelo próprio banco. A mensagem ao cliente
+--   pede o módulo do registro (cobrança, contrato/garantia, chamado, análise;
+--   lead/conversa/visita = Comercial).
 -- - automacoes_regras: regras configuráveis (gatilho e ação de listas
 --   FECHADAS, condições simples validadas). automacoes_execucoes: histórico só
 --   acréscimo, com trava única (regra, objeto, dia). A rodada é feita por
@@ -114,12 +119,24 @@ as $$
   end
 $$;
 
-/** Módulo e operação para decidir/executar cada tipo de ação (espelho de permissaoAcao). */
-create or replace function privado.ia_acao_permissao(p_tipo text, p_imob boolean)
+/**
+ * Módulo e operação para decidir/executar cada tipo de ação (espelho de permissaoAcao).
+ * A mensagem ao cliente depende do registro a que se refere (p_ref = referencia_tipo):
+ * na imobiliária, cobrança → Cobranças, contrato/garantia → Contratos, chamado →
+ * Manutenção, análise → Análise cadastral; lead, visita, conversa, pessoa ou sem
+ * registro → Comercial. No pessoal, sempre Pessoas → editar.
+ */
+create or replace function privado.ia_acao_permissao(p_tipo text, p_imob boolean, p_ref text default null)
 returns text[] language sql immutable set search_path = pg_catalog
 as $$
   select case p_tipo
-    when 'mensagem_cliente' then case when p_imob then array['comercial','editar'] else array['pessoas','editar'] end
+    when 'mensagem_cliente' then case
+      when not coalesce(p_imob, false) then array['pessoas','editar']
+      when p_ref = 'fatura' then array['cobrancas','editar']
+      when p_ref in ('contrato','garantia') then array['contratos','editar']
+      when p_ref = 'chamado' then array['manutencao','editar']
+      when p_ref = 'analise' then array['analise','editar']
+      else array['comercial','editar'] end
     when 'mudar_etapa_lead' then array['comercial','editar']
     when 'mudar_responsavel_lead' then array['comercial','editar']
     when 'desconto' then array['contratos','editar']
@@ -156,7 +173,7 @@ begin
   foreach f in array array['privado.ia_recursos()','privado.ia_recursos_imob()','privado.ia_gatilhos()','privado.ia_gatilhos_imob()',
                            'privado.ia_acoes_regra()','privado.ia_acoes_regra_imob()','privado.ia_tipos_acao()','privado.ia_tipos_acao_imob()','privado.ia_consultas()',
                            'privado.ia_consultas_imob()','privado.ia_inconsistencia_tipos()','privado.ia_recurso_permissao(text)',
-                           'privado.ia_acao_permissao(text, boolean)','privado.ia_consulta_permissao(text)'] loop
+                           'privado.ia_acao_permissao(text, boolean, text)','privado.ia_consulta_permissao(text)'] loop
     execute format('grant execute on function %s to authenticated', f);
   end loop;
 end $$;
@@ -329,6 +346,45 @@ begin
 end;
 $$;
 
+/**
+ * Registro a que a ação se refere, tirado do PAYLOAD que será executado:
+ * {tipo, id} da primeira chave preenchida, na ordem de cada tipo (fatura_id →
+ * 'fatura', lead_id → 'lead'…). É o que quem aprova vê — nunca o que quem pediu
+ * mandou nas colunas. Espelho de referenciaDoPayload (o teste confere).
+ */
+create or replace function privado.ia_acao_referencia(p_tipo text, p jsonb)
+returns text[] language sql immutable set search_path = pg_catalog
+as $$
+  select array[left(c.chave, -3), p ->> c.chave]
+    from unnest(case p_tipo
+                  when 'mensagem_cliente' then array['conversa_id','lead_id','pessoa_id']
+                  when 'mudar_etapa_lead' then array['lead_id']
+                  when 'mudar_responsavel_lead' then array['lead_id']
+                  when 'desconto' then array['contrato_id']
+                  when 'alterar_preco' then array['imovel_id']
+                  when 'cancelar_cobranca' then array['fatura_id']
+                  when 'renegociar_cobranca' then array['fatura_id']
+                  when 'criar_lancamento' then array['contrato_id','imovel_id']
+                  when 'criar_tarefa' then array['lead_id','contrato_id','imovel_id']
+                  else array[]::text[] end) with ordinality as c(chave, n)
+   where jsonb_typeof(p) = 'object' and jsonb_typeof(p -> c.chave) = 'string' and btrim(p ->> c.chave) <> ''
+   order by c.n
+   limit 1
+$$;
+
+/**
+ * Valor em R$ da ação, tirado do PAYLOAD: desconto em reais, novo preço e
+ * lançamento; os outros (e desconto em %) não têm valor. Espelho de valorDoPayload.
+ */
+create or replace function privado.ia_acao_valor(p_tipo text, p jsonb)
+returns numeric language sql immutable set search_path = pg_catalog
+as $$
+  select case
+    when p_tipo = 'desconto' and p ->> 'tipo' = 'valor' then round(privado.ia_num(p, 'valor'), 2)
+    when p_tipo in ('alterar_preco','criar_lancamento') then round(privado.ia_num(p, 'valor'), 2)
+  end
+$$;
+
 /** Erro nas condições de uma regra (lista fechada de chaves por gatilho). Espelho de validarCondicoes. */
 create or replace function privado.ia_condicoes_erro(p_gatilho text, p jsonb)
 returns text language plpgsql immutable set search_path = pg_catalog
@@ -409,6 +465,7 @@ begin
   foreach f in array array['privado.ia_uuid_ok(text)','privado.ia_data_ok(text)','privado.ia_num(jsonb, text)','privado.ia_mascarar(text)','privado.ia_saida_extracao(text)',
                            'privado.ia_no_horario(timestamptz, time, time, smallint[])','privado.ia_moeda(numeric)',
                            'privado.ia_preencher(text, text, text, numeric, date, text)','privado.ia_payload_erro(text, jsonb)',
+                           'privado.ia_acao_referencia(text, jsonb)','privado.ia_acao_valor(text, jsonb)',
                            'privado.ia_condicoes_erro(text, jsonb)','privado.ia_acao_config_erro(text, text, jsonb)','privado.ia_titulo_padrao(text)'] loop
     execute format('grant execute on function %s to authenticated', f);
   end loop;
@@ -577,15 +634,19 @@ as $$
      and privado.tem_permissao(p_org, 'configuracoes', 'editar')
 $$;
 
-/** Executar (rodar a via normal) um tipo de ação: só a permissão do módulo. */
-create or replace function privado.ia_pode_executar(p_org uuid, p_tipo text)
+/**
+ * Executar (rodar a via normal) um tipo de ação: só a permissão do módulo.
+ * p_ref = referencia_tipo da ação (a mensagem ao cliente muda de módulo conforme
+ * o registro: cobrança, contrato, chamado, análise ou Comercial).
+ */
+create or replace function privado.ia_pode_executar(p_org uuid, p_tipo text, p_ref text)
 returns boolean language plpgsql stable security definer set search_path = public
 as $$
 declare
   v_perm text[];
 begin
   if privado.papel_atual(p_org) is null then return false; end if;
-  v_perm := privado.ia_acao_permissao(p_tipo, privado.org_imobiliaria(p_org));
+  v_perm := privado.ia_acao_permissao(p_tipo, privado.org_imobiliaria(p_org), p_ref);
   return v_perm is not null and privado.tem_permissao(p_org, v_perm[1], v_perm[2]);
 end;
 $$;
@@ -596,7 +657,7 @@ $$;
  * "aprovar" no módulo; e quem pediu não aprova a própria (só o administrador).
  * Sem "exigir aprovação": quem tem a permissão do módulo confirma.
  */
-create or replace function privado.ia_pode_decidir(p_org uuid, p_tipo text, p_criada_por uuid)
+create or replace function privado.ia_pode_decidir(p_org uuid, p_tipo text, p_criada_por uuid, p_ref text)
 returns boolean language plpgsql stable security definer set search_path = public
 as $$
 declare
@@ -604,31 +665,31 @@ declare
   v_perm text[];
   v_exigir boolean;
 begin
-  if v_papel is null or not privado.ia_pode_executar(p_org, p_tipo) then return false; end if;
+  if v_papel is null or not privado.ia_pode_executar(p_org, p_tipo, p_ref) then return false; end if;
   select exigir_aprovacao into v_exigir from public.ia_config where organizacao_id = p_org;
   if not coalesce(v_exigir, true) then return true; end if;
   if v_papel = 'admin' then return true; end if;
-  v_perm := privado.ia_acao_permissao(p_tipo, privado.org_imobiliaria(p_org));
+  v_perm := privado.ia_acao_permissao(p_tipo, privado.org_imobiliaria(p_org), p_ref);
   if v_papel <> 'gestor' and not privado.tem_permissao(p_org, v_perm[1], 'aprovar') then return false; end if;
   if p_criada_por is not null and p_criada_por = auth.uid() then return false; end if;
   return true;
 end;
 $$;
 
-create or replace function privado.ia_pode_ver_acao(p_org uuid, p_tipo text, p_criada_por uuid)
+create or replace function privado.ia_pode_ver_acao(p_org uuid, p_tipo text, p_criada_por uuid, p_ref text)
 returns boolean language sql stable security definer set search_path = ''
 as $$
   select p_criada_por = auth.uid()
       or coalesce(privado.papel_atual(p_org), '') in ('admin','gestor')
-      or privado.ia_pode_executar(p_org, p_tipo)
+      or privado.ia_pode_executar(p_org, p_tipo, p_ref)
 $$;
 
 do $$
 declare
   f text;
 begin
-  foreach f in array array['privado.ia_pode_configurar(uuid)','privado.ia_pode_executar(uuid, text)',
-                           'privado.ia_pode_decidir(uuid, text, uuid)','privado.ia_pode_ver_acao(uuid, text, uuid)'] loop
+  foreach f in array array['privado.ia_pode_configurar(uuid)','privado.ia_pode_executar(uuid, text, text)',
+                           'privado.ia_pode_decidir(uuid, text, uuid, text)','privado.ia_pode_ver_acao(uuid, text, uuid, text)'] loop
     execute format('revoke execute on function %s from public, anon', f);
     execute format('grant execute on function %s to authenticated', f);
   end loop;
@@ -727,6 +788,7 @@ declare
   v_api boolean := privado.chamada_da_api();
   v_erro text;
   v_perm text[];
+  v_ref text[];
 begin
   if tg_op = 'INSERT' then
     new.titulo := left(btrim(coalesce(new.titulo, '')), 200);
@@ -740,7 +802,17 @@ begin
     new.updated_at := now();
     if v_api then
       if new.origem = 'automacao' then raise exception 'Ações de automação só são criadas pelo próprio sistema.'; end if;
-      v_perm := privado.ia_acao_permissao(new.tipo, privado.org_imobiliaria(new.organizacao_id));
+      new.origem := case when new.origem = 'ia' then 'ia' else 'usuario' end;
+      -- Quem aprova vê o registro e o valor do que SERÁ executado: os dois saem do
+      -- payload, nunca do que quem pediu mandou nas colunas. Regra e execução de
+      -- automação só existem nas ações criadas pelo próprio banco.
+      v_ref := privado.ia_acao_referencia(new.tipo, new.payload);
+      new.referencia_tipo := v_ref[1];
+      new.referencia_id := v_ref[2]::uuid;
+      new.valor := privado.ia_acao_valor(new.tipo, new.payload);
+      new.regra_id := null;
+      new.execucao_id := null;
+      v_perm := privado.ia_acao_permissao(new.tipo, privado.org_imobiliaria(new.organizacao_id), new.referencia_tipo);
       if not privado.tem_permissao(new.organizacao_id, v_perm[1], 'ver') then
         raise exception 'Seu perfil de acesso não permite sugerir esta ação.';
       end if;
@@ -800,7 +872,7 @@ begin
   end if;
 
   if old.status = 'pendente' and new.status in ('aprovada','recusada') then
-    if not privado.ia_pode_decidir(old.organizacao_id, old.tipo, old.criada_por) then
+    if not privado.ia_pode_decidir(old.organizacao_id, old.tipo, old.criada_por, old.referencia_tipo) then
       raise exception 'Você não pode decidir esta ação (precisa de outra pessoa com permissão para aprovar).';
     end if;
     new.motivo := nullif(left(btrim(coalesce(new.motivo, '')), 500), '');
@@ -831,7 +903,7 @@ begin
   -- Começar a executar (trava): só uma tela consegue passar de aprovada/erro para
   -- "executando"; a outra recebe "já está nesta situação" e não roda nada.
   if old.status in ('aprovada','erro') and new.status = 'executando' then
-    if not privado.ia_pode_executar(old.organizacao_id, old.tipo) then
+    if not privado.ia_pode_executar(old.organizacao_id, old.tipo, old.referencia_tipo) then
       raise exception 'Você não pode executar esta ação.';
     end if;
     new.executada_por := auth.uid();
@@ -844,7 +916,7 @@ begin
   -- Terminar: quem começou registra o resultado. Execução travada (caiu no meio)
   -- há mais de 10 minutos: quem pode executar marca como erro para tentar de novo.
   if old.status = 'executando' and new.status in ('executada','erro') then
-    if not privado.ia_pode_executar(old.organizacao_id, old.tipo) then
+    if not privado.ia_pode_executar(old.organizacao_id, old.tipo, old.referencia_tipo) then
       raise exception 'Você não pode executar esta ação.';
     end if;
     if old.executada_por is distinct from auth.uid() then
@@ -868,7 +940,7 @@ begin
   -- tipos que pedem passo humano (espelho de ACAO_AUTOMATICA = false). Os que o
   -- sistema faz sozinho passam sempre por "executando".
   if old.status in ('aprovada','erro') and new.status = 'executada' and old.tipo in ('mensagem_cliente','renegociar_cobranca') then
-    if not privado.ia_pode_executar(old.organizacao_id, old.tipo) then
+    if not privado.ia_pode_executar(old.organizacao_id, old.tipo, old.referencia_tipo) then
       raise exception 'Você não pode executar esta ação.';
     end if;
     new.executada_por := auth.uid();
@@ -999,10 +1071,11 @@ begin
              and (usuario_id = auth.uid() or coalesce(privado.papel_atual(organizacao_id), '') in ('admin','gestor')));
   end if;
 
-  -- Ações sugeridas: vê quem pediu, quem pode executar o tipo e administrador/gestor.
+  -- Ações sugeridas: vê quem pediu, quem pode executar o tipo (a mensagem, pelo
+  -- módulo do registro: cobrança no financeiro, lead no comercial…) e administrador/gestor.
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'ia_acoes' and policyname = 'ia_acoes_ver') then
     create policy ia_acoes_ver on public.ia_acoes for select to authenticated
-      using (organizacao_id in (select privado.org_ids()) and privado.ia_pode_ver_acao(organizacao_id, tipo, criada_por));
+      using (organizacao_id in (select privado.org_ids()) and privado.ia_pode_ver_acao(organizacao_id, tipo, criada_por, referencia_tipo));
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'ia_acoes' and policyname = 'ia_acoes_criar') then
     create policy ia_acoes_criar on public.ia_acoes for insert to authenticated
@@ -1010,7 +1083,7 @@ begin
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'ia_acoes' and policyname = 'ia_acoes_alterar') then
     create policy ia_acoes_alterar on public.ia_acoes for update to authenticated
-      using (organizacao_id in (select privado.org_ids()) and privado.ia_pode_ver_acao(organizacao_id, tipo, criada_por))
+      using (organizacao_id in (select privado.org_ids()) and privado.ia_pode_ver_acao(organizacao_id, tipo, criada_por, referencia_tipo))
       with check (organizacao_id in (select privado.org_ids()));
   end if;
 
@@ -1227,6 +1300,7 @@ declare
   v_ate date;
   v_dias integer;
   v_hoje date := (now() at time zone 'America/Sao_Paulo')::date;
+  v_esc uuid;
   r jsonb;
 begin
   if v_org is null or auth.uid() is null then raise exception 'Sem acesso.'; end if;
@@ -1357,15 +1431,18 @@ begin
                             from (select * from pend order by data nulls last limit 100) x), '[]'::jsonb))
       into r;
   elsif p_chave = 'leads_periodo' then
+    -- Corretor vê só os leads dele (mesma conta de public.bi_leads_canais).
+    v_esc := privado.bi_escopo_corretor(v_org);
     with g as (
       select l.origem, count(*) as qtd, count(*) filter (where l.status = 'ganho') as ganhos, count(*) filter (where l.status = 'perdido') as perdidos
         from leads l
        where l.organizacao_id = v_org and (l.created_at at time zone 'America/Sao_Paulo')::date between v_de and v_ate
+         and (v_esc is null or l.corretor_id = v_esc)
        group by 1
     )
     select jsonb_build_object(
       'titulo', 'Leads recebidos por origem',
-      'fonte', 'Comercial → Leads (data de chegada)',
+      'fonte', 'Comercial → Leads (data de chegada)' || case when v_esc is not null then ' — só os seus leads' else '' end,
       'resumo', jsonb_build_array(privado.ia_item('Leads', (select sum(qtd) from g), 'inteiro'), privado.ia_item('Fechados', (select sum(ganhos) from g), 'inteiro')),
       'tipos', jsonb_build_array('texto','inteiro','inteiro','inteiro'),
       'colunas', jsonb_build_array('Origem','Leads','Fechados','Perdidos'),

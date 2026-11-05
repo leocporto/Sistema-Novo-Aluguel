@@ -50,6 +50,8 @@ import {
   validarFiltrosBusca,
   validarPayloadAcao,
   validarRespostaAtendimento,
+  referenciaDoPayload,
+  valorDoPayload,
   validarResumo,
   consultasDoModo,
   acoesRegraDoModo,
@@ -696,55 +698,49 @@ export async function explicarPrecoComIA(_: EstadoPreco, fd: FormData): Promise<
 // =============================================================================
 // Ações sugeridas (aprovação humana)
 // =============================================================================
-function payloadDoForm(tipo: TipoAcaoIA, fd: FormData): { payload: Record<string, unknown>; valor: number | null; referencia: [string, string] | null; pessoa: string | null } {
+/**
+ * Dados da ação a partir do formulário. O registro (referência) e o valor que
+ * quem aprova vê saem do payload (referenciaDoPayload/valorDoPayload) — o banco
+ * grava os mesmos, ignorando o que vier nas colunas.
+ */
+function payloadDoForm(tipo: TipoAcaoIA, fd: FormData): { payload: Record<string, unknown>; pessoa: string | null } {
   const t = (k: string) => texto(fd, k);
   const limpo = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ""));
   switch (tipo) {
     case "mensagem_cliente": {
       const p = limpo({ canal: t("canal") ?? "whatsapp", destino: t("destino"), nome: t("nome"), texto: t("texto"), conversa_id: t("conversa_id"), lead_id: t("lead_id"), pessoa_id: t("pessoa_id") });
-      const ref: [string, string] | null = p.conversa_id ? ["conversa", String(p.conversa_id)] : p.lead_id ? ["lead", String(p.lead_id)] : p.pessoa_id ? ["pessoa", String(p.pessoa_id)] : null;
-      return { payload: p, valor: null, referencia: ref, pessoa: (p.pessoa_id as string) ?? null };
+      return { payload: p, pessoa: (p.pessoa_id as string) ?? null };
     }
     case "mudar_etapa_lead":
-      return { payload: limpo({ lead_id: t("lead_id"), status: t("status"), motivo: t("motivo") }), valor: null, referencia: t("lead_id") ? ["lead", t("lead_id")!] : null, pessoa: null };
+      return { payload: limpo({ lead_id: t("lead_id"), status: t("status"), motivo: t("motivo") }), pessoa: null };
     case "mudar_responsavel_lead":
-      return { payload: { ...limpo({ lead_id: t("lead_id"), motivo: t("motivo") }), corretor_id: t("corretor_id") }, valor: null, referencia: t("lead_id") ? ["lead", t("lead_id")!] : null, pessoa: null };
-    case "desconto": {
-      const valor = numero(fd, "valor");
-      return { payload: limpo({ contrato_id: t("contrato_id"), tipo: t("tipo_desconto") ?? "valor", valor, inicio: t("inicio"), fim: t("fim"), motivo: t("motivo") }), valor: t("tipo_desconto") === "pct" ? null : valor, referencia: t("contrato_id") ? ["contrato", t("contrato_id")!] : null, pessoa: null };
-    }
-    case "alterar_preco": {
-      const valor = numero(fd, "valor");
-      return { payload: limpo({ imovel_id: t("imovel_id"), campo: t("campo") ?? "valor_aluguel", valor }), valor, referencia: t("imovel_id") ? ["imovel", t("imovel_id")!] : null, pessoa: null };
-    }
+      return { payload: { ...limpo({ lead_id: t("lead_id"), motivo: t("motivo") }), corretor_id: t("corretor_id") }, pessoa: null };
+    case "desconto":
+      return { payload: limpo({ contrato_id: t("contrato_id"), tipo: t("tipo_desconto") ?? "valor", valor: numero(fd, "valor"), inicio: t("inicio"), fim: t("fim"), motivo: t("motivo") }), pessoa: null };
+    case "alterar_preco":
+      return { payload: limpo({ imovel_id: t("imovel_id"), campo: t("campo") ?? "valor_aluguel", valor: numero(fd, "valor") }), pessoa: null };
     case "cancelar_cobranca":
-      return { payload: limpo({ fatura_id: t("fatura_id"), motivo: t("motivo") }), valor: null, referencia: t("fatura_id") ? ["fatura", t("fatura_id")!] : null, pessoa: null };
+      return { payload: limpo({ fatura_id: t("fatura_id"), motivo: t("motivo") }), pessoa: null };
     case "renegociar_cobranca":
-      return { payload: limpo({ fatura_id: t("fatura_id"), observacao: t("observacao") }), valor: null, referencia: t("fatura_id") ? ["fatura", t("fatura_id")!] : null, pessoa: null };
-    case "criar_lancamento": {
-      const valor = numero(fd, "valor");
+      return { payload: limpo({ fatura_id: t("fatura_id"), observacao: t("observacao") }), pessoa: null };
+    case "criar_lancamento":
       return {
         // "descricao_lancamento" = descrição do lançamento; "descricao" fica para a explicação da ação.
         payload: limpo({
           tipo: t("tipo_lancamento"),
           descricao: t("descricao_lancamento") ?? t("descricao"),
-          valor,
+          valor: numero(fd, "valor"),
           vencimento: t("vencimento"),
           categoria: t("categoria"),
           pessoa_id: t("pessoa_id"),
           contrato_id: t("contrato_id"),
           imovel_id: t("imovel_id"),
         }),
-        valor,
-        referencia: t("contrato_id") ? ["contrato", t("contrato_id")!] : t("imovel_id") ? ["imovel", t("imovel_id")!] : null,
         pessoa: t("pessoa_id"),
       };
-    }
     case "criar_tarefa":
       return {
         payload: limpo({ titulo: t("titulo_tarefa"), vencimento: t("vencimento"), prioridade: t("prioridade") ?? "normal", lead_id: t("lead_id"), imovel_id: t("imovel_id"), contrato_id: t("contrato_id") }),
-        valor: null,
-        referencia: t("lead_id") ? ["lead", t("lead_id")!] : t("contrato_id") ? ["contrato", t("contrato_id")!] : null,
         pessoa: null,
       };
   }
@@ -757,9 +753,11 @@ export async function sugerirAcao(_: EstadoAcao, fd: FormData): Promise<EstadoAc
     const tipo = (TIPOS_ACAO_IA as readonly string[]).find((t) => t === texto(fd, "tipo")) as TipoAcaoIA | undefined;
     if (!tipo) throw new ErroValidacao("Tipo de ação inválido.");
     if (TIPOS_ACAO_IA_IMOB.includes(tipo)) exigirImobiliaria(ctx);
-    const { payload, valor, referencia, pessoa } = payloadDoForm(tipo, fd);
+    const { payload, pessoa } = payloadDoForm(tipo, fd);
     const erro = validarPayloadAcao(tipo, payload);
     if (erro) throw new ErroValidacao(erro);
+    const referencia = referenciaDoPayload(tipo, payload);
+    const valor = valorDoPayload(tipo, payload);
     const { error } = await ctx.supabase.from("ia_acoes").insert({
       tipo,
       origem: texto(fd, "origem") === "ia" ? "ia" : "usuario",
@@ -782,7 +780,7 @@ export async function sugerirAcao(_: EstadoAcao, fd: FormData): Promise<EstadoAc
 type LinhaAcao = AcaoParaExecutar & { status: string; executada_em: string | null };
 
 async function carregarAcao(ctx: Contexto, id: string): Promise<LinhaAcao> {
-  const { data } = await ctx.supabase.from("ia_acoes").select("id, tipo, payload, titulo, status, executada_em").eq("id", id).maybeSingle();
+  const { data } = await ctx.supabase.from("ia_acoes").select("id, tipo, payload, titulo, referencia_tipo, status, executada_em").eq("id", id).maybeSingle();
   if (!data) throw new ErroValidacao("Ação não encontrada.");
   return data as unknown as LinhaAcao;
 }

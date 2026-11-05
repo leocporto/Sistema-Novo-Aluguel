@@ -13,9 +13,12 @@ import {
   ROTULO_ORIGEM_ACAO,
   ROTULO_STATUS_ACAO,
   ROTULO_TIPO_ACAO,
+  alvoDaAcao,
+  confirmacaoAcao,
   detalhesAcao,
   permissaoAcao,
   podeDecidirAcao,
+  referenciaDoPayload,
   type StatusAcaoIA,
   type TipoAcaoIA,
 } from "@/lib/dominio/ia";
@@ -26,6 +29,7 @@ import { AbasInteligencia } from "../../abas";
 import { cancelarAcao, executarAprovada, marcarAcaoFeita } from "../../actions";
 import { carregarConfigIA, linkReferencia, nomesUsuarios, quando } from "../../dados";
 import { Decidir, EnviarMensagem } from "../decidir";
+import { carregarRegistrosAlvo } from "../registros";
 
 export const metadata: Metadata = { title: "Ação para aprovar" };
 
@@ -61,12 +65,22 @@ export default async function AcaoPage({ params }: PageProps<"/inteligencia/acoe
   if (!data) notFound();
   const a = data as Acao;
   const imob = organizacao.modo !== "pessoal";
-  const [modulo, operacao] = permissaoAcao(a.tipo, imob);
-  const [cfg, nomes, temModulo, temAprovar] = await Promise.all([carregarConfigIA(supabase), nomesUsuarios(supabase), pode(modulo, operacao), pode(modulo, "aprovar")]);
-  const decide = podeDecidirAcao({ papel, temPermissaoModulo: temModulo, temAprovarModulo: temAprovar, exigirAprovacao: cfg.exigir_aprovacao, souQuemPediu: a.criada_por === usuario.id });
-  const ref = linkReferencia(a.referencia_tipo, a.referencia_id);
-  const nome = (u: string | null) => (u ? (nomes.get(u) ?? "Usuário") : "—");
   const p = a.payload;
+  // A mensagem ao cliente pede o módulo do registro (cobrança, contrato, chamado…): mesma regra do banco.
+  const [modulo, operacao] = permissaoAcao(a.tipo, imob, a.referencia_tipo);
+  const [cfg, nomes, temModulo, temAprovar, registros] = await Promise.all([
+    carregarConfigIA(supabase),
+    nomesUsuarios(supabase),
+    pode(modulo, operacao),
+    pode(modulo, "aprovar"),
+    carregarRegistrosAlvo(supabase, a.tipo, p),
+  ]);
+  const decide = podeDecidirAcao({ papel, temPermissaoModulo: temModulo, temAprovarModulo: temAprovar, exigirAprovacao: cfg.exigir_aprovacao, souQuemPediu: a.criada_por === usuario.id });
+  // O que aparece (registro, link, confirmação) sai do payload que será executado, nunca do título.
+  const alvo = alvoDaAcao(a.tipo, p, registros);
+  const refPayload = a.tipo === "mensagem_cliente" ? null : referenciaDoPayload(a.tipo, p);
+  const ref = refPayload ? linkReferencia(refPayload[0], refPayload[1]) : linkReferencia(a.referencia_tipo, a.referencia_id);
+  const nome = (u: string | null) => (u ? (nomes.get(u) ?? "Usuário") : "—");
   const destino = String(p.destino ?? "");
   const texto = String(p.texto ?? "");
   const linkMensagem =
@@ -77,7 +91,7 @@ export default async function AcaoPage({ params }: PageProps<"/inteligencia/acoe
           ? linkSms(destino, texto)
           : linkWhatsapp(destino, texto)
       : null;
-  const resumo = `${ROTULO_TIPO_ACAO[a.tipo]} — ${a.titulo}`;
+  const confirmacao = confirmacaoAcao(a.tipo, a.titulo, a.valor, alvo);
   const { data: fat } =
     a.tipo === "renegociar_cobranca" && typeof p.fatura_id === "string" ? await supabase.from("faturas").select("contrato_id").eq("id", p.fatura_id).maybeSingle() : { data: null };
   const contratoDaFatura = (fat?.contrato_id as string | undefined) ?? null;
@@ -100,7 +114,12 @@ export default async function AcaoPage({ params }: PageProps<"/inteligencia/acoe
       <div className="space-y-5">
         <Cartao titulo="O que será feito">
           {a.descricao && <p className="mb-4 whitespace-pre-line text-sm text-texto-2">{a.descricao}</p>}
-          <Definicao itens={detalhesAcao(a.tipo, p).map(([k, v]) => [k, <span key={k} className="whitespace-pre-line">{v}</span>])} />
+          <Definicao itens={[...alvo.itens, ...detalhesAcao(a.tipo, p)].map(([k, v]) => [k, <span key={k} className="whitespace-pre-line">{v}</span>])} />
+          {alvo.faltando.length > 0 && (
+            <div className="mt-4">
+              <Aviso tipo="alerta">Não encontrei {alvo.faltando.join(", ")} desta ação (apagado ou sem acesso). Confira no módulo antes de decidir.</Aviso>
+            </div>
+          )}
           {a.valor !== null && <p className="mt-4 text-sm text-texto">Valor envolvido: <strong>{formatarReais(a.valor)}</strong></p>}
           {ref && (
             <p className="mt-4 text-sm">
@@ -120,7 +139,7 @@ export default async function AcaoPage({ params }: PageProps<"/inteligencia/acoe
                     ? "Ao aprovar, a ação é feita na hora pela via normal do sistema (com as mesmas regras e permissões da tela do módulo)."
                     : "Ao aprovar, a ação fica pronta para alguém fazer pelo botão (abrir o WhatsApp com o texto / montar o acordo) e marcar como feita."}
                 </p>
-                <Decidir id={a.id} resumo={resumo} valor={a.valor !== null ? formatarReais(a.valor) : null} />
+                <Decidir id={a.id} confirmacao={confirmacao} />
               </>
             ) : (
               <Aviso>
@@ -147,7 +166,7 @@ export default async function AcaoPage({ params }: PageProps<"/inteligencia/acoe
             {temModulo && ACAO_AUTOMATICA[a.tipo] && a.executada_em && agoraMs() - new Date(a.executada_em).getTime() > 10 * 60_000 && (
               <div className="mt-3 space-y-3">
                 <Aviso tipo="alerta">Parou no meio há mais de 10 minutos. Confira no módulo se a ação foi feita antes de tentar de novo.</Aviso>
-                <BotaoAcao acao={executarAprovada} id={a.id} variante="primario" confirmar={`Tentar de novo: ${resumo}${a.valor !== null ? ` — ${formatarReais(a.valor)}` : ""}?`}>
+                <BotaoAcao acao={executarAprovada} id={a.id} variante="primario" confirmar={`Tentar de novo?\n\n${confirmacao}`}>
                   <RotateCw className="size-4" /> Tentar de novo
                 </BotaoAcao>
               </div>
@@ -172,7 +191,7 @@ export default async function AcaoPage({ params }: PageProps<"/inteligencia/acoe
                 </>
               )}
               {ACAO_AUTOMATICA[a.tipo] && (
-                <BotaoAcao acao={executarAprovada} id={a.id} variante="primario" confirmar={`Fazer agora: ${resumo}${a.valor !== null ? ` — ${formatarReais(a.valor)}` : ""}?`}>
+                <BotaoAcao acao={executarAprovada} id={a.id} variante="primario" confirmar={`Fazer agora?\n\n${confirmacao}`}>
                   <RotateCw className="size-4" /> {a.status === "erro" ? "Tentar de novo" : "Fazer agora"}
                 </BotaoAcao>
               )}

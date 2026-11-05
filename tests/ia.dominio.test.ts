@@ -5,6 +5,13 @@ import {
   CONFIG_PADRAO,
   TIPOS_ACAO_IA_IMOB,
   acoesRegraDoModo,
+  alvoDaAcao,
+  confirmacaoAcao,
+  idsAlvoAcao,
+  linhasParaIA,
+  promptExplicarConsulta,
+  referenciaDoPayload,
+  valorDoPayload,
   PERGUNTAS_PADRAO,
   conferirDescricao,
   custoEstimado,
@@ -290,6 +297,45 @@ describe("assistente: consultas da lista fechada", () => {
     })!;
     expect(explicarConsulta(r)).toBe("Aluguel recebido de 01/10/2026 a 31/10/2026: Total recebido: R$ 12.345,60. Fonte: Relatórios e BI → Financeiro.");
   });
+
+  it("relatório personalizado: nenhuma linha vai para a IA (só colunas, totais e quantidade)", () => {
+    const r = lerResultadoConsulta({
+      titulo: "Leads da semana",
+      fonte: 'Relatórios e BI → Personalizados → "Leads da semana"',
+      resumo: [{ rotulo: "Total de Orçamento", valor: 5000, tipo: "moeda" }],
+      colunas: ["Nome", "Telefone", "E-mail", "Orçamento"],
+      tipos: ["texto", "texto", "texto", "moeda"],
+      linhas: [
+        ["Joana Pereira da Silva", "(51) 99876-5432", "joana.silva@exemplo.com", 3000],
+        ["Marcos Tavares", "51 98765-4321", "marcos@ex.com.br", 2000],
+      ],
+      consulta: "relatorio_salvo",
+      parametros: { relatorio_id: "11111111-1111-1111-1111-111111111111" },
+    })!;
+    const pedido = promptExplicarConsulta("quem são os leads da semana? meu fone 51 99999-8888", r);
+    for (const dado of ["Joana", "Pereira", "Marcos", "Tavares", "99876", "98765", "99999", "joana.silva", "marcos@ex"]) expect(pedido.usuario).not.toContain(dado);
+    expect(pedido.usuario).toContain("Nome | Telefone | E-mail | Orçamento");
+    expect(pedido.usuario).toContain("Linhas: 2 (não enviadas");
+    expect(pedido.usuario).toContain("Total de Orçamento = R$ 5.000,00");
+  });
+
+  it("consultas fechadas: as primeiras linhas vão mascaradas (proteção extra)", () => {
+    const r = lerResultadoConsulta({
+      titulo: "Aluguéis em atraso",
+      fonte: "Cobranças → Quem deve",
+      resumo: [{ rotulo: "Cobranças em atraso", valor: 1, tipo: "inteiro" }],
+      colunas: ["Contrato", "Imóvel", "Vencimento", "Dias de atraso", "Em aberto"],
+      tipos: ["texto", "texto", "data", "inteiro", "moeda"],
+      linhas: [["C-1 (529.982.247-25)", "AP-1 contato@x.com", "2026-10-10", 25, 2000]],
+      consulta: "inadimplencia",
+      parametros: {},
+    })!;
+    const t = linhasParaIA(r);
+    expect(t).toContain("Primeiras linhas (Contrato | Imóvel | Vencimento | Dias de atraso | Em aberto)");
+    expect(t).toContain("C-1 ([CPF]) | AP-1 [e-mail] | 2026-10-10 | 25 | 2000");
+    expect(t).not.toContain("529.982");
+    expect(linhasParaIA({ ...r, linhas: [] })).toBe("Sem linhas.");
+  });
 });
 
 describe("leads: nota, intenção e próximo contato", () => {
@@ -433,6 +479,108 @@ describe("configuração, horário, custo e textos", () => {
     expect(acoesRegraDoModo("imobiliaria")).toEqual([...ACOES_REGRA]);
     expect(TIPOS_ACAO_IA_IMOB).toContain("criar_tarefa");
     expect(permissaoAcao("criar_tarefa", true)).toEqual(["comercial", "criar"]);
+  });
+
+  it("mensagem ao cliente: o módulo depende do registro (cobrança no financeiro, não no comercial)", () => {
+    expect(permissaoAcao("mensagem_cliente", true, "fatura")).toEqual(["cobrancas", "editar"]);
+    expect(permissaoAcao("mensagem_cliente", true, "contrato")).toEqual(["contratos", "editar"]);
+    expect(permissaoAcao("mensagem_cliente", true, "garantia")).toEqual(["contratos", "editar"]);
+    expect(permissaoAcao("mensagem_cliente", true, "chamado")).toEqual(["manutencao", "editar"]);
+    expect(permissaoAcao("mensagem_cliente", true, "analise")).toEqual(["analise", "editar"]);
+    for (const ref of ["lead", "visita", "conversa", "pessoa", null, undefined]) expect(permissaoAcao("mensagem_cliente", true, ref)).toEqual(["comercial", "editar"]);
+    for (const ref of ["fatura", "lead", null]) expect(permissaoAcao("mensagem_cliente", false, ref)).toEqual(["pessoas", "editar"]);
+    // Os outros tipos não mudam com o registro.
+    expect(permissaoAcao("cancelar_cobranca", true, "lead")).toEqual(["cobrancas", "aprovar"]);
+  });
+
+  it("aprovação: registro e valor saem do payload que será executado", () => {
+    const X = "11111111-1111-1111-1111-111111111111";
+    const Y = "22222222-2222-2222-2222-222222222222";
+    const Z = "33333333-3333-3333-3333-333333333333";
+    expect(referenciaDoPayload("cancelar_cobranca", { fatura_id: Y, motivo: "duplicada" })).toEqual(["fatura", Y]);
+    expect(referenciaDoPayload("mensagem_cliente", { conversa_id: X, lead_id: Y, pessoa_id: Z })).toEqual(["conversa", X]);
+    expect(referenciaDoPayload("mensagem_cliente", { lead_id: null, pessoa_id: Z })).toEqual(["pessoa", Z]);
+    expect(referenciaDoPayload("criar_tarefa", { titulo: "x", imovel_id: Z })).toEqual(["imovel", Z]);
+    expect(referenciaDoPayload("mensagem_cliente", { texto: "oi" })).toBeNull();
+    expect(valorDoPayload("desconto", { tipo: "valor", valor: "150.555" })).toBe(150.56);
+    expect(valorDoPayload("desconto", { tipo: "pct", valor: 10 })).toBeNull();
+    expect(valorDoPayload("alterar_preco", { valor: 2100 })).toBe(2100);
+    expect(valorDoPayload("alterar_preco", { valor: "1.005" })).toBe(1.01);
+    expect(valorDoPayload("cancelar_cobranca", { valor: 50 })).toBeNull();
+    expect(idsAlvoAcao("mudar_responsavel_lead", { lead_id: X, corretor_id: Y })).toEqual({ lead: X, novoCorretor: Y });
+    expect(idsAlvoAcao("mudar_responsavel_lead", { lead_id: X, corretor_id: null })).toEqual({ lead: X, novoCorretor: null });
+  });
+
+  it("aprovação: quem decide vê a cobrança, o lead e o novo corretor reais (não o título de quem pediu)", () => {
+    const Y = "22222222-2222-2222-2222-222222222222";
+    const cob = alvoDaAcao("cancelar_cobranca", { fatura_id: Y, motivo: "duplicada" }, {
+      fatura: { numero: 77, vencimento: "2026-10-10", valor: 5000, status: "aberta", contrato: "C-9", imovel: "AP-9" },
+    });
+    expect(cob.itens).toContainEqual(["Cobrança", "nº 77 — vence 10/10/2026 — R$ 5.000,00 (em aberto)"]);
+    expect(cob.faltando).toEqual([]);
+    const txt = confirmacaoAcao("cancelar_cobranca", "Cancelar cobrança duplicada de R$ 50", null, cob);
+    expect(txt.split("\n")[0]).toBe("Cancelar cobrança: cobrança nº 77 (vence 10/10/2026, R$ 5.000,00, imóvel AP-9)");
+    expect(txt).toContain("Pedido: “Cancelar cobrança duplicada de R$ 50”");
+
+    const lead = alvoDaAcao("mudar_responsavel_lead", { lead_id: Y, corretor_id: "33333333-3333-3333-3333-333333333333" }, {
+      lead: { nome: "Bruna Lead", status: "proposta", corretor: "Maria" },
+      novoCorretor: "Carlos Corretor",
+    });
+    expect(lead.itens).toContainEqual(["Lead", "Bruna Lead (etapa atual: Proposta; corretor atual: Maria)"]);
+    expect(lead.itens).toContainEqual(["Novo responsável", "Carlos Corretor"]);
+    expect(confirmacaoAcao("mudar_responsavel_lead", "Passar para Maria", null, lead)).toContain("novo responsável: Carlos Corretor");
+    const semCorretor = alvoDaAcao("mudar_responsavel_lead", { lead_id: Y, corretor_id: null }, { lead: { nome: "Bruna", status: "novo", corretor: null } });
+    expect(semCorretor.itens).toContainEqual(["Novo responsável", "sem corretor (o lead fica sem responsável)"]);
+
+    const preco = alvoDaAcao("alterar_preco", { imovel_id: Y, campo: "valor_aluguel", valor: 2100 }, { imovel: { codigo: "IA-1", bairro: "Centro", aluguel: 2000, venda: null } });
+    expect(preco.itens).toContainEqual(["Aluguel atual", "R$ 2.000,00"]);
+    expect(preco.resumo).toBe("imóvel IA-1: aluguel de R$ 2.000,00 para R$ 2.100,00");
+    const desc = alvoDaAcao("desconto", { contrato_id: Y, tipo: "valor", valor: 100, inicio: "2026-12" }, { contrato: { codigo: "C-1", imovel: "IA-1", aluguel: 2000 } });
+    expect(desc.resumo).toBe("contrato C-1 (imóvel IA-1); desconto de R$ 100,00");
+
+    // Registro apagado ou sem acesso: avisa (não aprova às cegas).
+    const sumiu = alvoDaAcao("cancelar_cobranca", { fatura_id: Y, motivo: "x" }, { fatura: null });
+    expect(sumiu.faltando).toEqual(["cobrança"]);
+    expect(confirmacaoAcao("cancelar_cobranca", "x", null, sumiu)).toContain("Atenção: não encontrei cobrança");
+  });
+
+  it("aprovação de lançamento: mostra a pessoa (credor ou devedor) que vem do payload", () => {
+    const C = "22222222-2222-2222-2222-222222222222";
+    const P = "44444444-4444-4444-4444-444444444444";
+    const pagar = { tipo: "pagar", descricao: "Conserto", valor: 800, vencimento: "2026-11-20", contrato_id: C, pessoa_id: P };
+    // O id da pessoa sai do payload (é o que executar.ts grava em lancamentos.pessoa_id).
+    expect(idsAlvoAcao("criar_lancamento", pagar)).toEqual({ contrato: C, imovel: undefined, pessoa: P });
+    expect(idsAlvoAcao("criar_lancamento", { ...pagar, pessoa_id: null }).pessoa).toBeNull();
+
+    const a = alvoDaAcao("criar_lancamento", pagar, {
+      contrato: { codigo: "C-1", imovel: "IA-1", aluguel: 2000 },
+      pessoa: { nome: "Zé Encanador", documento: "123.456.789-09" },
+    });
+    expect(a.itens).toContainEqual(["A quem pagar", "Zé Encanador (CPF final 8909)"]);
+    expect(a.resumo).toBe("contrato C-1 (imóvel IA-1); a pagar R$ 800,00 a Zé Encanador");
+    expect(a.faltando).toEqual([]);
+    expect(confirmacaoAcao("criar_lancamento", "Pagar o conserto", 800, a).split("\n")[0]).toBe(
+      "Criar lançamento financeiro: contrato C-1 (imóvel IA-1); a pagar R$ 800,00 a Zé Encanador",
+    );
+
+    const receber = alvoDaAcao("criar_lancamento", { ...pagar, tipo: "receber", pessoa_id: P }, {
+      contrato: { codigo: "C-1", imovel: "IA-1", aluguel: 2000 },
+      pessoa: { nome: "Imobiliária X", documento: "12.345.678/0001-95" },
+    });
+    expect(receber.itens).toContainEqual(["De quem receber", "Imobiliária X (CNPJ final 0195)"]);
+    expect(receber.resumo).toContain("a receber R$ 800,00 de Imobiliária X");
+
+    // Sem pessoa no payload: diz claramente que não há ninguém ligado.
+    const sem = alvoDaAcao("criar_lancamento", { ...pagar, contrato_id: undefined, pessoa_id: undefined }, {});
+    expect(sem.itens).toContainEqual(["A quem pagar", "nenhuma pessoa ligada ao lançamento"]);
+    expect(sem.resumo).toBe("a pagar R$ 800,00 (sem pessoa ligada)");
+    expect(sem.faltando).toEqual([]);
+
+    // Pessoa apagada ou de outra organização (RLS esconde): avisa antes de aprovar.
+    const sumiu = alvoDaAcao("criar_lancamento", pagar, { contrato: { codigo: "C-1", imovel: "IA-1", aluguel: 2000 }, pessoa: null });
+    expect(sumiu.faltando).toEqual(["pessoa"]);
+    expect(sumiu.itens).toContainEqual(["A quem pagar", "não encontrada (apagada ou sem acesso) — confira antes de decidir"]);
+    expect(confirmacaoAcao("criar_lancamento", "x", 800, sumiu)).toContain("Atenção: não encontrei pessoa");
   });
 
   it("ações: dados validados por tipo", () => {
