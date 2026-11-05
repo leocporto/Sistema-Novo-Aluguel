@@ -37,6 +37,8 @@ para qualquer tela nova. Tokens em `src/app/globals.css`; componentes em `src/co
   grande peso 600, detalhe 12px. Tons: `neutro`, `alerta`, `perigo`, `sucesso`.
 - Tabelas (`<Tabela>`/`<Celula>`): cartão de raio 18, cabeçalho mono 10,5px caixa alta sobre
   `bg-elev`, linhas com 14px e hover suave.
+- **Colunas de número/valor ficam à direita, título junto**: `<Tabela direita="resto">` (todas menos a
+  primeira) ou `direita={[índices]}`, e a `<Celula className="text-right tabular-nums">` correspondente.
 - Selos (`<Selo>`): pílula mono 10,5px; cores `azul`, `verde`, `amarelo`, `vermelho`, `cinza`.
 
 ## Controles

@@ -66,7 +66,7 @@ export default async function EquipeRelatorioPage({ searchParams }: PageProps<"/
       )}
 
       <div className="mb-6">
-        <Tabela colunas={[AGRUPAR[por].replace("Por ", "").replace(/^./, (c) => c.toUpperCase()), "Leads (atend./receb.)", "1º atendimento", "Visitas", "Propostas", "Conversão", "Locações", "Vendas", "Captações", "Comissões"]}>
+        <Tabela colunas={[AGRUPAR[por].replace("Por ", "").replace(/^./, (c) => c.toUpperCase()), "Leads (atend./receb.)", "1º atendimento", "Visitas", "Propostas", "Conversão", "Locações", "Vendas", "Captações", "Comissões"]} direita="resto">
           {grupos.length === 0 && <LinhaVazia colunas={10}>Sem corretores ou colaboradores para mostrar.</LinhaVazia>}
           {grupos.map((g, i) => (
             <tr key={g.chave || "sem"}>
@@ -83,10 +83,10 @@ export default async function EquipeRelatorioPage({ searchParams }: PageProps<"/
                 </span>
                 {por !== "pessoa" && <span className="block text-xs text-mudo">{g.pessoas} pessoa(s)</span>}
               </Celula>
-              <Celula className="tabular-nums">
+              <Celula className="text-right tabular-nums">
                 {g.totais.leads_atendidos}/{g.totais.leads_recebidos}
               </Celula>
-              <Celula className="tabular-nums">{formatarDuracao(tempoMedioResposta(g.totais))}</Celula>
+              <Celula className="text-right tabular-nums">{formatarDuracao(tempoMedioResposta(g.totais))}</Celula>
               <Celula className="text-right tabular-nums">{g.totais.visitas}</Celula>
               <Celula className="text-right tabular-nums">
                 {g.totais.propostas} <span className="text-xs text-mudo">({g.totais.propostas_aceitas} aceitas)</span>
@@ -106,7 +106,7 @@ export default async function EquipeRelatorioPage({ searchParams }: PageProps<"/
 
       {!corretor && (
         <Cartao titulo="Desempenho por filial">
-          <Tabela colunas={["Filial", "Imóveis", "Contratos ativos", "Aluguel da carteira", "Administração", "Intermediação", "Leads", "Vendas", "Comissão de vendas"]}>
+          <Tabela colunas={["Filial", "Imóveis", "Contratos ativos", "Aluguel da carteira", "Administração", "Intermediação", "Leads", "Vendas", "Comissão de vendas"]} direita="resto">
             {filiais.length === 0 && <LinhaVazia colunas={9}>Nenhuma filial cadastrada (Equipe → Equipes e filiais).</LinhaVazia>}
             {filiais.map((f) => (
               <tr key={f.filial_id ?? "sem"}>

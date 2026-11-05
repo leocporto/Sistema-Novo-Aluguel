@@ -102,7 +102,7 @@ export default async function ComercialRelatorioPage({ searchParams }: PageProps
       </div>
 
       <Cartao titulo="Leads por canal de origem">
-        <Tabela colunas={["Canal", "Leads", "Atendidos", "Visitaram", "Fizeram proposta", "Fecharam", "Conversão", "Perdidos"]}>
+        <Tabela colunas={["Canal", "Leads", "Atendidos", "Visitaram", "Fizeram proposta", "Fecharam", "Conversão", "Perdidos"]} direita="resto">
           {canais.length === 0 && <LinhaVazia colunas={8}>Nenhum lead no período.</LinhaVazia>}
           {canais.map((c) => (
             <tr key={c.origem}>

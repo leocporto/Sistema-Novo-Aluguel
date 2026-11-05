@@ -62,7 +62,7 @@ export default async function PrevisaoPage({ searchParams }: PageProps<"/relator
       </div>
 
       <Cartao titulo="Mês a mês">
-        <Tabela colunas={cols}>
+        <Tabela colunas={cols} direita="resto">
           {linhas.length === 0 && <LinhaVazia colunas={cols.length}>Sem contratos ativos nem contas em aberto.</LinhaVazia>}
           {linhas.map((l) => (
             <tr key={`${l.atrasado}-${l.mes}`} className={l.atrasado ? "[&>td]:bg-ruim-bg" : ""}>
